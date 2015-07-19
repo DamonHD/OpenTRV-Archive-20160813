@@ -1,0 +1,19 @@
+CleanWeb "Transport": IoT Meets Buses
+DHD20150223
+
+Q: If you could choose one or two sensors to put in all the bus shelters on your most-used route,
+   what would they be and why, and are there any ethical/security/privacy issues?
+
+Talk:
+
+  * Saving the planet (and your hairdo): PMs, NOx CO2
+
+  * Cheap, robust, micro-power, open sensors and backhaul (backed out of OpenTRV) == IoT
+
+  * Footfall: currently largely unknown in real time (and ad targeting!)
+
+  * Other environmental measurements, eg fine-grid temperature may be useful to Met Office, also air quality
+
+  * Journey planning and adjustment of capacity for demand in real-time
+
+  * 22k bus stops in London, 395k in UK

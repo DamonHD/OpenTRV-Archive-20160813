@@ -1,0 +1,32 @@
+2014/07/03: discussing possible CE-stamp RF problems on IRC...
+
+[21:40] mikestir    yes looking at it it's not great in terms of ground plane, but it's not exactly a speed demon
+[21:41] mikestir    I can't see it being a big problem
+[21:41] mikestir    also the rf track isn't
+[21:41] mikestir    and the tracks are _still_ unnecessarily thin
+[21:41] mikestir    I've given up telling you about that though
+[21:42] DamonHD I did try to widen them a little but we were having trouble routing.
+[21:42] DamonHD And all the supply tracks are now much wider than they were in their own net class.
+[21:42] Boelle_DK   *me hides*
+[21:42] DamonHD And we're way above iTEAD and PMS limits.
+[21:43] mikestir    the ground plane thing just needs some stitching vias so you don't have it cut up into slots
+[21:43] mikestir    slots are bad - they act as antennas
+[21:43] DamonHD Doesn't that risk ground loops?
+[21:43] mikestir    no - you have a ground loop as it is
+[21:43] mikestir    look at that thin section of ground on the top layer that goes all the way around the bottom edge
+[21:44] mikestir    if you have narrow sections like that and you can't stitch it you need to make sure there's a break at one end
+[21:45] DamonHD So stitching / multiple routes is OK.
+[21:45] DamonHD ?
+[21:45] mikestir    yes
+[21:45] DamonHD OK.
+[21:45] DamonHD Good to know. Thanks.
+[21:45] mikestir    what you don't want is a pair of ground tracks on either side with a via at each end
+[21:45] mikestir    if you stick vias all the way along you don't have a loop any more
+[21:46] mikestir    the vias and the tiny sections in between have such low resistance and inductance that they cease to matter
+[21:47] mikestir    your antenna track should really be designed as a coplanar waveguide with stitching vias along the adjoining ground plane, but it's so short you probably don't need to care about that - what you have is probably fine
+
+[21:47] DamonHD Good!
+[21:48] mikestir    http://www.mike-stirling.com/gallery3/index.php/HAB/DSC_2396
+[21:48] mikestir    look at the rf layout on that
+
+[21:48] mikestir    that could probably use more stitching vias but I wanted to be kind to the fab, and it works fine

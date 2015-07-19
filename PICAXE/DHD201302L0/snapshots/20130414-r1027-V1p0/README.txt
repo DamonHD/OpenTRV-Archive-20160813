@@ -1,0 +1,1 @@
+V0.1 on V0.09 PCB1 (with RFM23) as deployed to study with BAKE but no schedule nor use of LEARN button.

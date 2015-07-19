@@ -1,0 +1,4 @@
+Libraries in and below this directory are third party and believed to be OK to redistribute as-is.
+OpenTRV makes no claims over them.
+They are here for simplicity in some cases.
+

@@ -1,0 +1,53 @@
+DHD20130701
+
+Summary of 09:30 telephone conference call today between:
+Prof Ruth Rettie (RR) http://www.smartcommunities.org.uk/
+Dr Kevin Burchell (KB) http://www.smartcommunities.org.uk/
+Damon Hart-Davis (DHD) OpenTRV
+
+
+DHD gave a brief summary of how the OpenTRV device behaves (eg FROST/WARM/BAKE modes and LEARN),
+and explained that it had some additional optional anticipatory 'smarts' that could be used/disabled.
+
+DHD is very keen to get some sort of objective metrics to DECC by end of 2013/2014 winter
+to help DECC decide ASAP if worth pursuing zoned smart heating with market incentives etc, etc.
+
+RR suggested that we wouldn't have enough people or time for a full controlled trial
+getting good estimates of energy savings, partly because interacting with householders
+(eg just talking to them, or collecting gas meter reading)
+is slow and expensive and distorts results.
+
+We agreed that we want to have 'normal' people in the trial,
+since the aim of OpenTRV is to make energy saving (and decent comfort)
+simple/easy (no complex controls/programming) for non-techie non-energy-fanatics,
+with relatively little explicit interaction with their heating system.
+
+DHD would also like to include OpenTRV and SuperHome people in the trial,
+at least on the side, as OpenTRV should also work for the energy-aware
+and/or energy-efficient homes.
+
+RR suggested that we doing a small rolling trial and not expect too many hard numbers,
+looking first to improve the ergonomics and to test people's reactions to OpenTRV
+in a small set of homes, eg including KB's.  Do people like it?  Do they use more heating?
+
+(This initial set/period might be DHD + KB + BG + BH + maybe one or two others.) 
+
+This can be started before winter proper to test the controls,
+but raising the programmed temperature thresholds.
+
+Then maybe we rope in a few of the Smart Communities participants.
+
+DHD would still like to look for a drop in kWh/HDD after OpenTRV installation,
+eg in households doing monthly or weekly gas meter readings.
+
+(We might possibly expand to another 5--10 households for the second period?)
+
+
+RR suggested that the way to take this forward might be with TSB
+(Technology Strategy Board) money with a firm to commercialise
+one version of OpenTRV (which the permissive licences are meant to facilitate).
+
+We might also talk to Alex at Southampton.
+
+We'll get the first phases going and tighten up subsequent trial design
+as we go along, but keeping an eye on getting objective metrics whenever possible.

@@ -1,0 +1,47 @@
+ALL SIGNIFICANT RELEASES AND BRANCHES (and to-do)
+
+
+This document is used to record all significant releases and branches
+in the Java code tree.
+
+Follow agreed procedures before creating (or deleting) branches
+or release/freeze points.
+
+
+pending:
+
+
+20150509:
+    freezepoint name: V0.1.0
+    branch name: HEAD
+    Deployed where: 16WW RPi for graphing.
+    Changes since last freezepoint (developer/mgr initials and brief description):
+    Previous significant freezepoint: V0.0.8
+    DHD20150509: basic filters and fanout drivers for IoT Launchpad Twitter and EDX in place.
+    DHD20150331: added AsyncStatsHandlerWrapper to try to ensure that no handler blocks processing even if slow.
+
+
+
+20141219:
+    freezepoint name: V0.0.8
+    branch name: HEAD
+    Deployed where: 16WW RPi for graphing.
+    Changes since last freezepoint (developer/mgr initials and brief description):
+    Previous significant freezepoint: V0.0.7
+    DHD20141219: created JSONStatsLineStreamReader to enable easy processing of JSON logs.
+
+20141130:
+    freezepoint name: V0.0.7
+    branch name: HEAD
+    Deployed where: 16WW RPi.
+    Changes since last freezepoint (developer/mgr initials and brief description):
+    Previous significant freezepoint: V0.0.6
+    DHD20141130: fixing Java server/bridge failure to recover after unexpected input (! error line in this case).
+
+20141123:
+    freezepoint name: V0.0.6
+    branch name: HEAD
+    Deployed where: 16WW RPi.
+    Changes since last freezepoint (developer/mgr initials and brief description):
+    Previous significant freezepoint: V0.0.5
+    DHD20141123: logging JSON format stats frames; see TODO-389.

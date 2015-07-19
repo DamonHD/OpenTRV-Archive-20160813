@@ -1,0 +1,184 @@
+<?xml version="1.0"?>
+
+<!--
+The OpenTRV project licenses this file to you
+under the Apache Licence, Version 2.0 (the "Licence");
+you may not use this file except in compliance
+with the Licence. You may obtain a copy of the Licence at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the Licence is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the Licence for the
+specific language governing permissions and limitations
+under the Licence.
+
+Author(s) / Copyright (s): Damon Hart-Davis 2013
+-->
+
+<!-- Use Ant 1.6 or newer. -->
+
+
+<project name="DHD201302L0" default="all" basedir=".">
+
+    <property name="app.name" value="DHD201302L0"/>
+    <property name="app.version.major" value="0"/>
+    <property name="app.version.minor" value="0"/>
+    <property name="app.version.micro" value="1"/>
+    <property name="app.version" value="${app.version.major}.${app.version.minor}.${app.version.micro}"/>
+    <!-- Version excluding the "micro" portion, thus reflecting only significant API/functionality changes. -->
+    <property name="app.version.notmicro" value="${app.version.major}.${app.version.minor}"/>
+
+
+    <!-- The base dir of this project's PICAXE source. -->
+    <property name="bsrc.base.dir" value="bsrc"/>
+    <!-- The top dir of this project's main PICAXE source. -->
+    <property name="main.base.dir" value="${bsrc.base.dir}/main"/>
+    <!-- The top dir of this project's test/standalone PICAXE source. -->
+    <property name="test.base.dir" value="${bsrc.base.dir}/test"/>
+
+    <property name="dirsuffix.dbg" value="_D"/>
+    <property name="dirsuffix.opt" value="_O"/>
+    <property name="build.dir.base" value="out"/>
+    <property name="build.dir.dbg" value="../${build.dir.base}${dirsuffix.dbg}"/>
+    <property name="build.dir.opt" value="../${build.dir.base}${dirsuffix.opt}"/>
+    <!-- Build dir for common (non-opt, non-dbg) items. -->
+    <property name="build.dir.cmn" value="../${build.dir.base}_C"/>
+
+    <!-- General temporary work directory within an output subdirectory. -->
+    <property name="tmp.workdir" value="work.tmp"/>
+
+
+
+    <!--Location (directory) of simple PICAXE source-fragment library... -->
+    <property name="bsrclib.dir" value="../lib/bsrc"/>
+
+
+
+    <!-- =================================================================== -->
+    <!-- General initialisation target.                                      -->
+    <!-- =================================================================== -->
+    <target name="init">
+          <tstamp>
+              <format property="build.time" pattern="yyyy/dd/MM HH:mm" offset="0" unit="hour"/>
+          </tstamp>
+    </target>
+
+
+
+    <!-- =================================================================== -->
+    <!-- Builds test stub code with appended module(s).                      -->
+    <!-- =================================================================== -->
+    <!-- Depends on standalone selected test stub and empty module/fragment all .inc.bas files. -->
+	<!-- NOTE: MAY NOT BE SAFE TO RUN ON PRODUCTION HARDWARE WITHOUT ATTENTION TO *ALL* DEVICES PRESENT. -->
+    <target name="stubtest"
+        depends="init,clean"
+        description="builds test stub composite .bas file (from test body and modules)">
+        <mkdir dir="${build.dir.cmn}"/>
+        <delete file="${build.dir.cmn}/teststub.out.bas" quiet="true" />
+        <concat destfile="${build.dir.cmn}/teststub.out.bas"
+            fixlastline="true">
+            <header filtering="no" trimleading="yes">
+                ; GENERATED/OUTPUT FILE: DO NOT EDIT!
+                ; Built ${build.time}.
+                ; PARTIAL-HARDWARE TEST STUB.
+            </header>
+            <filelist dir="${test.base.dir}" files="TestDS1306-RTC.bas"/>
+            <fileset dir="${bsrclib.dir}"><include name="*.inc.bas"/></fileset>
+        </concat>
+    </target>
+
+
+
+    <!-- =================================================================== -->
+    <!-- Builds generic zero-hardware unit test code with all lib module(s). -->
+    <!-- =================================================================== -->
+    <!-- Depends on standalone unit test suit GenericCompuationUnitTests.bas and all .inc.bas files. -->
+    <target name="GenericComputationalUnitTests"
+        depends="init,clean"
+        description="builds generic computational unit test .bas file (from test body and module)">
+        <mkdir dir="${build.dir.cmn}"/>
+        <delete file="${build.dir.cmn}/GenericComputationalUnitTests.out.bas" quiet="true" />
+        <concat destfile="${build.dir.cmn}/GenericComputationalUnitTests.out.bas"
+            fixlastline="true">
+            <header filtering="no" trimleading="yes">
+                ; GENERATED/OUTPUT FILE: DO NOT EDIT!
+                ; Built ${build.time}.
+                ; ZERO-HARDWARE TEST STUB.
+            </header>
+            <filelist dir="${main.base.dir}" files="V0p09-board-IO-config.inc.bas"/> <!-- Used to provide standard board definitions/#defines. -->
+            <filelist dir="${test.base.dir}" files="GenericComputationalUnitTests.bas"/>
+            <fileset dir="${bsrclib.dir}"><include name="*.inc.bas"/></fileset>
+        </concat>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Builds DHD201302L0 board test suite code for V0.09 PCB1, full I/O.  -->
+    <!-- =================================================================== -->
+    <!-- Depends on main V0p09-TRV-test.body.bas and some module/fragment *.inc.bas files. -->
+    <target name="DHD201302L0_V0p09_tests"
+        depends="init,clean"
+        description="builds DHD201302L0 V0.09 PCB1 board tests composite .bas file">
+        <mkdir dir="${build.dir.cmn}"/>
+        <delete file="${build.dir.cmn}/DHD201302L0-V0p09-BOARD-TESTS.out.bas" quiet="true" />
+        <concat destfile="${build.dir.cmn}/DHD201302L0-V0p09-BOARD-TESTS.out.bas"
+            fixlastline="true">
+            <header filtering="no" trimleading="yes">
+                ; GENERATED/OUTPUT FILE: DO NOT EDIT!
+                ; Built ${build.time}.
+                ; BOARD-TEST NODE BUILD.
+            </header>
+            <filelist dir="${main.base.dir}" files="V0p09-board-IO-config.inc.bas"/>
+            <filelist dir="${main.base.dir}" files="V0p09-board-test.body.bas"/>
+            <fileset dir="${bsrclib.dir}"><include name="*.inc.bas"/></fileset>
+        </concat>
+    </target>
+
+
+    <!-- =================================================================== -->
+    <!-- Builds DHD201302L0 production code for V0.09 PCB1.                  -->
+    <!-- =================================================================== -->
+    <!-- Depends on main V0p09-TRV-control.body.bas and some module/fragment *.inc.bas files. -->
+    <target name="DHD201302L0_V0p09"
+        depends="init,clean"
+        description="builds DHD201302L0 V0.09 PCB1 composite .bas file">
+        <mkdir dir="${build.dir.cmn}"/>
+        <delete file="${build.dir.cmn}/DHD201302L0-V0p09.out.bas" quiet="true" />
+        <concat destfile="${build.dir.cmn}/DHD201302L0-V0p09.out.bas"
+            fixlastline="true">
+            <header filtering="no" trimleading="yes">
+                ; GENERATED/OUTPUT FILE: DO NOT EDIT!
+                ; Built ${build.time}.
+                ; GENERIC NODE BUILD.
+            </header>
+            <filelist dir="${main.base.dir}" files="V0p09-generic-config.inc.bas"/>
+            <filelist dir="${main.base.dir}" files="V0p09-board-IO-config.inc.bas"/>
+            <filelist dir="${main.base.dir}" files="V0p09-TRV-control.body.bas"/>
+            <fileset dir="${bsrclib.dir}"><include name="*.inc.bas"/></fileset>
+        </concat>
+    </target>
+
+
+    <!-- =================================================================== -->
+    <!-- Cleans up generated intermediate stuff                              -->
+    <!-- =================================================================== -->
+    <target name="clean"
+        depends="init"
+        description="cleans up all generated files and cached state">
+        <echo message="Doing cleanup of all build dirs..."/>
+        <delete dir="${build.dir.cmn}" quiet="true" />
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Builds test/release code from scratch, and tests it where possible. -->
+    <!-- =================================================================== -->
+    <target name="all"
+        depends="init,clean,GenericComputationalUnitTests,stubtest,DHD201302L0_V0p09_tests,DHD201302L0_V0p09"
+        description="cleans, then does builds">
+        <echo message="Builds and tests complete."/>
+    </target>
+
+
+</project>

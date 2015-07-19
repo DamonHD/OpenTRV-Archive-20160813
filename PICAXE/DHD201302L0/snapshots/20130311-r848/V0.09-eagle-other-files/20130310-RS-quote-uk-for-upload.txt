@@ -1,0 +1,22 @@
+# of boards	7									
+Quantity per board	Quantity Needed	Manually adjusted	Minimum Buy	Price each	Line total	Seller Stock No	Manufacturer Part. No.	Description	Supplier	
+1	7	7	1	1.4	1.4	705-1490	35RASMT4BHNTRX	Stereo jack	RS Components	
+1	7	7	5	0.322	1.61	714-2334	10103592-0001LF	Micro USB	RS Components	
+1	7	7	10	0.322	3.22	628-3661	TC1185-3.3VCT713	3.3V Regulator	RS Components	
+1	7	7	1	4.25	4.25	732-7321	DS1306E+	DS1306	RS Components	
+2	14	14	50	0.1	5	741-4434	C1608X5R0J106M080AB	10 uF	RS Components	
+1	7	7	50	0.018	0.9	213-2418	CRG0603F10K	10 Kohm	RS Components	
+1	7	7	50	0.012	0.6	213-2452	CRG0603F22K	22 kohm	RS Components	
+1	7	7	50	0.007	0.35	213-2367	CRG0603F4K7	4.7Kohm	RS Components	
+1	7	7	5	0.282	1.41	700-7907	SML-211UTT86	SMD LED Red 630nm 18deg Clear 0805	RS Components	
+3	21	21	25	0.02	0.5	264-4630	C0603C104K4RAC	100nF	RS Components	
+1	7	7	5	0.096	0.48	749-2059	GRM31CR60G107ME39L	100uF	RS Components	
+1	7	7	50	0.034	1.7	464-6391	06035A101JAT2A	100pF	RS Components	
+7	49	49	50	0.012	0.6	213-2531	CRG0603F100K	100Kohm	RS Components	
+1	7	7	50	0.012	0.6	213-2222	CRG0603F470R	470ohm	RS Components	
+1	7	7	5	0.8	4	667-6120	MC-306, 32.768kHz, 20ppm, 6pF	Crystal	RS Components	
+1	7	7	5	0.094	0.47	229-2548	L-483GDT	LED	RS Components	
+1	7	7	5	0.19	0.95	710-0444	1776275-2	Screw Terminal	RS Components	
+1	7	5	5	0.73	3.65	267-7416	W35532TRC	PCB Sockets	RS Components	
+1	7	2	1	4.29	4.29	716-6936	NEXC104Z3.5V10.5X5.5TRF	supercap	RS Components	
+										

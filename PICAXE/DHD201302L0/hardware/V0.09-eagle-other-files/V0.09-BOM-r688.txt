@@ -1,0 +1,19 @@
+Stereo Jack  SC1488-1-ND     0.44 £
+Power Jack   CP-002APJCT-ND  1.22 £
+3.3V Regulator   TC10553.3VCT713CT-ND   0.31 £
+PicAXE 18M2+     AXE015M2SM 2.64 £   techsupplies.co.uk
+DS1306   DS1306E+-ND     4.08 £
+RFM22B   RFM22B-868-S1   9.28 £  uk.farnell.com
+10 uF    478-4086-1-ND   0.37 £
+10 Kohm  RHM10KGCT-ND    0.07 £
+22 Kohm  RHM22KACT-ND    0.07 £
+4.7 Kohm     RHM4.7KECT-ND   0.07 £
+LED1     67-1656-1-ND    0.44 £
+LED2     67-1684-1-ND    0.44 £
+100 nF   445-2287-1-ND   0.24 £
+100 uF   587-1349-1-ND   1.22 £
+100 pF   478-3717-1-ND   0.11 £
+100 Kohm     RHM100KECT-ND   0.07 £
+470 Ohm  RHM470ERCT-ND   0.07 £
+Crystal  644-1171-1-ND   0.94 £
+0.1 F    604-1169-1-ND   3.53 £

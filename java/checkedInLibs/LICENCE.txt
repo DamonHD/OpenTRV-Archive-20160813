@@ -1,0 +1,28 @@
+Libraries in and below this directory are third party and believed to be OK to redistribute as-is.
+OpenTRV makes no claims over them.
+They are here for simplicity in some cases.
+
+Name: rxtx
+Maintainer: Trent Jarvi 
+Source: http://rxtx.qbang.org/
+Copyright: 1997-2007, Trent Jarvi 
+Licence: LGPL-2.1+
+See also native versions from here:
+https://blogs.oracle.com/jtc/entry/serial_port_communication_for_java
+
+Name: jSSC (java-simple-serial-connector)
+Maintainer: Sokolov Alexey.
+Licence: LGPL
+http://code.google.com/p/java-simple-serial-connector/
+https://github.com/scream3r/java-simple-serial-connector/
+
+Name: json-simple-1.1.1.jar (JSON library, Apache 2.0)
+Maintainer: Yidong Fang
+Licence: Apache 2.0
+https://code.google.com/p/json-simple/
+
+Name: jtwitter-3.0.7 + Signpost + Apache commons
+Licence: LGPL + Apache 2.0 + Apache 2.0
+Maintainer: Developed by Daniel Winterstein. Copyright (c) Winterwell Associates Ltd, 2008-2012 and ThinkTank Mathematics Ltd, 2007, except where otherwise stated.
+http://www.winterwell.com/software/jtwitter.php
+Stored complete as ZIP plus plartial expanded for Java classpath.

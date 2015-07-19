@@ -1,0 +1,88 @@
+DHD20130701
+Part of the email trail / discussion from before the call today.
+
+
+DHD wrote:
+
+OK, good.
+
+This device also has some limited memory for recording data (may be of use to another project); I am currently keeping hourly samples for the last 24h (and 'weekly' smoothed variants) of ambient light and temperature and of warm/frost mode.
+
+So there may be other parameters that we should capture, or for longer.
+
+Rgds
+
+Damon
+
+
+On 28 Jun 2013, at 16:08, Burchell, Kevin W wrote:
+
+Thanks, Damon.
+
+Could I add:
+1.       Options for energy consumption data collection (+ baseline). Maybe weekly readings? Can we incentivise?
+2.       Timing/schedule
+3.       Looks like there may be more than one intervention group?
+
+Best
+Kevin
+
+-----Original Message-----
+From: Damon Hart-Davis
+Sent: 28 June 2013 13:28
+To: Burchell, Kevin W
+Cc: Damon Hart-Davis; Rettie, Ruth M
+Subject: Conf call for Trial of OpenTRV this winter
+
+Suggested agenda / some items to discuss and a photo (see below).
+
+
+
+
+1) What is aim of trial?
+
+Aim is to see if OpenTRV does better than normal TRV in energy saving and/or comfort.
+
+Aim is to see how acceptable OpenTRV behaviour is, without minimal controls (WARM/FROST modes, optional BAKE and LEARN and "SMART" behaviours) and default or adjusted temperature settings.
+
+Aim is to deliver evidence for / against OpenTRV effectiveness by end of 2013/2014 winter.
+
+2) Restrictions on candidates by house and heating type etc.
+
+Must be radiator-heated with 2-wire thermostat control or equivalent and TRVs already fitted in all rooms under study.
+
+Can/should we include existing SuperHomes along with 'normal' humans?
+
+Is this robust enough for (say) kids running around?
+
+In some case it may be necessary to fit an extra TRV (where the existing thermostat is).
+
+3) How many of these systems can we build and install and what should the sample size be?
+
+4) What will our control be?
+
+
+
+
+
+See photo here:
+
+http://www.conrad-uk.com/ce/en/product/646463/FHT-80BTF-Wireless-Thermostat-Saving-Set
+
+Left-hand item (wireless radiator valve) screws on radiator in place of existing TRV head: no tools required.  For now OpenTRV uses this very valve.
+
+Middle item is the bit that OpenTRV replaces and contains the temperature and light sensors and 'brains'.  One of these also controls the boiler (we'll have to stick to heating systems / boilers with compatible controls: we can discuss) and optionally a local radiator in the same room.  Final physical design not yet finished; may include 3D-printed box!  Can be put on the wall or simply on a shelf, etc.
+
+The bit on the right is a window sensor and we're not using one of those at least for now.
+
+
+This is what our V0.1 PCBs look like BTW: this will be V0.2 technology that we deploy this winter (each board is < 5cm square):
+
+http://gallery.hd.org/_c/energy-matters/_more2013/_more04/OpenTRV-prototype-20130410-V0p09-PCB-populated-and-prepared-for-simple-deployment-1-DHD.jpg.html
+
+
+
+
+Rgds
+
+Damon

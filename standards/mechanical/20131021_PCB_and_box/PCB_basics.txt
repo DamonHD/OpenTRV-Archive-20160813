@@ -1,0 +1,7 @@
+REV2 / REV2 / REV4 PCB BASICS.
+
+50mm x 50mm boards (typically 2-layer 1.6mm thick).
+
+3.2mm holes (for 3M bolts) at corners (centres 2.16mm from board edge on either side).
+
+6mm square clearance at corners and 2mm along the edges for all components.

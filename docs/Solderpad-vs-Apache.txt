@@ -1,0 +1,26 @@
+From: Damon Hart-Davis
+Date: 16 April 2013 12:13:05 GMT+01:00
+To: Closed list for developer discussions <opentrv-dev@lists.opentrv.org.uk>
+Subject: Licensing
+
+Hi,
+
+I  just had a chat with Andrew Katz, a lawyer involved with the creation of the Solderpad (0.51) licence, a variant of Apache 2.0 that deals with some of the legal/IP issues beyond copyright and patents that Apache addresses:
+
+http://solderpad.org/licenses/
+
+From our discussion we determined that maybe the best thing to do to protect us from IP trolls and also to protect/comfort end users (commercial and non-commercial) is as follows:
+
+All code (including the generation scripts for 3D shapes): Apache licence
+
+Schematics: Solderpad licence (eg paste the text into the schematic like we already have with V0.09 and the Apache licence)
+
+PCB: Solderpad licence by putting short text eg "Solderpad licence <URL>" linking to the licence text on the PCB legend
+
+Generated 3D files (ie output of scripts): disclaim rights, eg add something to the output to the effect "we believe we retain no rights in this, but you may choose to regard this as licensed under Solderpad/Apache if you wish".
+
+Any comments?
+
+Rgds
+
+Damon

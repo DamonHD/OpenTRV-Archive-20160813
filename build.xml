@@ -1,0 +1,333 @@
+<?xml version="1.0"?>
+
+<!--
+The OpenTRV project licenses this file to you
+under the Apache Licence, Version 2.0 (the "Licence");
+you may not use this file except in compliance
+with the Licence. You may obtain a copy of the Licence at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the Licence is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the Licence for the
+specific language governing permissions and limitations
+under the Licence.
+
+Author(s) / Copyright (s): Damon Hart-Davis 2014
+  -->
+
+<!-- ======================================================================= -->
+<!-- PG2K J2EE/servlet and client apps.                                      -->
+<!-- ======================================================================= -->
+
+<!-- Use Ant 1.6 or newer. -->
+
+<!-- All code runs under JDK 8. -->
+
+<!--
+    This builds Java components.
+
+     1) Comms utilities JAR.
+
+    In addition, this can build/run unit test code for the system.
+
+
+    The debug builds are designed for the fastest possible incremental
+    compilation, but at some slight risk of things not being rebuilt
+    when they should be; occasionally use the "clean" target to zap
+    cached state.  The debug builds are also as debuggable as possible.
+
+    The optimised builds are always from scratch for reliability,
+    and are configured for run-time speed.  They will be
+    relatively slow to build and difficult to debug.
+
+
+    Expects JUnit 3.8.1 or newer.
+  -->
+
+<project name="OpenTRV" default="all" basedir=".">
+
+    <property name="app.name" value="OpenTRV"/>
+    <property name="app.version.major" value="0"/>
+    <property name="app.version.minor" value="2"/>
+    <property name="app.version.micro" value="2"/>
+    <property name="app.version" value="${app.version.major}.${app.version.minor}.${app.version.micro}"/>
+    <!-- Version excluding the "micro" portion, thus reflecting only significant API/functionality changes. -->
+    <property name="app.version.notmicro" value="${app.version.major}.${app.version.minor}"/>
+
+    <property name="dist.jar" value="${app.name}-${app.version}.jar"/>
+
+    <!-- Target/minimum JDK/JSE version for build and run. -->
+    <property name="JDKVER" value="8"/>
+    <!-- Target/minimum .class file version for build. -->
+    <property name="CLASSVER" value="8"/>
+
+    <!-- Stub names, used in source and output dirs and package names. -->
+    <!-- This is third-party imported (library) code. -->
+    <property name="tp" value="thirdParty"/>
+    <!-- This is core server-side support code. -->
+    <property name="comms" value="comms"/>
+    <!-- This is the command-line (and WAR) test code. -->
+    <property name="test" value="test"/>
+
+    <!-- Version property file source dir. -->
+    <property name="version.src.dir" value="version"/>
+    <!-- Version property file properties file name. -->
+    <property name="version.pfname" value="OpenTRV.properties"/>
+
+    <!-- The base dir of the Java source. -->
+    <property name="jsrc.base.dir" value="javasrc"/>
+    <!-- Specific Java source areas. -->
+    <property name="tp.src.dir" value="${jsrc.base.dir}"/>
+    <property name="comms.src.dir" value="${jsrc.base.dir}"/>
+    <property name="test.src.dir" value="${jsrc.base.dir}"/>
+
+    <property name="dirsuffix.dbg" value="_D"/>
+    <property name="dirsuffix.opt" value="_O"/>
+    <property name="build.dir.base" value="out"/>
+    <property name="build.dir.dbg" value="${build.dir.base}${dirsuffix.dbg}"/>
+    <property name="build.dir.opt" value="${build.dir.base}${dirsuffix.opt}"/>
+    <!-- Build dir for common (non-opt, non-dbg) items. -->
+    <property name="build.dir.cmn" value="${build.dir.base}_C"/>
+
+    <!-- General temporary work directory. -->
+    <property name="tmp.workdir" value="work.tmp"/>
+
+    <!-- Test report directories. -->
+    <property name="test.reportdir" value="test.report"/>
+    <property name="test.reportdir.xml" value="${test.reportdir}/xml"/>
+    <property name="test.reportdir.html" value="${test.reportdir}/html"/>
+
+    <!-- Directory for external and runtime-loadable (small, public) plugin JARs to copy to the WAR WEB-INF/lib directory. -->
+    <property name="plugins.dir" value="java/checkedInLibs"/>
+    <!-- Directory for external API JARs only needed at compile time (not at runtime). -->
+    <property name="extapilibs.dir" value="DNR/extAPIlibs"/>
+    <!-- Directory for external API JARs only needed for testing. -->
+    <property name="extapilibs.dir.test" value="java/checkedInLibs.test"/>
+
+    <!-- Name of directory for i18n message properties files. -->
+    <property name="i18n.msgs.props.dir" value="i18nMsgs"/>
+
+    <!-- Name of the svrCore JAR file to produce. -->
+    <property name="comms.jar" value="OpenTRV-comms-${app.version}.jar"/>
+
+    <!-- JARs from plug-ins dir. -->
+    <path id="plugins.class.path" description="plug-in JARs">
+      <fileset dir="${plugins.dir}">
+        <include name="**/*.jar" />
+      </fileset>
+    </path>
+    <property name="cp.plugins" refid="plugins.class.path"/>
+    <!-- Basic class path we compile against, including plug-in JARs, external libs and the J2EE/JWS APIs. -->
+    <property name="cp.common.basic" value="${cp.plugins}:${cp.j3d}:${J2EEAPI.jar}:${extapilibs.dir}/JDK${JDKVER}/javaws.jar:${JAI.cp}:${plugins.private.dir}/commons-logging-1.1.1.jar:${plugins.dir}/log4j-1.2.15.jar"/>
+    <!-- Provided in debug/non-debug versions. -->
+    <!-- Expects cp.J2EEAPI to contain a classpath fragment for the J2EE API. -->
+    <property name="cp.dbg.basic" value="${IsDebug.true.cp}:${cp.common.basic}"/>
+    <property name="cp.opt.basic" value="${IsDebug.false.cp}:${cp.common.basic}"/>
+    <!-- Components only required for testing. -->
+    <!--<property name="cp.dbg.test" value="DNR/offline/MutabilityDetector-0.8.jar:DNR/httpunit-1.7-minimal/lib/httpunit.jar"/>-->
+    <property name="cp.dbg.test" value="${cp.dbg.basic}:${extapilibs.dir.test}/junit-4.12.jar:${extapilibs.dir.test}/hamcrest-core-1.3.jar"/>
+    <property name="cp.opt.test" value="${cp.dbg.test}"/>
+
+    <!--Place where source snapshot is built. -->
+    <property name="src.snapshot.dir" value="${build.dir.cmn}"/>
+    <!--Name of raw source snapshot archive to include in generated WAR file. -->
+    <property name="src.snapshot.tbz2" value="PG2K-src-snapshot-${app.version.major}-${app.version.minor}-${app.version.micro}-DHD.tbz2"/>
+
+    <!--Place where javadoc is built. -->
+    <property name="javadoc.dir" value="${build.dir.cmn}/javadoc"/>
+
+    <!-- General initialisation target. -->
+    <target name="init">
+          <tstamp>
+              <format property="build.time" pattern="yyyy/dd/MM HH:mm" offset="0" unit="hour"/>
+          </tstamp>
+    </target>
+    
+
+    <!-- Build properties file containing the version. -->
+    <target name="version.file"
+        description="makes the application version properties file"
+        depends="init">
+        <delete file="${version.src.dir}/${version.pfname}" quiet="true"/>
+        <mkdir dir="${version.src.dir}"/>
+        <echo file="${version.src.dir}/${version.pfname}" append="no">
+# WARNING: autogenerated file, do not edit or check in.
+app.version=${app.version}
+build.time=${build.time} UTC
+        </echo>
+    </target>
+
+
+    <!-- =================================================================== -->
+    <!-- Prepares the comms JAR build directories, debug and optimised       -->
+    <!-- =================================================================== -->
+    <!-- DBG -->
+    <target name="comms.prepare.dbg.testuptodate">
+        <!-- Claim that the JAR target is up-to-date if its source files are. -->
+        <uptodate property="comms.jar.dbg.uptodate"
+            targetfile="${build.dir.dbg}/${comms.jar}">
+            <srcfiles dir="${comms.src.dir}" includes="**/*.java"/>
+        </uptodate>
+    </target>
+    <target name="comms.prepare.dbg"
+        depends="init,comms.prepare.dbg.testuptodate"
+        unless="comms.jar.dbg.uptodate">
+        <delete file="${build.dir.dbg}/${comms.jar}" quiet="true"/>
+        <mkdir dir="${build.dir.dbg}/${tmp.workdir}/${comms}"/>
+        <!-- Used for testing, may move to a different target in future -->
+        <mkdir dir="${build.dir.dbg}/${tmp.workdir}/${test}"/>
+        <delete file="${build.dir.dbg}/.tmp.${comms.jar}" quiet="true"/>
+    </target>
+    <target name="test.prepare.dbg"
+        depends="init,comms.prepare.dbg">
+        <mkdir dir="${build.dir.dbg}/${tmp.workdir}/${test}"/>
+        <mkdir dir="${build.dir.dbg}/${test.reportdir}"/>
+        <mkdir dir="${build.dir.dbg}/${test.reportdir.xml}"/>
+        <mkdir dir="${build.dir.dbg}/${test.reportdir.html}"/>
+    </target>
+
+    <!-- OPT -->
+    <!-- This is extra strict and cleans everything out before starting. -->
+    <target name="comms.prepare.opt"
+        depends="init">
+        <!-- Make sure that the working dir is clear of cached state. -->
+        <delete dir="${build.dir.opt}/${tmp.workdir}/${comms}" quiet="true"/>
+        <delete file="${build.dir.opt}/${comms.jar}" quiet="true"/>
+        <mkdir dir="${build.dir.opt}/${tmp.workdir}/${comms}"/>
+        <delete file="${build.dir.opt}/.tmp.${comms.jar}" quiet="true"/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Compiles the comms source code, debug and optimised                 -->
+    <!-- =================================================================== -->
+    <!-- FOR NOW, the svrCore will include the AI code. -->
+    <!-- DBG -->
+    <target name="comms.compile.dbg"
+        depends="comms.prepare.dbg"
+        unless="comms.jar.dbg.uptodate">
+        <javac srcdir="${comms.src.dir}"
+            destdir="${build.dir.dbg}/${tmp.workdir}/${comms}"
+            classpath="${cp.dbg.basic}"
+            debug="on"
+            deprecation="on"
+            target="${CLASSVER}"
+            optimize="off"
+            includeantruntime="false">
+            <include name="uk/org/opentrv/comms/**/*.java"/>
+        </javac>
+    </target>
+    <target name="test.compile.dbg"
+        depends="test.prepare.dbg">
+        <javac srcdir="${comms.src.dir}"
+            destdir="${build.dir.dbg}/${tmp.workdir}/${test}"
+            classpath="${cp.dbg.test}"
+            debug="on"
+            deprecation="on"
+            target="${CLASSVER}"
+            optimize="off"
+            includeantruntime="false">
+            <include name="uk/org/opentrv/**/*.java"/>
+        </javac>
+        <copy todir="${build.dir.dbg}/${tmp.workdir}/${test}">
+            <fileset dir="${comms.src.dir}" includes="**/*.csv" />
+            <fileset dir="${comms.src.dir}" includes="**/*.json" />
+        </copy>
+    </target>
+
+    <!-- OPT -->
+    <target name="comms.compile.opt"
+        depends="comms.prepare.opt">
+        <javac srcdir="${comms.src.dir}"
+            destdir="${build.dir.opt}/${tmp.workdir}/${comms}"
+            classpath="${cp.opt.basic}"
+            debug="off"
+            deprecation="on"
+            target="${CLASSVER}"
+            optimize="on"
+            includeantruntime="false">
+            <include name="uk/org/opentrv/comms/**/*.java"/>
+        </javac>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- JARs the svrCore source code, debug and optimised                   -->
+    <!-- =================================================================== -->
+    <!-- DBG -->
+    <target name="comms.jar.dbg"
+        depends="comms.compile.dbg,version.file"
+        unless="comms.jar.dbg.uptodate"
+        description="builds the comms JAR">
+        <jar jarfile="${build.dir.dbg}/${comms.jar}">
+            <fileset dir="${build.dir.dbg}/${tmp.workdir}/${comms}" includes="**/*.class" />
+            <fileset dir="${version.src.dir}" includes="**/*.properties" />
+        </jar>     
+    </target>
+
+    <!-- OPT -->
+    <target name="comms.jar.opt"
+        depends="comms.compile.opt,version.file"
+        description="builds the optimised/release comms JAR">
+        <jar jarfile="${build.dir.opt}/${comms.jar}"
+            compress="true" level="9" filesonly="true">
+            <fileset dir="${build.dir.opt}/${tmp.workdir}/${comms}" includes="**/*.class" />
+            <fileset dir="${version.src.dir}" includes="**/*.properties" />
+        </jar>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Tests the debug code.                                               -->
+    <!-- =================================================================== -->
+    <target name="test.dbg.run"
+        depends="test.compile.dbg">
+        <junit printsummary="on"
+            fork="true"
+            haltonfailure="no">
+            <classpath>
+                <pathelement path="${cp.dbg.test}"/>
+                <pathelement location="${build.dir.dbg}/${tmp.workdir}/${test}"/>
+            </classpath>
+            <formatter type="xml"/>
+            <batchtest todir="${build.dir.dbg}/${test.reportdir.xml}">
+                <fileset dir="${comms.src.dir}">
+                    <include name="**/*Test*.java" />
+                </fileset>
+            </batchtest>
+        </junit>
+    </target>
+    <target name="test.dbg.report"
+        depends="test.dbg.run">
+        <junitreport todir="${build.dir.dbg}/${test.reportdir.html}">
+            <fileset dir="${build.dir.dbg}/${test.reportdir.xml}">
+                <include name="TEST-*.xml"/>
+            </fileset>
+            <report todir="${build.dir.dbg}/${test.reportdir.html}" />
+        </junitreport>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Builds debug and optimised code from scratch, and tests it.         -->
+    <!-- =================================================================== -->
+    <target name="all"
+        depends="clean,comms.jar.dbg,comms.jar.opt"
+        description="cleans, then does optimised/release build and test">
+        <echo message="Builds and tests complete."/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Cleans up generated intermediate stuff                              -->
+    <!-- =================================================================== -->
+    <target name="clean"
+        description="cleans up all generated files and cached state">
+        <echo message="Doing cleanup of all build dirs..."/>
+        <parallel>
+            <delete dir="${build.dir.dbg}" quiet="true"/>
+            <delete dir="${build.dir.cmn}" quiet="true"/>
+            <delete dir="${build.dir.opt}" quiet="true"/>
+        </parallel>
+    </target>
+
+
+</project>

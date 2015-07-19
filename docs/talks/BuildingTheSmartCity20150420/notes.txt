@@ -1,0 +1,48 @@
+OpenTRV - providing technology to revolutionise the way we heat our homes.
+
+IoT / Cites / Stack
+
+
+Here to save the planet: up to 8% of EU's entire carbon footprint on 500m radiators.
+
+For that we need to be cheap (target GBP10/rad, payback in one winter).
+
+For that we need to be open and interoperable.
+
+For that we need IoT.
+
+
+IoT Review
+
+  * Lots of sensors (and some actuators)
+    Business case: "If you can't measure, you can't manage..."
+
+  * Internet often though not always involved
+    OpenTRV's "home LAN" need not touch the Internet but the tech is the same when it does.
+
+  * Lowest power things (smallest, cheapest) cannot directly support Internet sensibly
+    Eg 22kB for IPv4 UDP on AVR.
+    Which implies concentrators.
+    Also militates against meshing.
+
+  * Big pending issues: we're hoping to contribute over next 12 months!
+    Standards/interop in data and comms.
+    Security.
+
+
+IoT in Cities
+
+  * IoT Launchpad
+    Buses (public transport generally), air, env key targets of IoT.
+    Building health is another.
+    Fine-grained monitoring such as temps and PMs may be hugely helpful.
+    Preferably fit-and-forget, eg self-powered where mains not available.
+    Cheap (and not worth nicking), secure, safe, reliable and accurate enough, open.
+
+
+IoT Stack
+
+  * 80% of IoT value and people in s/w side.
+    Not everyone could or should wield at soldering iron.
+    OpenTRV contribution is founders with experience all the way up the stack.
+    Like being back in Personal Robots days with Z80A but with EEPROM, radio and nice IDE!
