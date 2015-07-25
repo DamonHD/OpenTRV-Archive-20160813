@@ -6,7 +6,8 @@
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
 <listEntry value="1"/>
 </listAttribute>
+<booleanAttribute key="org.eclipse.jdt.launching.ATTR_USE_START_ON_FIRST_THREAD" value="true"/>
 <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="uk.org.opentrv.comms.util.EventDrivenV0p2CLIFollower"/>
-<stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value="/dev/tty.usbserial-FTGACM4G testout"/>
+<stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value="javasrc/uk/org/opentrv/test/cfg/dhd.conf"/>
 <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="OpenTRV"/>
 </launchConfiguration>
