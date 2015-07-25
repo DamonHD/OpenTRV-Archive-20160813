@@ -90,7 +90,13 @@ public final class IOHandlingV0p2
                         break;
                         }
 
-                    case '!': case '?': // Error/warning report from OpenTRV.
+                    case '?': // Error/warning report from OpenTRV.
+                        {
+                        System.err.println("WARNING: " + inputBuf);
+                        break;
+                        }
+
+                    case '!': // Error/warning report from OpenTRV.
                         {
                         System.err.println("ERROR: " + inputBuf);
                         break;
@@ -111,7 +117,8 @@ public final class IOHandlingV0p2
         else if((c < 32) || (c > 126))
             {
             // Bad character (non-printable ASCII); reject entire line.
-            System.err.println("Bad character on line: " + ((int)c));
+            System.err.println("Bad character on line: " + ((int)c) +
+                    " after " + inputBuf.length() + " chars: " + inputBuf.toString());
             inputBuf.setLength(0); // Clear buffer.
             }
 

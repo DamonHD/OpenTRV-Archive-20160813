@@ -9,6 +9,7 @@ or release/freeze points.
 
 
 pending:
+    DHD20150725: improved reporting on bad input from V0p2 unit over serial
 
 
 
