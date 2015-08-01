@@ -302,6 +302,9 @@ public final class CRCTest
         // Minimal alert with non-zero house codes.
         byte bufAlert1[] = new byte[] {'!', 10, 21, 1, 1, 1, 1};
         assertEquals(55, CC1Impl.computeSimpleCRC(bufAlert1, 0, bufAlert1.length));
+        // Minimal alert with non-zero house codes.
+        byte bufAlert2[] = new byte[] {'!', 99, 99, 1, 1, 1, 1};
+        assertEquals(12, CC1Impl.computeSimpleCRC(bufAlert2, 0, bufAlert2.length));
         }
 
     /**OK PRNG. */
