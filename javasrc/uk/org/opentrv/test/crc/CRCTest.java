@@ -274,7 +274,7 @@ public final class CRCTest
         }
 
     /**Test some basics of the CC1 (central control V1) protocol CRC1.
-     * These tests can then be ported to/from the Arduino code. 
+     * These tests can then be ported to/from the Arduino C++ code. 
      */
     @Test public void testCC1()
         {
