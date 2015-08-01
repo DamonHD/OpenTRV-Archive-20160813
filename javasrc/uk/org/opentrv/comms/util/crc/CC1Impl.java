@@ -44,7 +44,7 @@ public final class CC1Impl
       *     must be positive and entirely within buf[]
       * @return 0 (invalid) if the buffer is too short or the message otherwise invalid
       */
-     static byte computeSimpleCRC(final byte buf[], final int offset, final int buflen)
+     public static byte computeSimpleCRC(final byte buf[], final int offset, final int buflen)
          {
          // Assume a fixed message length.
          final int len = 7;

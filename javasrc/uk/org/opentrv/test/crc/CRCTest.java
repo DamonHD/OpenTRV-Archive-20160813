@@ -28,6 +28,7 @@ import java.util.Random;
 
 import org.junit.Test;
 
+import uk.org.opentrv.comms.util.crc.CC1Impl;
 import uk.org.opentrv.comms.util.crc.CRC7_5B;
 import uk.org.opentrv.comms.util.crc.CRC8_98_DOW;
 
@@ -270,6 +271,37 @@ public final class CRCTest
             --bitsLeftToFlip;
             }
 //System.out.println(Arrays.toString(buf));
+        }
+
+    /**Test some basics of the CC1 (central control V1) protocol CRC1.
+     * These tests can then be ported to/from the Arduino code. 
+     */
+    @Test public void testCC1()
+        {
+        byte buf[] = new byte[13]; // More than long enough.
+        // Test that a zero leading byte is rejected with a zero result.
+        buf[0] = 0;
+        assertEquals(0, CC1Impl.computeSimpleCRC(buf, 0, buf.length));
+        // Test that a plausible non-zero byte and long-enough buffer is non-zero.
+        buf[0] = '!';
+        assertTrue(0 != CC1Impl.computeSimpleCRC(buf, 0, buf.length));
+        // Test that a plausible non-zero byte and not-long-enough buffer is rejected with a zero result.
+        buf[0] = '!';
+        assertEquals(0, CC1Impl.computeSimpleCRC(buf, 0, 1));
+        assertEquals(0, CC1Impl.computeSimpleCRC(buf, 0, 6));
+        assertTrue(0 != CC1Impl.computeSimpleCRC(buf, 0, 7 /* OTProtocolCC::CC1Alert::primary_frame_bytes */ )); // Should be long enough.
+        // CC1Alert contains:
+        //   * House code (hc1, hc2) of valve controller that the alert is being sent from (or on behalf of).
+        //   * Four extension bytes, currently reserved and of value 1.
+        // Should generally be fixed length on the wire, and protected by non-zero version of CRC7_5B.
+        //     '!' hc2 hc2 1 1 1 1 crc
+        // Note that most values are whitened to be neither 0x00 nor 0xff on the wire.
+        // Minimal alert with zero house codes.
+        byte bufAlert0[] = new byte[] {'!', 0, 0, 1, 1, 1, 1};
+        assertEquals(80, CC1Impl.computeSimpleCRC(bufAlert0, 0, bufAlert0.length));
+        // Minimal alert with non-zero house codes.
+        byte bufAlert1[] = new byte[] {'!', 10, 21, 1, 1, 1, 1};
+        assertEquals(55, CC1Impl.computeSimpleCRC(bufAlert1, 0, bufAlert1.length));
         }
 
     /**OK PRNG. */
