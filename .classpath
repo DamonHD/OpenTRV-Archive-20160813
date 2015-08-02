@@ -10,5 +10,6 @@
 	<classpathentry kind="lib" path="java/checkedInLibs/jtwitter-3.0.7/jtwitter.jar"/>
 	<classpathentry kind="lib" path="java/checkedInLibs/jtwitter-3.0.7/lib/signpost-commonshttp4.jar"/>
 	<classpathentry kind="lib" path="java/checkedInLibs/jtwitter-3.0.7/lib/signpost-core-1.2.1.1.jar"/>
+	<classpathentry kind="lib" path="java/checkedInLibs/rxtx-2.1.7.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
