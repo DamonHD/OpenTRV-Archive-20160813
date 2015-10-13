@@ -33,76 +33,25 @@ including interrupts and sleep.
 
 #include "V0p2_Main.h"
 
-#include "Sensor.h"
-
-//#define USE_WDT_FOR_SHORT_DELAYS // If defined use WDT rather than slowing main system clock.
-
-// If CPU clock is 1MHz then *assume* that it is the 8MHz internal RC clock prescaled by 8 unless DEFAULT_CPU_PRESCALE is defined.
-#if F_CPU == 1000000L
-#ifndef DEFAULT_CPU_PRESCALE
-#define DEFAULT_CPU_PRESCALE 3
-#endif
-#endif
-
-//#ifndef DEFAULT_CPU_PRESCALE
-//// Default prescale value at start-up computed and stored once.
-//extern const clock_div_t DEFAULT_CPU_PRESCALE;
-//#endif
-
-#define MAX_CPU_PRESCALE clock_div_256 // At least for the ATmega328P...
-#define MIN_CPU_HZ ((F_CPU) >> (((int) MAX_CPU_PRESCALE) - (DEFAULT_CPU_PRESCALE)))
-
-// By default allow use of IDLE mode to save some power while leaving most things running.
-#ifndef DISABLE_AVR_IDLE_MODE
-#define ENABLE_AVR_IDLE_MODE
-#endif
+#include <OTV0p2Base.h>
 
 
-// Sleep for specified number of _delay_loop2() loops at minimum available CPU speed.
-// Each loop takes 4 cycles at that minimum speed, but entry and exit overheads may take the equivalent of a loop or two.
-// Note: inlining is prevented so as to avoid migrating anything into the section where the CPU is running slowly.
-// Deprecated as may interact badly with interrupts if used naively (eg ISR code runs very slowly).
-// This may only be safe to use with interrupts disabled.
-void _sleepLowPowerLoopsMinCPUSpeed(uint16_t loops) __attribute__ ((noinline));
-
-// Sleep/spin for approx specified strictly-positive number of milliseconds, in as low-power mode as possible.
-// This may be achieved in part by dynamically slowing the CPU clock if possible.
-// Macro to allow some constant folding at compile time where the sleep-time argument is constant.
-// Should be good for values up to at least 1000, ie 1 second.
-// Assumes MIN_CPU_HZ >> 4000.
-// TODO: break out to non-inlined routine where arg is not constant (__builtin_constant_p).
-// Deprecated as may interact badly with interrupts if used naively (eg ISR code runs very slowly).
-static void inline _sleepLowPowerMs(const uint16_t ms) { _sleepLowPowerLoopsMinCPUSpeed((((MIN_CPU_HZ * (ms)) + 2000) / 4000) - ((MIN_CPU_HZ>=12000)?2:((MIN_CPU_HZ>=8000)?1:0))); }
-// Sleep/spin for (typically a little less than) strictly-positive specified number of milliseconds, in as low-power mode as possible.
-// This may be achieved in part by dynamically slowing the CPU clock if possible.
-// Macro to allow some constant folding at compile time where the sleep-time argument is constant.
-// Should be good for values up to at least 1000, ie 1 second.
-// Uses formulation likely to be quicker than _sleepLowPowerMs() for non-constant argument values,
-// and that results in a somewhat shorter sleep than _sleepLowPowerMs(ms).
-// Assumes MIN_CPU_HZ >> 4000.
-// TODO: break out to non-inlined routine where arg is not constant (__builtin_constant_p).
-// Deprecated as may interact badly with interrupts if used naively (eg ISR code runs very slowly).
-static void inline _sleepLowPowerLessThanMs(const uint16_t ms) { _sleepLowPowerLoopsMinCPUSpeed(((MIN_CPU_HZ/4000) * (ms)) - ((MIN_CPU_HZ>=12000)?2:((MIN_CPU_HZ>=8000)?1:0))); }
-
-// Sleep/spin for approx specified strictly-positive number of milliseconds, in as low-power mode as possible.
-// Nap() may be more efficient for intervals of longer than 15ms.
-// Interrupts are blocked for about 1ms at a time.
-// Should be good for the full range of values and should take no time where 0ms is specified.
-static void inline sleepLowPowerMs(uint16_t ms) { while(ms-- > 0) { ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { _sleepLowPowerMs(1); } } }
-// Sleep/spin for (typically a little less than) strictly-positive specified number of milliseconds, in as low-power mode as possible.
-// Nap() may be more efficient for intervals of longer than 15ms.
-// Interrupts are blocked for about 1ms at a time.
-// Should be good for the full range of values and should take no time where 0ms is specified.
-static void inline sleepLowPowerLessThanMs(uint16_t ms) { while(ms-- > 0) { ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { _sleepLowPowerLessThanMs(1); } } }
-
-// Call from setup() to turn off unused modules, set up timers and interrupts, etc.
-// I/O pin setting is not done here.
+// Call from setup() to turn off unused modules, set up timers and interrupts, etc, for OpenTRV V0p2 board.
+// I/O pin configuration is not done here.
 void powerSetup();
 
+// Selectively turn off all modules that need not run continuously so as to minimise power without sleeping.
+// Suitable for start-up and for belt-and-braces use before main sleep on each cycle,
+// to ensure that nothing power-hungry is accidentally left on.
+// Any module that may need to run all the time should not be turned off here.
+// May be called from panic(), so do not be too clever.
+// Does NOT attempt to power down the radio, eg in case that needs to be left in RX mode.
+// Does NOT attempt to adjust serial power state.
+void minimisePowerWithoutSleep();
 
 
 // Sensor for supply (eg battery) voltage in millivolts.
-class SupplyVoltageMilliVolts : public Sensor<uint16_t>
+class SupplyVoltageMilliVolts : public OTV0P2BASE::Sensor<uint16_t>
   {
   private:
     // Internal bandgap (1.1V nominal, 1.0--1.2V) as fraction of Vcc [0,1023].
@@ -152,43 +101,6 @@ extern SupplyVoltageMilliVolts Supply_mV;
 int readInternalTemperatureC16();
 
 
-
-// Selectively turn off all modules that need not run continuously so as to minimise power without sleeping.
-// Suitable for start-up and for belt-and-braces use before main sleep on each cycle,
-// to ensure that nothing power-hungry is accidentally left on.
-// Any module that may need to run all the time should not be turned off here.
-// May be called from panic(), so do not be too clever.
-// Does NOT attempt to power down the radio, eg in case that needs to be left in RX mode.
-// Does NOT attempt to adjust serial power state.
-void minimisePowerWithoutSleep();
-
-// Sleep with BOD disabled in power-save mode; will wake on any interrupt.
-// This particular API is not guaranteed to be maintained: please use sleepUntilInt() instead.
-void sleepPwrSaveWithBODDisabled();
-
-// Sleep indefinitely in as lower-power mode as possible until a specified watchdog time expires, or another interrupt.
-// May be useful to call minimsePowerWithoutSleep() first, when not needing any modules left on.
-#define sleepUntilInt() sleepPwrSaveWithBODDisabled()
-
-// Sleep briefly in as lower-power mode as possible until the specified (watchdog) time expires.
-//   * watchdogSleep is one of the WDTO_XX values from <avr/wdt.h>
-// May be useful to call minimsePowerWithoutSleep() first, when not needing any modules left on.
-void nap(int_fast8_t watchdogSleep);
-
-// Sleep briefly in as lower-power mode as possible until the specified (watchdog) time expires, or another interrupt.
-//   * watchdogSleep is one of the WDTO_XX values from <avr/wdt.h>
-//   * allowPrematureWakeup if true then if woken before watchdog fires return false; default false
-// Returns false if the watchdog timer did not go off, true if it did.
-// May be useful to call minimsePowerWithoutSleep() first, when not needing any modules left on.
-bool nap(int_fast8_t watchdogSleep, bool allowPrematureWakeup);
-
-#ifdef ENABLE_AVR_IDLE_MODE
-// Idle the CPU for specified time but leave everything else running (eg UART), returning on any interrupt or the watchdog timer.
-// Should reduce power consumption vs spinning the CPU >> 3x, though not nearly as much as nap().
-// True iff watchdog timer expired; false if something else woke the CPU.
-bool idleCPU(int_fast8_t watchdogSleep);
-#endif
-
 // Call this to do an I/O poll if needed; returns true if something useful happened.
 // This call should typically take << 1ms at 1MHz CPU.
 // Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or sleep.
@@ -199,14 +111,15 @@ bool pollIO(bool force = false);
 // Nap productively polling I/O, etc, across the system while spending time in low-power mode if possible.
 // Typically sleeps for about 30ms; tries to allow earlier wakeup if interrupt is received, etc.
 // True iff watchdog timer expired; false if something else woke the CPU.
-static bool inline nap15AndPoll() { const bool wd = nap(WDTO_15MS, true); pollIO(!wd); return(wd); }
-#ifdef ENABLE_AVR_IDLE_MODE
+static bool inline nap15AndPoll() { const bool wd = ::OTV0P2BASE::nap(WDTO_15MS, true); pollIO(!wd); return(wd); }
+
+#if !defined(OTV0P2BASE_IDLE_NOT_RECOMMENDED) && defined(ENABLE_USE_OF_AVR_IDLE_MODE)
 // Idle productively polling I/O, etc, across the system while spending time in low-power mode if possible.
 // Typically sleeps for nominally up to 30ms; tries to allow earlier wakeup if interrupt is received, etc.
 // (Will often be prematurely woken by timer0 with ~16ms interval.)
 // True iff watchdog timer expired; false if something else woke the CPU.
-static bool inline idle15AndPoll() { const bool wd = idleCPU(WDTO_15MS); pollIO(!wd); return(wd); }
-//static bool inline idle30AndPoll() { const bool wd = idleCPU(WDTO_30MS); pollIO(true); return(wd); }
+// Only use this if not disallowed for board type, eg with ENABLE_USE_OF_AVR_IDLE_MODE.
+static bool inline idle15AndPoll() { const bool wd = ::OTV0P2BASE::_idleCPU(WDTO_15MS, true); pollIO(!wd); return(wd); }
 #endif
 
 // Call this to productively burn tens to hundreds of CPU cycles, and poll I/O, eg in a busy-wait loop.
@@ -216,25 +129,6 @@ static bool inline idle15AndPoll() { const bool wd = idleCPU(WDTO_15MS); pollIO(
 // May capture some entropy in secure and non-secure PRNGs.
 void burnHundredsOfCyclesProductivelyAndPoll();
 
-
-// Use WDT-based timer for xxxPause() routines.
-// Very tiny low-power sleep to approximately match the PICAXE V0.09 routine of the same name.
-#define VERYTINY_PAUSE_MS 5
-static void inline veryTinyPause() { sleepLowPowerMs(VERYTINY_PAUSE_MS); }
-// Tiny low-power sleep to approximately match the PICAXE V0.09 routine of the same name.
-#define TINY_PAUSE_MS 15
-static void inline tinyPause() { nap(WDTO_15MS); } // 15ms vs 18ms nominal for PICAXE V0.09 impl.
-// Small low-power sleep.
-#define SMALL_PAUSE_MS 30
-static void inline smallPause() { nap(WDTO_30MS); }
-// Medium low-power sleep to approximately match the PICAXE V0.09 routine of the same name.
-// Premature wakeups MAY be allowed to avoid blocking I/O polling for too long.
-#define MEDIUM_PAUSE_MS 60
-static void inline mediumPause() { nap(WDTO_60MS); } // 60ms vs 144ms nominal for PICAXE V0.09 impl.
-// Big low-power sleep to approximately match the PICAXE V0.09 routine of the same name.
-// Premature wakeups MAY be allowed to avoid blocking I/O polling for too long.
-#define BIG_PAUSE_MS 120
-static void inline bigPause() { nap(WDTO_120MS); } // 120ms vs 288ms nominal for PICAXE V0.09 impl.
 
 #if defined(WAKEUP_32768HZ_XTAL) || 1 // FIXME: avoid getSubCycleTime() where slow clock NOT available.
 // Get fraction of the way through the basic cycle in range [0,255].
@@ -253,7 +147,7 @@ static void inline bigPause() { nap(WDTO_120MS); } // 120ms vs 288ms nominal for
 // So ~4ms per count for a 1s cycle time, ~8ms per count for a 2s cycle time.
 #define GSCT_MAX 255
 // Basic cycle length in milliseconds; strictly positive.
-#if defined(TWO_S_TICK_RTC_SUPPORT)
+#if defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
 #define BASIC_CYCLE_MS 2000
 #define SUB_CYCLE_TICKS_PER_S ((GSCT_MAX+1)/2) // Sub-cycle ticks per second.
 #else
@@ -378,32 +272,6 @@ bool analogueVsBandgapRead(uint8_t aiNumber, bool napToSettle);
 // If requested (and needed) powers up extra I/O during the reads.
 //   powerUpIO if true then power up I/O (and power down after if so)
 uint8_t noisyADCRead(bool powerUpIO = true);
-
-// Capture a little system entropy.
-// This call should typically take << 1ms at 1MHz CPU.
-// Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or do I/O, or sleep.
-// Should inject some noise into secure (TBD) and non-secure (RNG8) PRNGs, or at least churn them.
-void captureEntropy1();
-
-// Capture a little entropy from clock jitter between CPU and WDT clocks; possibly one bit of entropy captured.
-// Expensive in terms of CPU time and thus energy.
-uint_fast8_t clockJitterWDT();
-
-// Capture a little entropy from clock jitter between CPU and 32768Hz RTC clocks; possibly up to 2 bits of entropy captured.
-// Expensive in terms of CPU time and thus energy.
-#ifdef WAKEUP_32768HZ_XTAL
-uint_fast8_t clockJitterRTC();
-#else
-#define NO_clockJitterRTC
-#endif
-
-// Combined clock jitter techniques to generate approximately 8 bits (the entire result byte) of entropy efficiently on demand.
-// Expensive in terms of CPU time and thus energy, though possibly more efficient than basic clockJitterXXX() routines.
-#ifdef WAKEUP_32768HZ_XTAL
-uint_fast8_t clockJitterEntropyByte();
-#else
-#define NO_clockJitterEntropyByte
-#endif
 
 #endif
 

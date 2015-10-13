@@ -23,7 +23,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 #ifndef SECURITY_H
 #define SECURITY_H
 
-// How much info does a leaf node transmit about stats such as temperature and occupancy?
+// Leaf node privacy level: how much to transmit about stats such as temperature and occupancy?
+// The greater numerically the value, the less data is sent, especially over an insecure channel.
 // Excess unencrypted stats may, for example, allow a clever burglar to work out when no one is home.
 // Note that even in the 'always' setting,
 // some TXes may be selectively skipped or censored for energy saving and security reasons
@@ -54,11 +55,11 @@ stats_TX_level getStatsTXLevel();
 //      if false then it is easier to test if the underlying source provides new entropy reliably
 uint8_t getSecureRandomByte(bool whiten = true);
 
-// Add entropy to the pool, if any, along with an estimate of how many bits of real entropy are present.
-//   * data   byte containing 'random' bits.
-//   * estBits estimated number of truely securely random bits in range [0,8].
-// Not thread-/ISR- safe.
-void addEntropyToPool(uint8_t data, uint8_t estBits);
+//// Add entropy to the pool, if any, along with an estimate of how many bits of real entropy are present.
+////   * data   byte containing 'random' bits.
+////   * estBits estimated number of truely securely random bits in range [0,8].
+//// Not thread-/ISR- safe.
+//void addEntropyToPool(uint8_t data, uint8_t estBits);
 
 
 

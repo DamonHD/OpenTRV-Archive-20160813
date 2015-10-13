@@ -23,8 +23,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 #ifndef V0P2_ACTUATORS_H
 #define V0P2_ACTUATORS_H
 
-#include "Actuator.h"
-
 
 
 
@@ -32,7 +30,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 // Abstract class for motor drive.
 // Supports abstract model plus remote (wireless) and local/direct implementations.
 // Implementations may require poll() called at a fixed rate.
-class AbstractRadValve : public SimpleTSUint8Actuator
+class AbstractRadValve : public OTV0P2BASE::SimpleTSUint8Actuator
   {
   public:
     // Returns true if this sensor reading value passed is valid, eg in range [0,100].
@@ -94,6 +92,9 @@ class HardwareMotorDriverInterface
     // May take as much as 200ms eg to change direction.
     // Stopping (removing power) should typically be very fast, << 100ms.
     virtual void motorRun(motor_drive dir) = 0;
+//
+//    // Detect if end-stop is reached or motor current otherwise very high.
+//    virtual bool isCurrentHigh();
 
     // Enable/disable end-stop detection and shaft-encoder.
     // Disabling should usually forces the motor off,
@@ -125,11 +126,11 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
       initCalibrating, // Calibrating full valve travel.
       motorNormal, // Normal operating state: values lower than this indicate that power-up is not complete.
       decalcinating, // TODO: running decalcination cycle (and can recalibrate and mitigate valve seating issues).
-      motorDriverWrror // Error state can only nomrally be cleared by power-cycling.
+      motorDriverError // Error state can only normally be cleared by power-cycling.
       };
 
   private:
-    // Clicks from one end of the range to the other; 0 if not initialised.
+    // Clicks from one end of the range to the other; 0 if not initialised or no movement tracker.
     uint16_t clicksFullTravel;
 
     // Current clicks from closed end of travel.
@@ -190,6 +191,12 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Initially false until power-up and at least initial calibration are complete.
     bool isCalibrated() const { return((state > (uint8_t)initCalibrating) && (0 != clicksFullTravel)); }
 
+    // Returns true if device can track movement between end stops.
+    // Without this at best the logic has to guess and the valve control logic
+    // should possibly be more concerned with nudging open/closed
+    // than trying to hit some arbitrary percentage open.
+    bool hasMovementTracker() const { return(0 != clicksFullTravel); }
+
     // True iff power-up initialisation (eg including allowing user to fit to valve base) is done.
     bool isPowerUpDone() const { return(state >= (uint8_t)motorNormal); }
 
@@ -198,7 +205,7 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
   };
 
 #if defined(LOCAL_TRV) && defined(DIRECT_MOTOR_DRIVE_V1)
-// Implementation for V1 motor.
+// Implementation for V1 (REV7/DORM1) motor.
 // Usually not instantaited except within ValveMotorDirectV1.
 // Creating multiple instances almost certaintly a BAD IDEA.
 class ValveMotorDirectV1HardwareDriver : public HardwareMotorDriverInterface
@@ -209,8 +216,11 @@ class ValveMotorDirectV1HardwareDriver : public HardwareMotorDriverInterface
     // Stopping (removing power) should typically be very fast, << 100ms.
     virtual void motorRun(motor_drive dir);
 
+    // Detect if end-stop is reached or motor current otherwise very high.
+    virtual bool isCurrentHigh(HardwareMotorDriverInterface::motor_drive mdir = motorDriveOpening) const;
+
     // Enable/disable end-stop detection and shaft-encoder.
-    // Disabling should usually forces the motor off,
+    // Disabling should usually force the motor off,
     // with a small pause for any residual movement to complete.
     virtual void enableFeedback(bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback);
 
@@ -270,9 +280,11 @@ extern ValveMotorDirectV1 ValveDirect;
 // DHD20130522: FHT8V + valve heads I have been using are not typically open until around 6%; at least one opens at ~20%.
 // Allowing valve to linger at just below this level without calling for heat when shutting
 // may allow comfortable bolier pump overrun in older systems with no/poor bypass to avoid overheating.
-#define DEFAULT_MIN_VALVE_PC_REALLY_OPEN 15
+#define DEFAULT_MIN_VALVE_PC_REALLY_OPEN 11
 
-// Default valve percentage at which significant heat power is being provided.
+// Default valve percentage at which significant heating power is being provided.
+// For many valves much of the time this may be effectively fully open,
+// ie no change beyond this makes significant difference to heat delivery.
 #define DEFAULT_VALVE_PC_MODERATELY_OPEN 34
 
 
@@ -407,7 +419,7 @@ class OnOffBoilerDriverLogic
 // but any non-zero value should be regarded as calling for heat from an on/off boiler,
 // and only values of 0 and 100 may be produced.
 // Implementations require poll() called at a fixed rate (every 2s).
-class BoilerDriver : public SimpleTSUint8Actuator
+class BoilerDriver : public OTV0P2BASE::SimpleTSUint8Actuator
   {
   private:
     OnOffBoilerDriverLogic logic;

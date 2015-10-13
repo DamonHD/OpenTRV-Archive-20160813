@@ -26,7 +26,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #include "Power_Management.h"
 
 #include "RFM22_Radio.h"
-#include "RTC_Support.h"
 #include "Serial_IO.h"
 
 
@@ -39,7 +38,7 @@ static void timer2XtalIntSetup()
 
 #if defined(HALF_SECOND_RTC_SUPPORT)
   TCCR2B = (1<<CS22); // Set CLK/64 for overflow interrupt every 0.5s.
-#elif defined(TWO_S_TICK_RTC_SUPPORT)
+#elif defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
   TCCR2B = (1<<CS22)|(1<<CS21); // Set CLK/128 for overflow interrupt every 2s.
 #else
   TCCR2B = (1<<CS22)|(1<<CS20); // Set CLK/128 for overflow interrupt every 1s.
@@ -51,7 +50,32 @@ static void timer2XtalIntSetup()
   }
 #endif
 
-static bool _serialIsPoweredUp(); // Forward declaration.
+// Call from setup() to turn off unused modules, set up timers and interrupts, etc.
+// I/O pin setting is not done here.
+void powerSetup()
+  {
+#ifdef DEBUG
+  assert(OTV0P2BASE::DEFAULT_CPU_PRESCALE == clock_prescale_get()); // Verify that CPU prescaling is as expected.
+#endif
+
+  // Do normal gentle switch off, including analogue module/control in correct order.
+  minimisePowerWithoutSleep();
+
+  // Brutally force off all modules, then re-enable explicitly below any still needed.
+  power_all_disable(); 
+
+#if !defined(DONT_USE_TIMER0)
+  power_timer0_enable(); // Turning timer 0 off messes up some standard Arduino support such as delay() and millis().
+#endif
+  
+#if defined(WAKEUP_32768HZ_XTAL)
+  power_timer2_enable();
+  timer2XtalIntSetup();
+#endif
+  }
+
+
+//static bool _serialIsPoweredUp(); // Forward declaration.
 
 // Selectively turn off all modules that need not run continuously so as to minimise power without sleeping.
 // Suitable for start-up and for belt-and-braces use before main sleep on each cycle,
@@ -59,12 +83,12 @@ static bool _serialIsPoweredUp(); // Forward declaration.
 // Any module that may need to run all the time should not be turned off here.
 // May be called from panic(), so do not be too clever.
 // Does NOT attempt to power down the radio, eg in case that needs to be left in RX mode.
-// Does NOT attempt to power down the UART/serial.
+// Does NOT attempt to power down the hardware serial/UART.
 void minimisePowerWithoutSleep()
   {
   // Disable the watchdog timer.
   wdt_disable();
-  
+
   // Ensure that external peripherals are powered down.
   power_intermittent_peripherals_disable();
 
@@ -111,189 +135,6 @@ void minimisePowerWithoutSleep()
   }
 
 
-// Call from setup() to turn off unused modules, set up timers and interrupts, etc.
-// I/O pin setting is not done here.
-void powerSetup()
-  {
-#ifdef DEBUG
-  assert(DEFAULT_CPU_PRESCALE == clock_prescale_get()); // Verify that CPU prescaling is as expected.
-#endif
-
-  // Do normal gentle switch off, including analogue module/control in correct order.
-  minimisePowerWithoutSleep();
-
-  // Brutally force off all modules, then re-enable explicitly below any still needed.
-  power_all_disable(); 
-
-#if !defined(DONT_USE_TIMER0)
-  power_timer0_enable(); // Turning timer 0 off messes up some standard Arduino support such as delay() and millis().
-#endif
-  
-#if defined(WAKEUP_32768HZ_XTAL)
-  power_timer2_enable();
-  timer2XtalIntSetup();
-#endif
-  }
-
-#ifdef WAKEUP_32768HZ_XTAL
-ISR(TIMER2_OVF_vect)
-  {
-  // Maintain RTC.
-  // As long as this is very efficient the CPU can be left running slow.
-#if defined(TWO_S_TICK_RTC_SUPPORT)
-  tickDoubleSecondISR();
-#else
-  tickSecondISR();
-#endif
-  }
-#endif
-
-
-// Set non-zero when the watchdog ISR is invoked, ie the watchdog timer has gone off.
-// Cleared at the start of the watchdog sleep routine.
-// May contain a little entropy concentrated in the least-significant bits, in part from WDT-vs-CPU-clock jitter, especially if not sleeping.
-static volatile uint8_t _watchdogFired;
-
-// Catch watchdog timer interrupt to automatically clear WDIE and WDIF.
-// This allows use of watchdog for low-power timed sleep.
-ISR(WDT_vect)
-  {
-  // WDIE and WDIF are cleared in hardware upon entering this ISR.
-  wdt_disable();
-  // Note: be careful of what is accessed from this ISR.
-  // Capture some marginal entropy from the stack position.
-  // 
-  uint8_t x;
-  _watchdogFired = ((uint8_t) 0x80) | ((uint8_t) (int) &x); // Ensure non-zero, retaining any entropy in ls bits.
-  }
-
-
-
-
-//#ifndef DEFAULT_CPU_PRESCALE
-//// Default prescale value at start-up, fetched once.  Maybe could compute from prescaler fuse bit instead.
-//const clock_div_t DEFAULT_CPU_PRESCALE  = clock_prescale_get();
-//#endif
-
-// Sleep for specified number of _delay_loop2() loops at minimum available CPU speed.
-// Each loop takes 4 cycles at that minimum speed, but entry and exit overheads may take the equivalent of a loop or two.
-// Note: inlining is prevented so as to avoid migrating anything into the section where the CPU is running slowly.
-//
-// Note: may be dubious to run CPU clock less than 4x 32768Hz crystal speed,
-// eg at 31250Hz for 8MHz RC clock and max prescale.
-// Don't access timer 2 regs at low CPU speed, eg in ISRs.
-//
-// This may only be safe to use with interrupts disabled.
-__attribute__ ((noinline)) void _sleepLowPowerLoopsMinCPUSpeed(uint16_t loops)
-  {
-  const clock_div_t prescale = clock_prescale_get(); // Capture current prescale value.
-  clock_prescale_set(MAX_CPU_PRESCALE); // Reduce clock speed (increase prescale) as far as possible.
-  _delay_loop_2(loops); // Burn cycles...
-  clock_prescale_set(prescale); // Restore clock prescale.
-  }
-
-// Define macro to disable BOD during sleep here if not included in Arduino AVR toolset...
-// This is only for "pico-power" variants, eg the "P" in ATmega328P.
-#ifndef sleep_bod_disable
-#define sleep_bod_disable() \
-do { \
-  uint8_t tempreg; \
-  __asm__ __volatile__("in %[tempreg], %[mcucr]" "\n\t" \
-                       "ori %[tempreg], %[bods_bodse]" "\n\t" \
-                       "out %[mcucr], %[tempreg]" "\n\t" \
-                       "andi %[tempreg], %[not_bodse]" "\n\t" \
-                       "out %[mcucr], %[tempreg]" \
-                       : [tempreg] "=&d" (tempreg) \
-                       : [mcucr] "I" _SFR_IO_ADDR(MCUCR), \
-                         [bods_bodse] "i" (_BV(BODS) | _BV(BODSE)), \
-                         [not_bodse] "i" (~_BV(BODSE))); \
-} while (0)
-#endif
-
-// Sleep with BOD disabled in power-save mode; will wake on any interrupt.
-void sleepPwrSaveWithBODDisabled()
-  {
-  set_sleep_mode(SLEEP_MODE_PWR_SAVE); // Stop all but timer 2 and watchdog when sleeping.
-  cli();
-  sleep_enable();
-  sleep_bod_disable();
-  sei();
-  sleep_cpu();
-  sleep_disable();
-  sei();
-  }
-
-// Sleep briefly in as lower-power mode as possible until the specified (watchdog) time expires, or another interrupt.
-//   * watchdogSleep is one of the WDTO_XX values from <avr/wdt.h>
-// May be useful to call minimsePowerWithoutSleep() first, when not needing any modules left on.
-#define NAP_ALLOW_SPURIOUS_WAKEUP_BY_DEFAULT false
-void nap(int_fast8_t watchdogSleep)
-  {
-  // Watchdog should (already) be disabled on entry.
-  _watchdogFired = 0;
-
-  wdt_enable(watchdogSleep);
-  WDTCSR |= (1 << WDIE);
-
-  // Keep sleeping until watchdog actually fires.
-  for( ; ; )
-    {
-    sleepPwrSaveWithBODDisabled();
-    if(NAP_ALLOW_SPURIOUS_WAKEUP_BY_DEFAULT || (0 != _watchdogFired))
-      {
-      wdt_disable(); // Avoid spurious wakeup later.
-      return; // All done!
-      }
-    }
- }
-
-#if 1
-// Sleep briefly in as lower-power mode as possible until the specified (watchdog) time expires, or another interrupt.
-//   * watchdogSleep is one of the WDTO_XX values from <avr/wdt.h>
-//   * allowPrematureWakeup if true then if woken before watchdog fires return false; default false
-// Returns false if the watchdog timer did not go off, true if it did.
-// May be useful to call minimsePowerWithoutSleep() first, when not needing any modules left on.
-bool nap(int_fast8_t watchdogSleep, bool allowPrematureWakeup)
-  {
-  // Watchdog should (already) be disabled on entry.
-  _watchdogFired = 0;
-
-  wdt_enable(watchdogSleep);
-  WDTCSR |= (1 << WDIE);
-
-  // Keep sleeping until watchdog actually fires (unless premature return is permitted).
-  for( ; ; )
-    {
-    sleepPwrSaveWithBODDisabled();
-    const bool fired = (0 != _watchdogFired);
-    if(fired || allowPrematureWakeup)
-      {
-      wdt_disable(); // Avoid spurious wakeup later.
-      return(fired);
-      }
-    }
-  }
-#endif
-
-
-#ifdef ENABLE_AVR_IDLE_MODE
-// Idle the CPU for specified time but leave everything else running (eg UART), returning on any interrupt or the watchdog timer.
-// Should reduce power consumption vs spinning the CPU >> 3x, though not nearly as much as nap().
-// True iff watchdog timer expired; false if something else woke the CPU.
-bool idleCPU(const int_fast8_t watchdogSleep)
-  {
-  // Watchdog should (already) be disabled on entry.
-  _watchdogFired = 0;
-  wdt_enable(watchdogSleep);
-  WDTCSR |= (1 << WDIE);
-  set_sleep_mode(SLEEP_MODE_IDLE); // Leave everything running but the CPU...
-  sleep_mode();
-  //sleep_disable();
-  wdt_disable();
-  return(0 != _watchdogFired);
-  }
-#endif
-
 
 // Call this to productively burn tens to hundreds of CPU cycles, and poll I/O, eg in a busy-wait loop.
 // This may churn PRNGs or gather entropy for example.
@@ -302,8 +143,8 @@ bool idleCPU(const int_fast8_t watchdogSleep)
 // May capture some entropy in secure and non-secure PRNGs.
 void burnHundredsOfCyclesProductivelyAndPoll()
   {
-  if(pollIO()) { OTV0P2BASE::seedRNG8(cycleCountCPU(), _watchdogFired, _getSubCycleTime()); }
-  else { captureEntropy1(); }
+  if(pollIO()) { OTV0P2BASE::seedRNG8(cycleCountCPU(), 37 /* _watchdogFired */, _getSubCycleTime()); }
+  else { OTV0P2BASE::captureEntropy1(); }
   }
 
 // Sleep in reasonably low-power mode until specified target subcycle time.
@@ -330,7 +171,7 @@ bool sleepUntilSubCycleTime(const uint8_t sleepUntil)
       // Take a very short sleep, much less than half a tick,
       // eg as may be some way into this tick already.
       //burnHundredsOfCyclesProductively();
-      sleepLowPowerLessThanMs(1);
+      OTV0P2BASE::sleepLowPowerLessThanMs(1);
       continue;
       }
 
@@ -347,24 +188,24 @@ bool sleepUntilSubCycleTime(const uint8_t sleepUntil)
         {
         if(msLeft >= 333)
           {
-          nap(WDTO_250MS); // Nominal 250ms sleep.
+          ::OTV0P2BASE::nap(WDTO_250MS); // Nominal 250ms sleep.
           continue;
           }
-        nap(WDTO_60MS); // Nominal 60ms sleep.
+        ::OTV0P2BASE::nap(WDTO_60MS); // Nominal 60ms sleep.
         continue;
         }
-      nap(WDTO_15MS); // Nominal 15ms sleep.
+      ::OTV0P2BASE::nap(WDTO_15MS); // Nominal 15ms sleep.
       continue;
       }
 
-    // Use low-power CPU sleep for residual time, but being very careful not to oversleep.
+    // Use low-power CPU sleep for residual time, but being very careful not to over-sleep.
     // Aim to sleep somewhat under residual time, eg to allow for overheads, interrupts, and other slippages.
     // Assumed to be > 1 else would have been special-cased above.
     // Assumed to be << 1s else a nap() would have been used above.
 #ifdef DEBUG
     if((msLeft < 2) || (msLeft > 1000)) { panic(); }
 #endif
-    sleepLowPowerLessThanMs(msLeft - 1);
+    OTV0P2BASE::sleepLowPowerLessThanMs(msLeft - 1);
     }
   }
 
@@ -383,7 +224,7 @@ void power_intermittent_peripherals_enable(bool waitUntilStable)
   pinMode(IO_POWER_UP, OUTPUT);
   // If requested, wait long enough that I/O peripheral power should be stable.
   // Wait in a relatively low-power way...
-  if(waitUntilStable) { sleepLowPowerMs(1); }
+  if(waitUntilStable) { OTV0P2BASE::sleepLowPowerMs(1); }
   }
 
 // Disable/remove power to intermittent peripherals.
@@ -412,7 +253,7 @@ static uint16_t _analogueNoiseReducedReadM(const uint8_t admux, int8_t samples =
   const bool neededEnable = powerUpADCIfDisabled();
   ACSR |= _BV(ACD); // Disable the analogue comparator.
   ADMUX = admux;
-  if(samples < 2) { nap(WDTO_15MS); } // Allow plenty of time for things to settle if not taking multiple samples.
+  if(samples < 2) { ::OTV0P2BASE::nap(WDTO_15MS); } // Allow plenty of time for things to settle if not taking multiple samples.
   set_sleep_mode(SLEEP_MODE_ADC);
   ADCSRB = 0; // Enable free-running mode.
   bitWrite(ADCSRA, ADATE, (samples>1)); // Enable ADC auto-trigger iff wanting multiple samples.
@@ -450,6 +291,7 @@ uint16_t analogueNoiseReducedRead(const uint8_t aiNumber, const uint8_t mode)
   { return(_analogueNoiseReducedReadM((mode << 6) | (aiNumber & 7))); }
 
 // Read from the specified analogue input vs the band-gap reference; true means AI > Vref.
+// Uses the comparator.
 //   * aiNumber is the analogue input number [0,7] for ATMega328P
 //   * napToSettle  if true then take a minimal sleep/nap to allow voltage to settle
 //       if input source relatively high impedance (>>10k)
@@ -490,7 +332,7 @@ bool analogueVsBandgapRead(const uint8_t aiNumber, const bool napToSettle)
   ADMUX = aiNumber & 7;
 
   // Wait for voltage to stabilise.
-  if(napToSettle) { nap(WDTO_15MS); }
+  if(napToSettle) { ::OTV0P2BASE::nap(WDTO_15MS); }
 
   // Read comparator output from ACO (ACSR).
   bool result = (0 != (ACSR & _BV(ACO)));
@@ -507,9 +349,6 @@ bool analogueVsBandgapRead(const uint8_t aiNumber, const bool napToSettle)
   return(result);
   }
 
-
-// Measure internal bandgap (1.1V nominal, 1.0--1.2V) as fraction of Vcc [0,1023].
-static uint16_t read1V1wrtBattery() { return(_analogueNoiseReducedReadM(_BV(REFS0) | 14)); }
 
 // Default low-battery threshold suitable for 2xAA NiMH, with AVR BOD at 1.8V.
 #define BATTERY_LOW_MV 2000
@@ -529,8 +368,9 @@ static uint16_t read1V1wrtBattery() { return(_analogueNoiseReducedReadM(_BV(REFS
 // NOT thread-safe nor usable within ISRs (Interrupt Service Routines).
 uint16_t SupplyVoltageMilliVolts::read()
   {
-  // Measure internal bandgap (1.1V nominal, 1.0--1.2V) as fraction of Vcc.
-  const uint16_t raw = read1V1wrtBattery();
+  // Measure internal bandgap (1.1V nominal, 1.0--1.2V) as fraction of Vcc [0,1023].
+//  const uint16_t raw = read1V1wrtBattery();
+  const uint16_t raw = _analogueNoiseReducedReadM(_BV(REFS0) | 14);
   // If Vcc was 1.1V ADC would give 1023.
   // If Vcc was 2.2V ADC would give 511.
   const uint16_t result = ((1023U<<6) / raw) * (1100U>>6);
@@ -682,7 +522,7 @@ bool powerUpADCIfDisabled()
   ADCSRA |= _BV(ADEN);
   return(true);
   }
-    
+
 // Power ADC down.
 void powerDownADC()
   {
@@ -705,7 +545,6 @@ bool powerUpSerialIfDisabled()
   return(true);
   }
 
-#if 1
 // Flush any pending UART TX bytes in the hardware if UART is enabled, eg useful after Serial.flush() and before sleep.
 void flushSerialHW()
   {
@@ -718,7 +557,6 @@ void flushSerialHW()
   while(!(UCSR0A & _BV(TXC0))) { } // Wait for the transmission to complete.
   return;
   }
-#endif
 
 #ifndef flushSerialProductive
 // Does a Serial.flush() attempting to do some useful work (eg I/O polling) while waiting for output to drain.
@@ -751,7 +589,7 @@ void flushSerialSCTSensitive()
 #if 0 && defined(DEBUG)
   if(!_serialIsPoweredUp()) { panic(); } // Trying to operate serial without it powered up.
 #endif
-#ifdef ENABLE_AVR_IDLE_MODE
+#ifdef ENABLE_USE_OF_AVR_IDLE_MODE
   while(serialTXInProgress() && (getSubCycleTime() < GSCT_MAX - 2 - (20/SUBCYCLE_TICK_MS_RD)))
     { idle15AndPoll(); } // Save much power by idling CPU, though everything else runs.
 #endif
@@ -807,155 +645,8 @@ void powerDownTWI()
   //pinMode(SCL, INPUT);
   }
 
-// NOW SUPPLIED BY LIBRARY.
-//// If SPI was disabled, power it up, enable it as master and with a sensible clock speed, etc, and return true.
-//// If already powered up then do nothing other than return false.
-//// If this returns true then a matching powerDownSPI() may be advisable.
-//bool powerUpSPIIfDisabled()
-//  {
-//  if(!(PRR & _BV(PRSPI))) { return(false); }
-//
-//  pinMode(PIN_SPI_nSS, OUTPUT); // Ensure that nSS is an output to avoid forcing SPI to slave mode by accident.
-//  fastDigitalWrite(PIN_SPI_nSS, HIGH); // Ensure that nSS is HIGH and thus any slave deselected when powering up SPI.
-//
-//  PRR &= ~_BV(PRSPI); // Enable SPI power.
-//  // Configure raw SPI to match better how it was used in PICAXE V0.09 code.
-//  // CPOL = 0, CPHA = 0
-//  // Enable SPI, set master mode, set speed.
-//  const uint8_t ENABLE_MASTER =  _BV(SPE) | _BV(MSTR);
-//#if F_CPU <= 2000000 // Needs minimum prescale (x2) with slow (<=2MHz) CPU clock.
-//  SPCR = ENABLE_MASTER; // 2x clock prescale for <=1MHz SPI clock from <=2MHz CPU clock (500kHz SPI @ 1MHz CPU).
-//  SPSR = _BV(SPI2X);
-//#elif F_CPU <= 8000000
-//  SPCR = ENABLE_MASTER; // 4x clock prescale for <=2MHz SPI clock from nominal <=8MHz CPU clock.
-//  SPSR = 0;
-//#else // Needs setting for fast (~16MHz) CPU clock.
-//  SPCR = _BV(SPR0) | ENABLE_MASTER; // 8x clock prescale for ~2MHz SPI clock from nominal ~16MHz CPU clock.
-//  SPSR = _BV(SPI2X);
-//#endif
-//  return(true);
-//  }
-//
-//// Power down SPI.
-//void powerDownSPI()
-//  {
-//  SPCR &= ~_BV(SPE); // Disable SPI.
-//  PRR |= _BV(PRSPI); // Power down...
-//
-//  pinMode(PIN_SPI_nSS, OUTPUT); // Ensure that nSS is an output to avoid forcing SPI to slave mode by accident.
-//  fastDigitalWrite(PIN_SPI_nSS, HIGH); // Ensure that nSS is HIGH and thus any slave deselected when powering up SPI.
-//
-//  // Avoid pins from floating when SPI is disabled.
-//  // Try to preserve general I/O direction and restore previous output values for outputs.
-//  pinMode(PIN_SPI_SCK, OUTPUT);
-//  pinMode(PIN_SPI_MOSI, OUTPUT);
-//  pinMode(PIN_SPI_MISO, INPUT_PULLUP);
-//
-//  // If sharing SPI SCK with LED indicator then return this pin to being an output (retaining previous value).
-//  //if(LED_HEATCALL == PIN_SPI_SCK) { pinMode(LED_HEATCALL, OUTPUT); }
-//  }
 
 
-// Capture a little system entropy.
-// This call should typically take << 1ms at 1MHz CPU.
-// Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or do I/O, or sleep.
-// Should inject some noise into secure (TBD) and non-secure (RNG8) PRNGs.
-void captureEntropy1()
-  { OTV0P2BASE::seedRNG8(_getSubCycleTime() ^ _adcNoise, cycleCountCPU() ^ Supply_mV.get(), _watchdogFired); }
-
-
-// Capture a little entropy from clock jitter between CPU and WDT clocks; possibly one bit of entropy captured.
-// Expensive in terms of CPU time and thus energy.
-// TODO: may be able to reduce clock speed to lower energy cost while still detecting useful jitter.
-uint_fast8_t clockJitterWDT()
-  {
-  // Watchdog should be (already) be disabled on entry.
-  _watchdogFired = false;
-  wdt_enable(WDTO_15MS); // Set watchdog for minimum time.
-  WDTCSR |= (1 << WDIE);
-  uint_fast8_t count = 0;
-  while(!_watchdogFired) { ++count; } // Effectively count CPU cycles until WDT fires.
-  return(count);
-  }
-
-// Capture a little entropy from clock jitter between CPU and 32768Hz RTC clocks; possibly up to 2 bits of entropy captured.
-// Expensive in terms of CPU time and thus energy.
-// TODO: may be able to reduce clock speed at little to lower energy cost while still detecting useful jitter
-//   (but not below 131072kHz since CPU clock must be >= 4x RTC clock to stay on data-sheet and access TCNT2).
-#ifdef WAKEUP_32768HZ_XTAL
-uint_fast8_t clockJitterRTC()
-  {
-  const uint8_t t0 = TCNT2;
-  while(t0 == TCNT2) { }
-  uint_fast8_t count = 0;
-  const uint8_t t1 = TCNT2;
-  while(t1 == TCNT2) { ++count; } // Effectively count CPU cycles in one RTC sub-cycle tick.
-  return(count);
-  }
-#endif
-
-// Combined clock jitter techniques to generate approximately 8 bits (the entire result byte) of entropy efficiently on demand.
-// Expensive in terms of CPU time and thus energy, though possibly more efficient than basic clockJitterXXX() routines.
-// Internally this uses a CRC as a relatively fast and hopefully effective hash over intermediate values.
-// Note the that rejection of repeat values will be less effective with two interleaved gathering mechanisms
-// as the interaction while not necessarily adding genuine entropy, will make counts differ between runs.
-// DHD20130519: measured as taking ~63ms to run, ie ~8ms per bit gathered.
-#ifdef WAKEUP_32768HZ_XTAL
-uint_fast8_t clockJitterEntropyByte()
-  {
-  uint16_t hash = 0;
-
-  uint_fast8_t result = 0;
-  uint_fast8_t countR = 0, lastCountR = 0;
-  uint_fast8_t countW = 0, lastCountW = 0;
-
-  const uint8_t t0 = TCNT2; // Wait for sub-cycle timer to roll.
-  while(t0 == TCNT2) { ++hash; } // Possibly capture some entropy from recent program activity/timing.
-  uint8_t t1 = TCNT2;
-
-  _watchdogFired = 0;
-  wdt_enable(WDTO_15MS); // Start watchdog, with minimum timeout.
-  WDTCSR |= (1 << WDIE);
-  int_fast8_t bitsLeft = 8; // Decrement when a bit is harvested...
-  for( ; ; )
-    {
-    // Extract watchdog jitter vs CPU.
-    if(!_watchdogFired) { ++countW; }
-    else // Watchdog fired.
-      {
-      if(countW != lastCountW) // Got a different value from last; assume one bit of entropy.
-        {
-        hash = _crc_ccitt_update(hash, countW);
-        result = (result << 1) ^ ((uint_fast8_t)hash); // Nominally capturing (at least) lsb of hash.
-        if(--bitsLeft <= 0) { break; } // Got enough bits; stop now.
-        lastCountW = countW;
-        }
-      countW = 0;
-      _watchdogFired = 0;
-      wdt_enable(WDTO_15MS); // Restart watchdog, with minimum timeout.
-      WDTCSR |= (1 << WDIE);
-      }
-
-    // Extract RTC jitter vs CPU.
-    if(t1 == TCNT2) { --countR; }
-    else // Sub-cycle timer rolled.
-      {
-      if(countR != lastCountR) // Got a different value from last; assume one bit of entropy.
-        {
-        hash = _crc_ccitt_update(hash, countR);
-        result = (result << 1) ^ ((uint_fast8_t)hash); // Nominally capturing (at least) lsb of hash.
-        if(--bitsLeft <= 0) { break; } // Got enough bits; stop now.
-        lastCountR = countR;
-        }
-      countR = 0;
-      t1 = TCNT2; // Set to look for next roll.
-      }
-    }
-
-  wdt_disable(); // Ensure no spurious WDT wakeup pending.
-  return(result);
-  }
-#endif
 
 
 /*

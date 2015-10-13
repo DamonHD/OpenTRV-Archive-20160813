@@ -49,9 +49,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #include "V0p2_Sensors.h"
 
 #include "Control.h"
-#include "EEPROM_Utils.h"
 #include "FHT8V_Wireless_Rad_Valve.h"
-#include "RTC_Support.h"
 #include "Power_Management.h"
 #include "RFM22_Radio.h"
 #include "Security.h"
@@ -128,7 +126,7 @@ static uint16_t eeCRC()
 #define PP_OFF_MS 250
 static void posPOST(const uint8_t position, const __FlashStringHelper *s)
   {
-  sleepLowPowerMs(1000);
+  OTV0P2BASE::sleepLowPowerMs(1000);
 #ifdef DEBUG
   DEBUG_SERIAL_PRINT_FLASHSTRING("posPOST: "); // Can only be used once serial is set up.
   DEBUG_SERIAL_PRINT(position);
@@ -144,19 +142,19 @@ static void posPOST(const uint8_t position, const __FlashStringHelper *s)
   // Skip much of lightshow if '0'/end/none position.
   if(position > 0)
     {
-    sleepLowPowerMs(2*PP_OFF_MS); // TODO: use this time to gather entropy.
+    OTV0P2BASE::sleepLowPowerMs(2*PP_OFF_MS); // TODO: use this time to gather entropy.
     for(int i = position; --i >= 0; )
       {
       LED_HEATCALL_ON();
       tinyPause();
       LED_HEATCALL_OFF();
-      sleepLowPowerMs(PP_OFF_MS); // TODO: use this time to gather entropy.
+      OTV0P2BASE::sleepLowPowerMs(PP_OFF_MS); // TODO: use this time to gather entropy.
       }
     }
 
-  sleepLowPowerMs(PP_OFF_MS); // TODO: use this time to gather entropy.
+  OTV0P2BASE::sleepLowPowerMs(PP_OFF_MS); // TODO: use this time to gather entropy.
   LED_HEATCALL_ON();
-  sleepLowPowerMs(1000); // TODO: use this time to gather entropy.
+  OTV0P2BASE::sleepLowPowerMs(1000); // TODO: use this time to gather entropy.
   }
 
 // Rearrange date into sensible most-significant-first order.  (Would like it also to be fully numeric, but whatever...)
@@ -203,6 +201,45 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
   buflen = 8; // Truncate message to correct size for efficiency.
   return(true); // Accept message.
   }
+#elif defined(ALLOW_STATS_RX)
+// If a stats hub then be prepared to accept a wide variety of binary and JSON message types.
+// It may yet be good to trim the smaller message types down to size in particular to help queueing.
+// It may also be kinder to some of the older FS20+trailer handling routines to not over-trim!
+// This does duplicate some of the handling work elsewhere, thus allowing room for confusion.
+// Allows all messages through by default for diagnostic purposes.
+static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
+  {
+  const uint8_t initialBuflen = buflen;
+  if(initialBuflen < 1) { return(true); } // Accept everything, even empty message with no type byte.
+  // Fall through for message types not handled specifically.
+  switch(buf[0])
+    {
+    case OTRadioLink::FTp2_FullStatsIDL: case OTRadioLink::FTp2_FullStatsIDH:
+      {
+      // Maxmimum size is 8 including trailing CRC; fall through for possible further zeros trim.
+      buflen = min(initialBuflen, 8); // OTRadioLink::V0P2_MESSAGING_LEADING_FULL_STATS_MAX_BYTES_ON_WIRE);
+      break;
+      }
+    case OTRadioLink::FTp2_JSONRaw:
+      {
+      // Maxmimum size is 56 including trailing CRC; fall through for possible further zeros trim.
+      buflen = min(initialBuflen, MSG_JSON_ABS_MAX_LENGTH + 1);
+      break;
+      }
+    case OTRadioLink::FTp2_FS20_native:
+      {
+      // Maxmimum size is 53 including trailing stats+CRC; fall through for possible further zeros trim.
+      buflen = min(initialBuflen, 53);
+      break;
+      }
+    }
+  #if defined(CONFIG_TRAILING_ZEROS_FILTER_RX)
+  // By default apply heuristic trim of trailing zeros to almost all message types.
+  return(OTRadioLink::frameFilterTrailingZeros(buf, buflen)); // This will accept all messages.
+  #else
+  return(true); // Accept all messages.
+  #endif
+  }
 #elif defined(CONFIG_TRAILING_ZEROS_FILTER_RX)
 // Useful general heuristic to improve queueing, etc.
 #define FilterRXISR (OTRadioLink::frameFilterTrailingZeros)
@@ -221,16 +258,20 @@ void optionalPOST()
 //  posPOST(1, F("about to test radio module"));
 
 #ifdef USE_MODULE_RFM22RADIOSIMPLE
+// TODO-547: why does nested SPI enable break things?
+//  const bool neededToWakeSPI = OTV0P2BASE::powerUpSPIIfDisabled();
+//  DEBUG_SERIAL_PRINT(neededToWakeSPI);
+//  DEBUG_SERIAL_PRINTLN();
 #if !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(Using RFM22.)");
 #endif
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
-  //RFM22PowerOnInit();
   RFM23B.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
   if(!RFM23B.configure(1, &RFMConfig) || !RFM23B.begin()) { panic(); }
   // Apply filtering, if any, while we're having fun...
   RFM23B.setFilterRXISR(FilterRXISR);
+//  if(neededToWakeSPI) { OTV0P2BASE::powerDownSPI(); }
 #endif
 
 //  posPOST(1, F("Radio OK, checking buttons/sensors and xtal"));
@@ -242,7 +283,7 @@ void optionalPOST()
 #if defined(BUTTON_LEARN_L)
      || (fastDigitalRead(BUTTON_LEARN_L) == LOW)
 #endif
-#if defined(BUTTON_LEARN2_L)
+#if defined(BUTTON_LEARN2_L) && (9 != V0p2_REV) // This input is not momentary with REV9.
      || (fastDigitalRead(BUTTON_LEARN2_L) == LOW)
 #endif
     )
@@ -268,9 +309,9 @@ void optionalPOST()
     // Attempt to capture some entropy while waiting, implicitly from oscillator start-up time if nothing else.
     for(uint8_t i = 255; (--i > 0) && (earlySCT == getSubCycleTime()); )
       {
-      addEntropyToPool(clockJitterWDT() ^ noisyADCRead(), 1); // Conservatively hope for at least 1 bit from combined sources!
-      nap(WDTO_15MS); // Ensure lower mount of ~3s until loop finishes.
-      captureEntropy1(); // Have other fun, though likely largely ineffective at this stage.
+      OTV0P2BASE::addEntropyToPool(::OTV0P2BASE::clockJitterWDT() ^ noisyADCRead(), 1); // Conservatively hope for at least 1 bit from combined sources!
+      OTV0P2BASE::nap(WDTO_15MS); // Ensure lower mount of ~3s until loop finishes.
+      OTV0P2BASE::captureEntropy1(); // Have other fun, though likely largely ineffective at this stage.
       }
 #endif
     const uint8_t latestSCT = getSubCycleTime();
@@ -316,7 +357,7 @@ void setup()
 
 #if !defined(MIN_ENERGY_BOOT)
   // Restore previous RTC state if available.
-  restoreRTC();
+  OTV0P2BASE::restoreRTC();
   // TODO: consider code to calibrate the internal RC oscillator against the xtal, eg to keep serial comms happy, eg http://www.avrfreaks.net/index.php?name=PNphpBB2&file=printview&t=36237&start=0
 #endif
 
@@ -327,15 +368,15 @@ void setup()
   serialPrintAndFlush(F("\r\nOpenTRV: ")); // Leading CRLF to clear leading junk, eg from bootloader.
     serialPrintlnBuildVersion();
 #ifdef LED_UI2_EXISTS
-  nap(WDTO_120MS); // Sleep to let UI2 LED be seen.
+  OTV0P2BASE::nap(WDTO_120MS); // Sleep to let UI2 LED be seen.
   LED_UI2_OFF();
 #endif
 #endif
 
 #if !defined(MIN_ENERGY_BOOT)
   // Count resets to detect unexpected crashes/restarts.
-  const uint8_t oldResetCount = eeprom_read_byte((uint8_t *)EE_START_RESET_COUNT);
-  eeprom_write_byte((uint8_t *)EE_START_RESET_COUNT, 1 + oldResetCount);
+  const uint8_t oldResetCount = eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_RESET_COUNT);
+  eeprom_write_byte((uint8_t *)V0P2BASE_EE_START_RESET_COUNT, 1 + oldResetCount);
 #endif
 
 #if defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
@@ -347,7 +388,7 @@ void setup()
   DEBUG_SERIAL_PRINT(oldResetCount);
   DEBUG_SERIAL_PRINTLN();
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
-  const uint8_t overruns = (~eeprom_read_byte((uint8_t *)EE_START_OVERRUN_COUNTER)) & 0xff;
+  const uint8_t overruns = (~eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER)) & 0xff;
   if(0 != overruns)
     {
     DEBUG_SERIAL_PRINT_FLASHSTRING("Overruns: ");
@@ -458,12 +499,12 @@ void setup()
                        ((((uint16_t)rh) << 8) - rh) ^
 #endif
 #endif
-                       (getMinutesSinceMidnightLT() << 5) ^
+                       (OTV0P2BASE::getMinutesSinceMidnightLT() << 5) ^
                        (((uint16_t)getSubCycleTime()) << 6);
   //const long seed1 = ((((long) clockJitterRTC()) << 13) ^ (((long)clockJitterWDT()) << 21) ^ (((long)(srseed^eeseed)) << 16)) + s16;
   // Seed simple/fast/small built-in PRNG.  (Smaller and faster than srandom()/random().)
   const uint8_t nar1 = noisyADCRead();
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), clockJitterWDT() ^ (uint8_t)srseed);
+  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
 #if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("nar ");
   DEBUG_SERIAL_PRINTFMT(nar1, BIN);
@@ -471,28 +512,28 @@ void setup()
 #endif
   // TODO: seed other/better PRNGs.
   // Feed in mainly persistent/nonvolatile state explicitly. 
-  addEntropyToPool(oldResetCount ^ eeseed, 0);
-  addEntropyToPool((uint8_t)(eeseed >> 8) + nar1, 0);
-  addEntropyToPool((uint8_t)s16 ^ (uint8_t)(s16 >> 8), 0);
-  for(uint8_t i = 0; i < EE_LEN_SEED; ++i)
-    { addEntropyToPool(eeprom_read_byte((uint8_t *)(EE_START_SEED + i)), 0); }
-  addEntropyToPool(noisyADCRead(), 1); // Conservative first push of noise into pool.
+  OTV0P2BASE::addEntropyToPool(oldResetCount ^ eeseed, 0);
+  OTV0P2BASE::addEntropyToPool((uint8_t)(eeseed >> 8) + nar1, 0);
+  OTV0P2BASE::addEntropyToPool((uint8_t)s16 ^ (uint8_t)(s16 >> 8), 0);
+  for(uint8_t i = 0; i < V0P2BASE_EE_LEN_SEED; ++i)
+    { OTV0P2BASE::addEntropyToPool(eeprom_read_byte((uint8_t *)(V0P2BASE_EE_START_SEED + i)), 0); }
+  OTV0P2BASE::addEntropyToPool(noisyADCRead(), 1); // Conservative first push of noise into pool.
   // Carry a few bits of entropy over a reset by picking one of the four designated EEPROM bytes at random;
   // if zero, erase to 0xff, else AND in part of the seed including some of the previous EEPROM hash (and write).
   // This amounts to about a quarter of an erase/write cycle per reset/restart per byte, or 400k restarts endurance!
   // These 4 bytes should be picked up as part of the hash/CRC of EEPROM above, next time,
   // essentially forming a longish-cycle (poor) PRNG even with little new real entropy each time.
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), clockJitterWDT() ^ (uint8_t)srseed);
-  uint8_t *const erp = (uint8_t *)(EE_START_SEED + (3&((s16)^((eeseed>>8)+(__TIME__[7]))))); // Use some new and some eeseed bits to choose which byte to updated.
+  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
+  uint8_t *const erp = (uint8_t *)(V0P2BASE_EE_START_SEED + (3&((s16)^((eeseed>>8)+(__TIME__[7]))))); // Use some new and some eeseed bits to choose which byte to updated.
   const uint8_t erv = eeprom_read_byte(erp);
-  if(0 == erv) { eeprom_smart_erase_byte(erp); }
+  if(0 == erv) { OTV0P2BASE::eeprom_smart_erase_byte(erp); }
   else
     {
-    eeprom_smart_clear_bits(erp,
+    OTV0P2BASE::eeprom_smart_clear_bits(erp,
 #if !defined(NO_clockJitterEntropyByte)
-      clockJitterEntropyByte()
+      ::OTV0P2BASE::clockJitterEntropyByte()
 #else
-      (clockJitterWDT() ^ nar1) // Less good fall-back when clockJitterEntropyByte() not available with more actual entropy.
+      (::OTV0P2BASE::clockJitterWDT() ^ nar1) // Less good fall-back when clockJitterEntropyByte() not available with more actual entropy.
 #endif
       + ((uint8_t)eeseed)); // Nominally include disjoint set of eeseed bits in choice of which to clear.
     }

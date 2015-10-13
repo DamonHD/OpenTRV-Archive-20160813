@@ -34,9 +34,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 #endif
 
 #include "Control.h"
-#include "EEPROM_Utils.h"
 #include "FHT8V_Wireless_Rad_Valve.h"
-#include "RTC_Support.h"
 #include "Power_Management.h"
 #include "RFM22_Radio.h"
 #include "Security.h"
@@ -141,7 +139,7 @@ void POSTalt()
   }
 
 
-#if defined(ALT_MAIN_LOOP) // Do not define handlers here when alt main is in use.
+#if defined(ALT_MAIN_LOOP)
 
 #if defined(MASK_PB) && (MASK_PB != 0) // If PB interrupts required.
 //// Interrupt count.  Marked volatile so safe to read without a lock as is a single byte.
@@ -191,26 +189,7 @@ ISR(PCINT2_vect)
 //  const uint8_t changes = pins ^ prevStatePD;
 //  prevStatePD = pins;
 //
-//#if defined(ENABLE_VOICE_SENSOR)
-////  // Voice detection is a falling edge.
-////  // Handler routine not required/expected to 'clear' this interrupt.
-////  // FIXME: ensure that Voice.handleInterruptSimple() is inlineable to minimise ISR prologue/epilogue time and space.
-////  if((changes & VOICE_INT_MASK) && !(pins & VOICE_INT_MASK))
-//  // Voice detection is a RISING edge.
-//  // Handler routine not required/expected to 'clear' this interrupt.
-//  // FIXME: ensure that Voice.handleInterruptSimple() is inlineable to minimise ISR prologue/epilogue time and space.
-//  if((changes & VOICE_INT_MASK) && (pins & VOICE_INT_MASK))
-//    { Voice.handleInterruptSimple(); }
-//#endif
-//
-//  // TODO: MODE button and other things...
-//
-//  // If an interrupt arrived from no other masked source then wake the CLI.
-//  // The will ensure that the CLI is active, eg from RX activity,
-//  // eg it is possible to wake the CLI subsystem with an extra CR or LF.
-//  // It is OK to trigger this from other things such as button presses.
-//  // FIXME: ensure that resetCLIActiveTimer() is inlineable to minimise ISR prologue/epilogue time and space.
-//  if(!(changes & MASK_PD & ~1)) { resetCLIActiveTimer(); }
+// ....
   }
 #endif
 
@@ -221,10 +200,8 @@ ISR(PCINT2_vect)
 
 
 
-// Position to move the valve to [0,100].
-static uint8_t valvePosition = 42; // <<<<<<<< YOUR STUFF SETS THIS!
-
-
+static ValveMotorDirectV1HardwareDriver V1D;
+static HardwareMotorDriverInterface::motor_drive mdir = HardwareMotorDriverInterface::motorDriveOpening;
 
 
 // Called from loop().
@@ -233,7 +210,7 @@ void loopAlt()
   // Sleep in low-power mode (waiting for interrupts) until seconds roll.
   // NOTE: sleep at the top of the loop to minimise timing jitter/delay from Arduino background activity after loop() returns.
   // DHD20130425: waking up from sleep and getting to start processing below this block may take >10ms.
-#if 0 && defined(DEBUG)
+#if 1 && defined(DEBUG)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("*E"); // End-of-cycle sleep.
 #endif
 
@@ -241,11 +218,10 @@ void loopAlt()
   powerDownSerial(); // Ensure that serial I/O is off.
   // Power down most stuff (except radio for hub RX).
   minimisePowerWithoutSleep();
-//  RFM22ModeStandbyAndClearState();
 #endif
   static uint_fast8_t TIME_LSD; // Controller's notion of seconds within major cycle.
   uint_fast8_t newTLSD;
-  while(TIME_LSD == (newTLSD = getSecondsLT()))
+  while(TIME_LSD == (newTLSD = OTV0P2BASE::getSecondsLT()))
     {
     // Poll I/O and process message incrementally (in this otherwise idle time)
     // before sleep and on wakeup in case some IO needs further processing now,
@@ -253,17 +229,6 @@ void loopAlt()
     // or the in a previous orbit of this loop sleep or nap was terminated by an I/O interrupt.
     // Come back and have another go if work was done, until the next tick at most.
     if(handleQueuedMessages(&Serial, true, &RFM23B)) { continue; }
-
-//    RFM23B.poll();
-//    while(0 != RFM23B.getRXMsgsQueued())
-//      {
-//      uint8_t buf[65];
-//      const uint8_t msglen = RFM23B.getRXMsg(buf, sizeof(buf));
-//      const bool neededWaking = powerUpSerialIfDisabled();
-//      OTRadioLink::dumpRXMsg(buf, msglen);
-//      Serial.flush();
-//      if(neededWaking) { powerDownSerial(); }
-//      }
 
 // If missing h/w interrupts for anything that needs rapid response
 // then AVOID the lowest-power long sleep.
@@ -277,15 +242,17 @@ void loopAlt()
       // No h/w interrupt wakeup on receipt of frame,
       // so can only sleep for a short time between explicit poll()s,
       // though allow wake on interrupt anyway to minimise loop timing jitter.
-      nap(WDTO_15MS, true);
+      OTV0P2BASE::nap(WDTO_15MS, true);
       }
     else
       {
       // Normal long minimal-power sleep until wake-up interrupt.
       // Rely on interrupt to force fall through to I/O poll() below.
-      sleepUntilInt();
+      OTV0P2BASE::sleepUntilInt();
       }
 //    DEBUG_SERIAL_PRINTLN_FLASHSTRING("w"); // Wakeup.
+
+//    idle15AndPoll(); // Attempt to crash the board!
 
     }
   TIME_LSD = newTLSD;
@@ -300,55 +267,19 @@ void loopAlt()
 
 //  DEBUG_SERIAL_PRINTLN_FLASHSTRING("*");
 
-  // Power up serail for the loop body.
-  // May just want to turn it on in POSTalt() and leave it on...
-  const bool neededWaking = powerUpSerialIfDisabled();
+//  // Power up serial for the loop body.
+//  // May just want to turn it on in POSTalt() and leave it on...
+//  const bool neededWaking = powerUpSerialIfDisabled();
 
 
-#if defined(USE_MODULE_FHT8VSIMPLE)
-  // Try for double TX for more robust conversation with valve?
-  const bool doubleTXForFTH8V = false;
-  // FHT8V is highest priority and runs first.
-  // ---------- HALF SECOND #0 -----------
-  bool useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_First(doubleTXForFTH8V); // Time for extra TX before UI.
-//  if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@0"); }
-#endif
-
-
-
-
-
-
-
-
-
-#ifdef ALLOW_CC1_SUPPORT_RELAY
-  // FIXME: dumb alert TX every minute...
-  if(0 == TIME_LSD)
-    {
-    const OTProtocolCC::CC1Alert a1 = OTProtocolCC::CC1Alert::makeAlert(99, 99);
-    uint8_t buf[32]; // More than large enough for preamble + sync + alert message.
-    uint8_t *const bptr = RFM22RXPreambleAdd(buf);
-    const uint8_t bodylen = a1.encodeSimple(bptr, sizeof(buf) - STATS_MSG_START_OFFSET, true);
-    const uint8_t buflen = STATS_MSG_START_OFFSET + bodylen;
-#if 1 && defined(DEBUG)
-    OTRadioLink::printRXMsg(&Serial, buf, buflen);
-#endif
-    const bool doubleTX = false;
-    if(RFM23B.sendRaw(buf, buflen, 0, (doubleTX ? OTRadioLink::OTRadioLink::TXmax : OTRadioLink::OTRadioLink::TXnormal)))
-      {
-#if 1 && defined(DEBUG)
-      DEBUG_SERIAL_PRINTLN_FLASHSTRING("TX alert");
-#endif
-      }  
-#if 1 && defined(DEBUG)
-    else
-      {
-      DEBUG_SERIAL_PRINTLN_FLASHSTRING("!TX failed");
-      }
-#endif
-    }
-#endif
+//#if defined(USE_MODULE_FHT8VSIMPLE)
+//  // Try for double TX for more robust conversation with valve?
+//  const bool doubleTXForFTH8V = false;
+//  // FHT8V is highest priority and runs first.
+//  // ---------- HALF SECOND #0 -----------
+//  bool useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_First(doubleTXForFTH8V); // Time for extra TX before UI.
+////  if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@0"); }
+//#endif
 
 
 
@@ -356,97 +287,102 @@ void loopAlt()
 
 
 
-// EXPERIMENTAL TEST OF NEW RADIO CODE
-#if 1 && defined(DEBUG)
-
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("ints ");
-//    DEBUG_SERIAL_PRINT(intCountPB);
-//    DEBUG_SERIAL_PRINTLN();
-
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("listening to channel: ");
-//    DEBUG_SERIAL_PRINT(RFM23B.getListenChannel());
-//    DEBUG_SERIAL_PRINTLN();
-
-//    RFM23B.listen(false);
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("MODE ");
-//    DEBUG_SERIAL_PRINT(RFM23B.getMode());
-//    DEBUG_SERIAL_PRINTLN();
-//    RFM23B.listen(true);
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("MODE ");
-//    DEBUG_SERIAL_PRINT(RFM23B.getMode());
-//    DEBUG_SERIAL_PRINTLN();
-//    RFM23B.poll();
-    for(uint8_t lastErr; 0 != (lastErr = RFM23B.getRXErr()); )
-      {
-      DEBUG_SERIAL_PRINT_FLASHSTRING("err ");
-      DEBUG_SERIAL_PRINT(lastErr);
-      DEBUG_SERIAL_PRINTLN();
-      }
-    DEBUG_SERIAL_PRINT_FLASHSTRING("RSSI ");
-    DEBUG_SERIAL_PRINT(RFM23B.getRSSI());
-    DEBUG_SERIAL_PRINTLN();
-    static uint8_t oldDroppedRecent;
-    const uint8_t droppedRecent = RFM23B.getRXMsgsDroppedRecent();
-    if(droppedRecent != oldDroppedRecent)
-      {
-      DEBUG_SERIAL_PRINT_FLASHSTRING("?DROPPED recent: ");
-      DEBUG_SERIAL_PRINT(droppedRecent);
-      DEBUG_SERIAL_PRINTLN();
-      oldDroppedRecent = droppedRecent;
-      }
-#endif
 
 
-#if 1 && defined(DEBUG)
-  if(0 == (TIME_LSD & 3)) // TX every 4s so as not to flood the airwaves...
-    {
-//    uint8_t buf[STATS_MSG_START_OFFSET + 65];
-//    strncpy(STATS_MSG_START_OFFSET + (char *)buf, "{}", sizeof(buf)-1); // Allow for \0 to be replaced with crc and 0xff later.
-//    uint8_t *bptr = buf + STATS_MSG_START_OFFSET;
-//    const int wrote = strlen((char *)bptr);
-//    // Adjust JSON message for transmission.
-//    // (Set high-bit on final closing brace to make it unique, and compute (non-0xff) CRC.)
-//    const uint8_t crc = adjustJSONMsgForTXAndComputeCRC((char *)bptr);
-//    if(0xff == crc)
-//      {
-//  #if 1 && defined(DEBUG)
-//      DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON msg bad!");
-//  #endif
-//      }
-//    else
-//      {
-//      bptr += wrote;
-//      *bptr++ = crc; // Add 7-bit CRC for on-the-wire check.
-//      *bptr = 0xff; // Terminate message for TX.
-//      // Send it!
-//      RFM22RawStatsTX(buf, false);
-//  #if 1 && defined(DEBUG)
-//      DEBUG_SERIAL_PRINTLN_FLASHSTRING("TX");
-//  #endif
-//      }
-    }
-#endif
+
+
+
 
 
 
 
 
 //#if defined(USE_MODULE_FHT8VSIMPLE)
-//  if(0 == TIME_LSD)
+//  if(useExtraFHT8VTXSlots)
 //    {
-//    // Once per minute regenerate valve-setting command ready to transmit.
-//    FHT8VCreateValveSetCmdFrame(valvePosition);
+//    // Time for extra TX before other actions, but don't bother if minimising power in frost mode.
+//    // ---------- HALF SECOND #1 -----------
+//    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
+////    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@1"); }
 //    }
 //#endif
 
 
-#if defined(USE_MODULE_FHT8VSIMPLE)
-  if(useExtraFHT8VTXSlots)
+
+
+
+//#if defined(USE_MODULE_FHT8VSIMPLE) && defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
+//  if(useExtraFHT8VTXSlots)
+//    {
+//    // ---------- HALF SECOND #2 -----------
+//    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
+////    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@2"); }
+//    }
+//#endif
+
+
+
+
+
+//#if defined(USE_MODULE_FHT8VSIMPLE) && defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
+//  if(useExtraFHT8VTXSlots)
+//    {
+//    // ---------- HALF SECOND #3 -----------
+//    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
+////    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@3"); }
+//    }
+//#endif
+
+
+
+
+
+  // Measure motor count against (fixed) internal reference.
+  power_intermittent_peripherals_enable(true);
+  const uint16_t mc = analogueNoiseReducedRead(MOTOR_DRIVE_MC_AIN, INTERNAL);
+  void power_intermittent_peripherals_disable();
+  DEBUG_SERIAL_PRINT_FLASHSTRING("Count input: ");
+  DEBUG_SERIAL_PRINT(mc);
+  DEBUG_SERIAL_PRINTLN();
+
+
+//  // Run motor ~1s in the current direction; reverse at end of travel.
+//  DEBUG_SERIAL_PRINT_FLASHSTRING("Dir: ");
+//  DEBUG_SERIAL_PRINT(HardwareMotorDriverInterface::motorDriveClosing == mdir ? "closing" : "opening");
+//  DEBUG_SERIAL_PRINTLN();
+//  V1D.motorRun(mdir);
+//  OTV0P2BASE::nap(WDTO_30MS); // Run for minimum time to overcome initial initia.
+//  bool currentHigh = false;
+//  for(int i = 33; i-- > 0 && !(currentHigh = V1D.isCurrentHigh(mdir)); ) { OTV0P2BASE::nap(WDTO_30MS); }
+//  // Detect if end-stop is reached or motor current otherwise very high.
+//  if(currentHigh)
+//    {
+//    mdir = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
+//      HardwareMotorDriverInterface::motorDriveOpening : HardwareMotorDriverInterface::motorDriveClosing;
+//    }
+//  // Stop motor until next loop.
+//  V1D.motorRun(HardwareMotorDriverInterface::motorOff);
+//
+//  if(currentHigh) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Current high (reversing)"); }
+//
+
+
+  // Command-Line Interface (CLI) polling.
+  // If a reasonable chunk of the minor cycle remains after all other work is done
+  // AND the CLI is / should be active OR a status line has just been output
+  // then poll/prompt the user for input
+  // using a timeout which should safely avoid overrun, ie missing the next basic tick,
+  // and which should also allow some energy-saving sleep.
+#if 1 // && defined(SUPPORT_CLI)
+  if(true)
     {
-    // Time for extra TX before other actions, but don't bother if minimising power in frost mode.
-    // ---------- HALF SECOND #1 -----------
-    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
-//    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@1"); }
+    const uint8_t sct = getSubCycleTime();
+    const uint8_t listenTime = max(GSCT_MAX/16, CLI_POLL_MIN_SCT);
+    if(sct < (GSCT_MAX - 2*listenTime))
+      // Don't listen beyond the last 16th of the cycle,
+      // or a minimal time if only prodding for interaction with automated front-end,
+      // as listening for UART RX uses lots of power.
+      { pollCLI(OTV0P2BASE::randRNG8NextBoolean() ? (GSCT_MAX-listenTime) : (sct+CLI_POLL_MIN_SCT), 0 == TIME_LSD); }
     }
 #endif
 
@@ -454,44 +390,15 @@ void loopAlt()
 
 
 
-#if defined(USE_MODULE_FHT8VSIMPLE) && defined(TWO_S_TICK_RTC_SUPPORT)
-  if(useExtraFHT8VTXSlots)
-    {
-    // ---------- HALF SECOND #2 -----------
-    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
-//    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@2"); }
-    }
-#endif
-
-
-
-
-
-#if defined(USE_MODULE_FHT8VSIMPLE) && defined(TWO_S_TICK_RTC_SUPPORT)
-  if(useExtraFHT8VTXSlots)
-    {
-    // ---------- HALF SECOND #3 -----------
-    useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8VPollSyncAndTX_Next(doubleTXForFTH8V); 
-//    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@3"); }
-    }
-#endif
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-  // Force any pending output before return / possible UART power-down.
-  flushSerialSCTSensitive();
-  if(neededWaking) { powerDownSerial(); }
+//  // Force any pending output before return / possible UART power-down.
+//  flushSerialSCTSensitive();
+//  if(neededWaking) { powerDownSerial(); }
   }
 
 

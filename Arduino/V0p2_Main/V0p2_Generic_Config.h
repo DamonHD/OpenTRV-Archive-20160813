@@ -36,13 +36,17 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 
 
 // Production configs.
-//#define CONFIG_Trial2013Winter_Round1 // REV1.
-//#define CONFIG_Trial2013Winter_Round2 // REV2 cut4.
-//#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as boiler hub.
-#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
+//#define CONFIG_Trial2013Winter_Round1 // REV1 default config.
+//#define CONFIG_Trial2013Winter_Round1_LVBHSH // REV1: local valve control, boiler hub, stats hub & TX.
+//#define CONFIG_Trial2013Winter_Round1_NOHUB // REV1 as TX-only leaf node.
+//#define CONFIG_Trial2013Winter_Round1_BOILERHUB // REV1 as plain boiler node.
+//#define CONFIG_Trial2013Winter_Round2 // REV2 cut4 default config.
+//#define CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
+//#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
+//#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_NOHUB // REV2 cut4 as TX-only leaf node.
 //#define CONFIG_Trial2013Winter_Round2_CC1HUB // REV2 cut4 as CC1 hub.
-//#define CONFIG_DORM1 // REV7 / DORM1 Winter 2014/2015 all-in-one valve unit.
+#define CONFIG_DORM1 // REV7 / DORM1 Winter 2014/2015 all-in-one valve unit.
 //#define CONFIG_DORM1_BOILER // REV8 / DORM1 Winter 2014/2015 boiler-control unit.
 //#define CONFIG_REV9 // REV9 as CC1 relay, cut 2 of the board.
 
@@ -50,12 +54,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // One-offs and special cases.
 //#define CONFIG_DHD_TESTLAB_REV0 // REV0 / breadboard.
 //#define CONFIG_DHD_TESTLAB_REV1 // REV1.
+//#define CONFIG_Trial2013Winter_Round1_STATSHUB // REV1 as stats hub.
 //#define CONFIG_DHD_TESTLAB_REV4 // REV4 cut2.
 //#define CONFIG_DHD_TESTLAB_REV4_NOHUB // REV4 cut2, no hub.
 //#define CONFIG_BH_DHW // Bo's hot water.
 //#define CONFIG_BH_TESTLAB // Bo's test environment.
 //#define CONFIG_DORM1_SANS32K // REV7 / DORM1 without working 32768Hz clock.
 //#define CONFIG_REV7N // REV7 with external "Model N" valve.
+//#define CONFIG_REV7_STATSLH // REV7 as stats leaf and/or hub.
 //#define CONFIG_REV9_STATS // REV9 as stats node, cut 2 of the board.
 //#define CONFIG_REV9_cut1 // REV9 as CC1 relay, cut1 of board.
 
@@ -89,6 +95,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define ALLOW_STATS_RX
 // IF DEFINED: allow TX of stats frames.
 #define ALLOW_STATS_TX
+// IF DEFINED: allow minimal binary format in addition to more generic one: ~400 bytes code cost.
+#undef ALLOW_MINIMAL_STATS_TXRX
 // IF DEFINED: allow JSON stats frames alongside binary ones.
 #define ALLOW_JSON_OUTPUT
 // IF DEFINED: (default) forced always-on radio listen/RX, eg not requiring setup to explicitly enable.
@@ -109,30 +117,103 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #undef MIN_ENERGY_BOOT
 // IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
 #undef SENSOR_SHT21_ENABLE
+// IF DEFINED: enable use AVR's 'idle' mode to stop the CPU but leave I/O (eg Serial) running to save power.
+// DHD20150920: CURRENTLY NOT RECOMMENDED AS STILL SEEMS TO CAUSE SOME BOARDS TO CRASH.
+#define ENABLE_USE_OF_AVR_IDLE_MODE
 
 
 
 
 
 
-// -------------------------
+
+// ------------------------- REV1
+
+#ifdef CONFIG_Trial2013Winter_Round1_LVBHSH // REV1: local valve control, boiler hub, stats hub & TX.
+#define CONFIG_Trial2013Winter_Round1 // Just like normal REV1 except...
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#define LOCAL_TRV
+// IF DEFINED: this unit controls a valve, but provides slave valve control only.
+#undef SLAVE_TRV
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#define ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#define ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: use active-low LEARN button(s).  Needs SUPPORT_SINGLETON_SCHEDULE.
+#define LEARN_BUTTON_AVAILABLE // OPTIONAL ON V0.09 PCB1
+// IF DEFINED: this unit supports CLI over the USB/serial connection, eg for run-time reconfig.
+#define SUPPORT_CLI
+// IF DEFINED: support for general timed and multi-input occupancy detection / use.
+#define OCCUPANCY_SUPPORT
+#endif
+
+#ifdef CONFIG_Trial2013Winter_Round1_BOILERHUB // REV1 as plain boiler hub + can TX stats.
+#define CONFIG_Trial2013Winter_Round1 // Just like normal REV1 except...
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#define ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#undef ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#undef LOCAL_TRV
+#endif
+
+#ifdef CONFIG_Trial2013Winter_Round1_STATSHUB // REV1 as stats hub.
+#define CONFIG_Trial2013Winter_Round1 // Just like normal REV1 except...
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#undef ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#define ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#undef ALLOW_STATS_TX // Don't allow it to TX its own...
+#endif
+
+#ifdef CONFIG_Trial2013Winter_Round1_NOHUB // REV1 as TX-only leaf node.
+#define CONFIG_Trial2013Winter_Round1 // Just like normal REV2 except...
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#undef ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#undef ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+#endif
 
 #ifdef CONFIG_Trial2013Winter_Round1 // For trial over winter of 2013--4, first round (REV1).
 // Revision REV1 of V0.2 board.
 #define V0p2_REV 1
 // TODO-264: Find out why IDLE seems to crash some REV1 boards.
-#define DISABLE_AVR_IDLE_MODE
-// IF UNDEFINED: this unit cannot act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
-#undef ENABLE_BOILER_HUB
-// IF UNDEFINED: don't allow RX of stats frames (since there is no easy way to plug in a serial connection to relay them!)
-#undef ALLOW_STATS_RX
+#undef ENABLE_USE_OF_AVR_IDLE_MODE
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
 
-// -------------------------
 
-#ifdef CONFIG_Trial2013Winter_Round2_BOILERHUB // For trial over winter of 2013--4, second round (REV2), as pure boiler hub.
+// ------------------------- REV2
+
+#ifdef CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
+#define CONFIG_Trial2013Winter_Round2 // Just like normal REV2 except...
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#define LOCAL_TRV
+// IF DEFINED: this unit controls a valve, but provides slave valve control only.
+#undef SLAVE_TRV
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#define ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#define ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: use active-low LEARN button(s).  Needs SUPPORT_SINGLETON_SCHEDULE.
+#define LEARN_BUTTON_AVAILABLE // OPTIONAL ON V0.09 PCB1
+// IF DEFINED: this unit supports CLI over the USB/serial connection, eg for run-time reconfig.
+#define SUPPORT_CLI
+// IF DEFINED: support for general timed and multi-input occupancy detection / use.
+#define OCCUPANCY_SUPPORT
+#endif
+
+#ifdef CONFIG_Trial2013Winter_Round2_BOILERHUB // For trial over winter of 2013--4, second round (REV2), as pure boiler hub + can TX stats.
 #define CONFIG_Trial2013Winter_Round2 // Just like normal REV2 except...
 // IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
 #define ENABLE_BOILER_HUB
@@ -141,7 +222,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // IF DEFINED: allow TX of stats frames.
 #define ALLOW_STATS_TX
 // IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
-//#undef LOCAL_TRV // FOR NOW *disable* local TRV support.
+#undef LOCAL_TRV
 #endif
 
 #ifdef CONFIG_Trial2013Winter_Round2_STATSHUB // For trial over winter of 2013--4, second round (REV2), as stats hub.
@@ -151,7 +232,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // IF DEFINED: allow RX of stats frames.
 #define ALLOW_STATS_RX
 // IF DEFINED: allow TX of stats frames.
-#undef ALLOW_STATS_TX
+#undef ALLOW_STATS_TX // Don't allow it to TX its own...
 #endif
 
 #ifdef CONFIG_Trial2013Winter_Round2_NOHUB // REV2 cut4 as TX-only leaf node.
@@ -163,6 +244,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // IF DEFINED: allow TX of stats frames.
 #define ALLOW_STATS_TX
 #endif
+
 
 #ifdef CONFIG_Trial2013Winter_Round2_CC1HUB // REV2 cut4 as CC1 hub.
 #define CONFIG_Trial2013Winter_Round2 // Just like normal REV2 except...
@@ -193,6 +275,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define ALLOW_CC1_SUPPORT_HUB
 #endif
 
+
 #ifdef CONFIG_Trial2013Winter_Round2 // For trial over winter of 2013--4, second round (REV2).
 // Revision REV2 (cut4+) of V0.2 board.
 #define V0p2_REV 2
@@ -208,6 +291,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // -------------------------
 // NON-STANDARD DEFINITIONS
 // -------------------------
+
+// ------------------------- REV0 / breadboard
 
 #ifdef CONFIG_DHD_TESTLAB_REV0 // DHD's test lab breadboard with TRV.
 // Revision of V0.2 board.
@@ -234,7 +319,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define COMMON_SETTINGS
 #endif
 
-// -------------------------
+// ------------------------- REV1
 
 #ifdef CONFIG_DHD_TESTLAB_REV1 // DHD's test lab on REV1.
 // Revision of V0.2 board.
@@ -257,7 +342,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define COMMON_SETTINGS
 #endif
 
-// -------------------------
+// ------------------------- REV4
 
 #ifdef CONFIG_DHD_TESTLAB_REV4_NOHUB // REV4 board but no listening...
 #define CONFIG_DHD_TESTLAB_REV4
@@ -282,7 +367,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define COMMON_SETTINGS
 #endif
 
-// -------------------------
+// ------------------------- REV7
 
 #ifdef CONFIG_DORM1_SANS32K // REV7 / DORM1 without working 32768Hz clock.
 #define CONFIG_DORM1
@@ -303,28 +388,58 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #undef ENABLE_BOILER_HUB
 // IF UNDEFINED: do not allow RX of stats frames.
 #undef ALLOW_STATS_RX
-// IF UNDEFINED: do not allow JSON stats frames (to save ~3kB Flash at 20141210).
-//#undef ALLOW_JSON_OUTPUT
+// IF DEFINED: allow JSON stats frames.
+#define ALLOW_JSON_OUTPUT
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
 
-#ifdef CONFIG_DORM1_BOILER // For trial over winter of 2014--5, REV8 boiler-control counterpart to REV7.
-// Revision REV8 of V0.2 board, boiler control unit.
-#define V0p2_REV 8
-// No working xtal on initial batch.
-#undef WAKEUP_32768HZ_XTAL
-//// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
-//#define SENSOR_SHT21_ENABLE
+#ifdef CONFIG_REV7_STATSLH // REV7 as stats leaf and/or hub.
+// Revision REV7 of V0.2 board, all-in-one valve unit with local motor drive.
+// In this off-label mode being used as stats gatherers or relays.
+#define V0p2_REV 7
+// IF DEFINED: initial direct motor drive design.  Doesn't imply it gets used, but I/O can be set up safely.
+#define DIRECT_MOTOR_DRIVE_V1
+// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
+#define SENSOR_SHT21_ENABLE
 // Using RoHS-compliant phototransistor in place of LDR.
 #define AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
-// IF UNDEFINED: do not allow JSON stats frames (to save ~3kB Flash at 20141210).
-//#undef ALLOW_JSON_OUTPUT
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#undef ENABLE_BOILER_HUB // NO BOILER CODE
+// IF DEFINED: allow RX of stats frames.
+#define ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: allow JSON stats frames.
+#define ALLOW_JSON_OUTPUT
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
 
-// -------------------------
+// ------------------------- REV8
+
+#ifdef CONFIG_DORM1_BOILER // REV8 boiler-control counterpart to REV7.
+// Revision REV8.B of V0.2 board, boiler control unit.
+// NO LIGHT SENSOR FITTED ON REV8.B BOARDS.
+// BOTH TMP112 AND SHT21 FITTED on REV8.B BOARDS.
+#define V0p2_REV 8
+// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
+#define SENSOR_SHT21_ENABLE
+// Using RoHS-compliant phototransistor in place of LDR.
+//#define AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#define ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#undef ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#undef LOCAL_TRV
+// Use common settings.
+#define COMMON_SETTINGS
+#endif
+
+// ------------------------- REV9
 
 #ifdef CONFIG_REV9_cut1
 #define V0p2_REV 9 // Just like cut2 but with some bugs...
@@ -369,6 +484,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #undef ENABLE_FULL_OT_UI
 // IF DEFINED: basic FROST/WARM temperatures are settable.
 #undef SETTABLE_TARGET_TEMPERATURES
+// IF DEFINED: this unit supports CLI over the USB/serial connection, eg for run-time reconfig.
+#define SUPPORT_CLI
 // IF DEFINED: enable and extended CLI with a longer input buffer for example.
 #define ENABLE_EXTENDED_CLI
 // IF DEFINED: support for general timed and multi-input occupancy detection / use.
@@ -383,8 +500,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define COMMON_SETTINGS
 #endif
 
-
-#ifdef CONFIG_REV9_STATS // REV9 cut2, derived from REV4, as stats node.
+#ifdef CONFIG_REV9_STATS // REV9 cut2, derived from REV4, as stats node, for testing.
 #define V0p2_REV 9
 // IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
 #define SENSOR_SHT21_ENABLE
@@ -409,6 +525,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
+
+// ------------------------- REV10
+
+// REV8 + GSM Arduino shield + I2CEXT, see TODO-551
+
+// ------------------------- REV11
+
+// REV4 (ie SHT21 sensor and phototransistor) + PCB antenna + PCB battery back (probably AAA), see TODO-566
 
 // -------------------------
 
@@ -490,16 +614,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define USE_RTC_INTERNAL_SIMPLE // Provide software RTC support by default.
 // IF DEFINED: support one on and one off time per day (possibly in conjunction with 'learn' button).
 #define SUPPORT_SINGLETON_SCHEDULE
-// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
-//#define ENABLE_BOILER_HUB // NOT defined by default to allow omission for pure leaf nodes.
-//// IF DEFINED: allow TX of stats frames.
-//#define ALLOW_STATS_TX
-// IF DEFINED: allow RX of stats frames.
-//#define ALLOW_STATS_RX
-// IF DEFINED: allow minimal binary format in addition to more generic one: ~400 bytes.
-//#define ALLOW_MINIMAL_STATS_TXRX
 #endif
-
 
 // If LEARN_BUTTON_AVAILABLE then in the absence of anything better SUPPORT_SINGLETON_SCHEDULE should be supported.
 #ifdef LEARN_BUTTON_AVAILABLE
@@ -508,7 +623,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #endif
 #endif
 
-
+// For now (DHD20150927) allowing stats TX forces JSON to allos JSON stats.
+// IF DEFINED: allow TX of stats frames.
+#ifdef ALLOW_STATS_TX
+// IF DEFINED: allow JSON stats frames alongside binary ones.
+#define ALLOW_JSON_OUTPUT
+#endif
 
 // If (potentially) needing to run in some sort of continuous RX mode, define a flag true (else false).
 #if defined(ENABLE_BOILER_HUB) || defined(ALLOW_STATS_RX) || defined(ENABLE_DEFAULT_ALWAYS_RX)
@@ -531,14 +651,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #endif
 #endif
 
-//// Supporting library required for OneWire-connected sensors.
-//// Will also need a #include in the .ino file because of Arduino's pre-preprocessing logic (IDE 1.0.x).
-//#if defined(SENSOR_DS18B20_ENABLE)
-//#define REQUIRES_ONEWIRE22_LIB // Requires V2.2 of OneWire lib.
-//#include <OneWire.h>
-//#endif
-
 
 #endif
-
 

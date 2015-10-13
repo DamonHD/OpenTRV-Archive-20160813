@@ -30,8 +30,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015,
 //#endif
 #include <OTV0p2Base.h>
 
-#include "Sensor.h"
-
 #include "V0p2_Main.h"
 #include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
 #include "V0p2_Sensors.h" // I/O code access.
@@ -48,206 +46,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015,
 
 // Create bare-bones OneWire(TM) support if a pin has been allocated to it.
 #if defined(SUPPORTS_MINIMAL_ONEWIRE)
-// Create very light-weight standard-speed OneWire(TM) support if a pin has been allocated to it.
-// Meant to be similar to use to OneWire library V2.2.
-// Supports search but not necessarily CRC.
-// Designed to work with 1MHz/1MIPS CPU clock.
-
-// See: http://www.pjrc.com/teensy/td_libs_OneWire.html
-// See: http://www.tweaking4all.com/hardware/arduino/arduino-ds18b20-temperature-sensor/
-//
-// Note also that the 1MHz CPU clock causes timing problems in the OneWire library with delayMicroseconds().
-// See: http://forum.arduino.cc/index.php?topic=217004.0
-// See: http://forum.arduino.cc/index.php?topic=46696.0
-
-// Reset interface; returns false if no slave device present.
-// Reset the 1-Wire bus slave devices and ready them for a command.
-// Delay G (0); drive bus low, delay H (48); release bus, delay I (70); sample bus, 0 = device(s) present, 1 = no device present; delay J (410).
-// Timing intervals quite long so slightly slower impl here in base class is OK.
-bool MinimalOneWireBase::reset()
-  {
-  bool result = false;
-
-  // Locks out all interrupts until the final recovery delay to keep timing as accurate as possible,
-  // restoring them to their original state when done.
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
-    {
-    // Delay G (0).
-    delayG();
-    // Drive bus/DQ low.
-    bitWriteLow(inputReg, regMask);
-    bitModeOutput(inputReg, regMask);
-    // Delay H.
-    delayH();
-    // Release the bus (ie let it float).
-    bitModeInput(inputReg, regMask);
-    // Delay I.
-    delayI();
-    // Sample for presence pulse from slave; low signal means slave present.
-    result = !bitReadIn(inputReg, regMask);
-    }
-  // Delay J.
-  // Complete the reset sequence recovery.
-  // Timing is not critical here so interrupts are allowed in again...
-  delayJ();
-
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("OW reset");
-  if(result) { DEBUG_SERIAL_PRINT_FLASHSTRING(" found slave(s)"); }
-  DEBUG_SERIAL_PRINTLN();
-#endif
-
-  return(result);
-  }
-
-// Read a byte.
-// Read least-significant-bit first.
-uint8_t MinimalOneWireBase::read()
-  {
-  uint8_t result = 0;
-  for(uint8_t i = 0; i < 8; ++i)
-    {
-    result >>= 1;
-    if(read_bit()) { result |= 0x80; } else { result &= 0x7f; }
-    }
-  return(result);
-  }
-
-// Write a byte leaving the bus unpowered at the end.
-// Write least-significant-bit first.
-void MinimalOneWireBase::write(uint8_t v)
-  {
-  for(uint8_t i = 0; i < 8; ++i)
-    {
-    write_bit(0 != (v & 1));
-    v >>= 1;
-    }
-  }
-
-void MinimalOneWireBase::reset_search()
-  {
-  lastDeviceFlag = false;
-  lastDiscrepancy = 0;
-  for(int i = sizeof(addr); --i >= 0; ) { addr[i] = 0; }
-  }
-
-// Search for the next device.
-// Returns true if a new address has been found;
-// false means no devices or all devices already found or bus shorted.
-// This does not check the CRC.
-// Follows the broad algorithm shown in http://www.maximintegrated.com/en/app-notes/index.mvp/id/187
-bool MinimalOneWireBase::search(uint8_t newAddr[])
-  {
-  bool result = false;
-
-  // If not at last device, reset and start again.
-  if(!lastDeviceFlag)
-    {
-    uint8_t addrByteNumber = 0;
-    uint8_t addrByteMask = 1;
-    uint8_t idBitNumber = 1;
-    uint8_t lastZero = 0;
-
-    // 1-Wire reset
-    if(!reset())
-      {
-      // Reset search state other than addr.
-      lastDeviceFlag = false;
-      lastDiscrepancy = 0;
-      return(false); // No slave devices on bus...
-      }
-
-    // Send search command.
-    write(0xf0);
-
-    // Start the search loop.
-    do
-      {
-      // Read bit and the complement.
-      const bool idBit = read_bit();
-      const bool cmplIDBit = read_bit();
-#if 0 && defined(DEBUG)
-      DEBUG_SERIAL_PRINT_FLASHSTRING("Search read bit&compl: ");
-      DEBUG_SERIAL_PRINT(idBit);
-      DEBUG_SERIAL_PRINT(cmplIDBit);
-      DEBUG_SERIAL_PRINTLN();
-#endif
-
-      // Stop if no slave devices on the bus.
-      if(idBit && cmplIDBit) { break; }
-
-      bool searchDirection;
-
-      // If all active (non-waiting) slaves have the same next address bit
-      // then that bit becomes the search direction.
-      if(idBit != cmplIDBit) { searchDirection = idBit; }
-      else
-        {
-        if(idBitNumber < lastDiscrepancy)
-          { searchDirection = (0 != (addr[addrByteNumber] & addrByteMask)); }
-        else
-          { searchDirection = (idBitNumber == lastDiscrepancy); }
-
-        // If direction is false/0 then remember its position in lastZero.
-        if(false == searchDirection) { lastZero = idBitNumber; }
-        }
-
-      // Set/clear addr bit as appropriate.
-      if(searchDirection) { addr[addrByteNumber] |= addrByteMask; }
-      else { addr[addrByteNumber] &= ~addrByteMask; }
-
-      // Adjust the mask, etc.
-      ++idBitNumber;
-      if(0 == (addrByteMask <<= 1))
-        {
-#if 0 && defined(DEBUG)
-        DEBUG_SERIAL_PRINT_FLASHSTRING("Addr byte: ");
-        DEBUG_SERIAL_PRINTFMT(addr[addrByteNumber], HEX);
-        DEBUG_SERIAL_PRINTLN();
-#endif
-        addrByteMask = 1;
-        ++addrByteNumber;
-        }
-
-      // Send the next search bit...
-#if 0 && defined(DEBUG)
-      DEBUG_SERIAL_PRINT_FLASHSTRING("Search write: ");
-      DEBUG_SERIAL_PRINT(searchDirection);
-      DEBUG_SERIAL_PRINTLN();
-#endif
-      write_bit(searchDirection);
-      } while(addrByteNumber < 8); // Collect all address bytes!
-
-    if(idBitNumber == 65)
-      {
-      // Success!
-      lastDiscrepancy = lastZero;
-      if(0 == lastZero) { lastDeviceFlag = true; }
-      result = true;
-      } 
-    }
-
-  if(!result || (0 == addr[0]))
-    {
-    // No device found, so reset to be like first!
-    lastDeviceFlag = false;
-    lastDiscrepancy = 0;
-    result = false;
-    }
-
-  for(uint8_t i = 0; i < 8; ++i) { newAddr[i] = addr[i]; }
-  return(result);  
-  }
-
-
-// Select a particular device on the bus.
-void MinimalOneWireBase::select(const uint8_t addr[8])
-  {
-  write(0x55);
-  for(uint8_t i = 0; i < 8; ++i) { write(addr[i]); }
-  }
-
-MinimalOneWire<PIN_OW_DQ_DATA> MinOW;
+OTV0P2BASE::MinimalOneWire<PIN_OW_DQ_DATA> MinOW;
 #endif
 
 
@@ -364,7 +163,7 @@ uint8_t AmbientLight::read()
   power_intermittent_peripherals_disable();
 
   // Capture entropy from changed LS bits.
-  if((uint8_t)al != (uint8_t)rawValue) { addEntropyToPool((uint8_t)al ^ (uint8_t)rawValue, 0); } // Claim zero entropy as may be forced by Eve.
+  if((uint8_t)al != (uint8_t)rawValue) { ::OTV0P2BASE::addEntropyToPool((uint8_t)al ^ (uint8_t)rawValue, 0); } // Claim zero entropy as may be forced by Eve.
 
   // Adjust room-lit flag, with hysteresis.
   if(al <= LDR_THR_LOW)
@@ -481,7 +280,7 @@ static int TMP112_readTemperatureC16()
     if(Wire.requestFrom(TMP102_I2C_ADDR, 1) != 1) { return(0); } // Exit if error.
     const byte b1 = Wire.read();
     if(b1 & TMP102_CTRL_B1_OS) { break; } // Conversion completed.
-    nap(WDTO_15MS); // One or two of these naps should allow typical ~26ms conversion to complete...
+    ::OTV0P2BASE::nap(WDTO_15MS); // One or two of these naps should allow typical ~26ms conversion to complete...
     }
 
   // Fetch temperature.
@@ -595,9 +394,9 @@ static int Sensor_SHT21_readTemperatureC16()
   Wire.beginTransmission(SHT21_I2C_ADDR);
   Wire.write((byte) SHT21_I2C_CMD_TEMP_HOLD); // Select control register.
 #if defined(SHT21_USE_REDUCED_PRECISION)
-  nap(WDTO_30MS); // Should cover 12-bit conversion (22ms).
+  OTV0P2BASE::nap(WDTO_30MS); // Should cover 12-bit conversion (22ms).
 #else
-  sleepLowPowerMs(90); // Should be plenty for slowest (14-bit) conversion (85ms).
+  OTV0P2BASE::sleepLowPowerMs(90); // Should be plenty for slowest (14-bit) conversion (85ms).
 #endif
   //delay(100);
   Wire.endTransmission();
@@ -644,9 +443,9 @@ uint8_t HumiditySensorSHT21::read()
   Wire.beginTransmission(SHT21_I2C_ADDR);
   Wire.write((byte) SHT21_I2C_CMD_RH_HOLD); // Select control register.
 #if defined(SHT21_USE_REDUCED_PRECISION)
-  sleepLowPowerMs(5); // Should cover 8-bit conversion (4ms).
+  OTV0P2BASE::sleepLowPowerMs(5); // Should cover 8-bit conversion (4ms).
 #else
-  nap(WDTO_30MS); // Should cover even 12-bit conversion (29ms).
+  OTV0P2BASE::nap(WDTO_30MS); // Should cover even 12-bit conversion (29ms).
 #endif
   Wire.endTransmission();
   Wire.requestFrom(SHT21_I2C_ADDR, 3);
@@ -670,7 +469,7 @@ uint8_t HumiditySensorSHT21::read()
 
   // Capture entropy from raw status bits
   // iff (transformed) reading has changed.
-  if(value != result) { addEntropyToPool(rawRL ^ rawRH, 1); }
+  if(value != result) { OTV0P2BASE::addEntropyToPool(rawRL ^ rawRH, 1); }
 
   value = result;
   if(result > (HUMIDTY_HIGH_RHPC+HUMIDITY_EPSILON_RHPC)) { highWithHyst = true; }
@@ -948,7 +747,7 @@ int ExtTemperatureDS18B20C16::read()
   MinOW.write(0x44); // Start conversion without parasite power.
   //delay(750); // 750ms should be enough.
   // Poll for conversion complete (bus released)...
-  while(MinOW.read_bit() == 0) { nap(WDTO_15MS); }
+  while(MinOW.read_bit() == 0) { OTV0P2BASE::nap(WDTO_15MS); }
 
   // Fetch temperature (scratchpad read).
   MinOW.reset();
@@ -1088,6 +887,7 @@ uint8_t VoiceDetection::read()
   DEBUG_SERIAL_PRINT(value);
   DEBUG_SERIAL_PRINTLN();
 #endif
+  return(value);
   }
 
 // Handle simple interrupt.

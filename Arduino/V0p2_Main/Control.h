@@ -45,17 +45,26 @@ void loopOpenTRV();
 
 // Default frost (minimum) temperature in degrees C, strictly positive, in range [MIN_TARGET_C,MAX_TARGET_C].
 // Setting frost temperatures at a level likely to protect (eg) fridge/freezers as well as water pipes.
-#define BIASECO_FROST (max(7,MIN_TARGET_C)) // Target FROST temperature for ECO bias; must be in range [MIN_TARGET_C,BIASCOM_FROST[.
+// Note that 5C or below carries a risk of hypothermia: http://ipc.brookes.ac.uk/publications/pdf/Identifying_the_health_gain_from_retirement_housing.pdf
+// Other parts of the room may be somewhat colder than where the sensor is, so aim a little over 5C.
+// Note: BS EN 215:2004 S5.3.5 says maximum setting must be <= 32C, minimum in range [5C,12C].
+#define BIASECO_FROST (max(6,MIN_TARGET_C)) // Target FROST temperature for ECO bias; must be in range [MIN_TARGET_C,BIASCOM_FROST[.
 #define BIASCOM_FROST (max(12,MIN_TARGET_C)) // Target FROST temperature for Comfort bias; must be in range ]BIASECO_FROST,MAX_TARGET_C].
 #define FROST BIASECO_FROST
 // 18C is a safe room temperature even for the slightly infirm according to NHS England 2014:
 //     http://www.nhs.uk/Livewell/winterhealth/Pages/KeepWarmKeepWell.aspx
 // so should possibly be marked explicitly on the control.
+// 21C is recommended living temperature in retirement housing:
+//     http://ipc.brookes.ac.uk/publications/pdf/Identifying_the_health_gain_from_retirement_housing.pdf
 #define SAFE_ROOM_TEMPERATURE 18 // Safe for most purposes.
 // Default warm/comfort room (air) temperature in degrees C; strictly greater than FROST, in range [MIN_TARGET_C,MAX_TARGET_C].
 // Control loop effectively targets upper end of this 1C window as of 20130518, middle as of 20141209.
-#ifndef DHW_TEMPERATURES
-// 17/18 good for energy saving at ~1C below typical UK room temperatures (~19C in 2012).
+
+#ifndef DHW_TEMPERATURES // Settings for room TRV.
+// Set so that mid-point is at ~19C (BRE and others regard this as minimum comfort temperature)
+// and half the scale will be below 19C and thus save ('eco') compared to typical UK room temperatures.
+// (17/18 good for energy saving at ~1C below typical UK room temperatures of ~19C in 2012).
+// Note: BS EN 215:2004 S5.3.5 says maximum setting must be <= 32C, minimum in range [5C,12C].
 #define BIASECO_WARM 17 // Target WARM temperature for ECO bias; must be in range ]BIASCOM_FROST+1,BIASCOM_WARM[.
 #define BIASCOM_WARM 21 // Target WARM temperature for Comfort bias; must be in range ]BIASECO_WARM,MAX_TARGET_C-BAKE_UPLIFT-1].
 #else // Default settings for DHW control.
@@ -65,6 +74,12 @@ void loopOpenTRV();
 #endif
 // Default to a 'safe' temperature.
 #define WARM max(BIASECO_WARM,SAFE_ROOM_TEMPERATURE) 
+
+// Scale can run from eco warm -1 to comfort warm + 1, eg: * 16 17 18 >19< 20 21 22 BOOST
+#define TEMP_SCALE_MIN (BIASECO_WARM-1) // Bottom of range for adjustable-base-temperature systems.
+#define TEMP_SCALE_MID ((BIASECO_WARM + BIASCOM_WARM + 1)/2) // Middle of range for adjustable-base-temperature systems; should be 'eco' baised.
+#define TEMP_SCALE_MAX (BIASCOM_WARM+1) // Top of range for adjustable-base-temperature systems.
+
 
 // Raise target by this many degrees in 'BAKE' mode (strictly positive).
 #define BAKE_UPLIFT 5
@@ -77,7 +92,7 @@ void loopOpenTRV();
 // Enhanced setback in full-on eco mode for extra energy savings.  Not more than FULL_SETBACK.
 #define SETBACK_ECO (1+SETBACK_DEFAULT)
 // Full setback degrees C (strictly positive and significantly, ie several degrees, greater than SETBACK, less than MIN_TARGET_C).
-// This must be less than MIN_TARGET_C to avoid problems with unsigned arithmetic.
+// This must set back to no more than than MIN_TARGET_C to avoid problems with unsigned arithmetic.
 #define SETBACK_FULL 3
 // Prolonged inactivity time deemed to indicate room(s) really unoccupied to trigger full setback (minutes, strictly positive).
 #define SETBACK_FULL_M 50
@@ -637,7 +652,7 @@ bool inSmartMode();
 #define OCCUPATION_TIMEOUT_1_M ((OCCUPATION_TIMEOUT_M*2)/3)
 
 // Occupancy measure as a % confidence that the room/area controlled by this unit has active human occupants.
-class OccupancyTracker : public SimpleTSUint8Sensor
+class OccupancyTracker : public OTV0P2BASE::SimpleTSUint8Sensor
   {
   private:
     // Time until room regarded as unoccupied, in minutes; initially zero (ie treated as unoccupied at power-up).
@@ -873,7 +888,7 @@ void populateCoreStats(FullStatsMessageCore_t *content);
 #ifdef ENABLE_BOILER_HUB
 // Raw notification of received call for heat from remote (eg FHT8V) unit.
 // This form has a 16-bit ID (eg FHT8V housecode) and percent-open value [0,100].
-// Note that this may include 0 percent values for a remote unit explcitly confirming
+// Note that this may include 0 percent values for a remote unit explicitly confirming
 // that is is not, or has stopped, calling for heat (eg instead of replying on a timeout).
 // This is not filtered, and can be delivered at any time from RX data, from a non-ISR thread.
 // Does not have to be thread-/ISR- safe.

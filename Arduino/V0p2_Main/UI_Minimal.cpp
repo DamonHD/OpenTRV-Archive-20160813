@@ -28,11 +28,10 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #include "V0p2_Main.h"
 #include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
 #include "Control.h"
-#include "EEPROM_Utils.h"
 #include "FHT8V_Wireless_Rad_Valve.h"
 #include "Messaging.h"
 #include "Power_Management.h"
-#include "RTC_Support.h"
+#include "RFM22_Radio.h"
 #include "Schedule.h"
 #include "Serial_IO.h"
 #include "UI_Minimal.h"
@@ -100,7 +99,7 @@ bool recentUIControlUse() { return(0 != uiTimeoutM); }
 static void handleLEARN(const uint8_t which)
   {
   // Set simple schedule starting every 24h from a little before now and running for an hour or so.  
-  if(inWarmMode()) { setSimpleSchedule(getMinutesSinceMidnightLT(), which); }
+  if(inWarmMode()) { setSimpleSchedule(OTV0P2BASE::getMinutesSinceMidnightLT(), which); }
   // Clear simple schedule.
   else { clearSimpleSchedule(which); }
   }
@@ -284,7 +283,7 @@ bool tickUI(const uint_fast8_t sec)
           offPause(); // V0.09 was mediumPause().
           LED_HEATCALL_ON(); // flash
           if(isEcoTemperature(wt)) { veryTinyPause(); }
-          else if(!isComfortTemperature(wt)) { sleepLowPowerMs((VERYTINY_PAUSE_MS + TINY_PAUSE_MS) / 2); }
+          else if(!isComfortTemperature(wt)) { OTV0P2BASE::sleepLowPowerMs((VERYTINY_PAUSE_MS + TINY_PAUSE_MS) / 2); }
           else { tinyPause(); }
 
 #ifdef SUPPORT_BAKE
@@ -373,7 +372,7 @@ bool tickUI(const uint_fast8_t sec)
 void checkUserSchedule()
   {
   // Get minutes since midnight local time [0,1439].
-  const uint_least16_t msm = getMinutesSinceMidnightLT();
+  const uint_least16_t msm = OTV0P2BASE::getMinutesSinceMidnightLT();
 
   // Check all available schedules.
   // FIXME: probably will NOT work as expected for overlapping schedules (ie will got to FROST at end of first one).
@@ -552,7 +551,7 @@ void serialStatusReport()
 #else
   Serial.print(inWarmMode() ? 'W' : 'F');
 #endif
-#ifdef ENABLE_NOMINAL_RAD_VALVE
+#if defined(ENABLE_NOMINAL_RAD_VALVE)
   Serial.print(NominalRadValve.get()); Serial.print('%'); // Target valve position.
 #endif
   const int temp = TemperatureC16.get();
@@ -572,8 +571,8 @@ void serialStatusReport()
 
 #ifdef ENABLE_FULL_OT_CLI
   // *T* section: time and schedules.
-  const uint_least8_t hh = getHoursLT();
-  const uint_least8_t mm = getMinutesLT();
+  const uint_least8_t hh = OTV0P2BASE::getHoursLT();
+  const uint_least8_t mm = OTV0P2BASE::getMinutesLT();
   Serial.print(';'); // End previous section.
   Serial.print('T'); Serial.print(hh); Serial_print_space(); Serial.print(mm);
   // Show all schedules set.
@@ -581,13 +580,13 @@ void serialStatusReport()
     {
     Serial_print_space();
     uint_least16_t startMinutesSinceMidnightLT = getSimpleScheduleOn(scheduleNumber);
-    const bool invalidStartTime = startMinutesSinceMidnightLT >= MINS_PER_DAY;
+    const bool invalidStartTime = startMinutesSinceMidnightLT >= OTV0P2BASE::MINS_PER_DAY;
     const int startH = invalidStartTime ? 255 : (startMinutesSinceMidnightLT / 60);
     const int startM = invalidStartTime ? 0 : (startMinutesSinceMidnightLT % 60);
     Serial.print('W'); Serial.print(startH); Serial_print_space(); Serial.print(startM);
     Serial_print_space();
     uint_least16_t endMinutesSinceMidnightLT = getSimpleScheduleOff(scheduleNumber);
-    const bool invalidEndTime = endMinutesSinceMidnightLT >= MINS_PER_DAY;
+    const bool invalidEndTime = endMinutesSinceMidnightLT >= OTV0P2BASE::MINS_PER_DAY;
     const int endH = invalidEndTime ? 255 : (endMinutesSinceMidnightLT / 60);
     const int endM = invalidEndTime ? 0 : (endMinutesSinceMidnightLT % 60);
     Serial.print('F'); Serial.print(endH); Serial_print_space(); Serial.print(endM);
@@ -779,18 +778,19 @@ static void InvalidIgnored() { Serial.println(F("Invalid, ignored.")); }
 #define MAXIMUM_CLI_RESPONSE_CHARS MAXIMUM_CLI_OT_RESPONSE_CHARS
 #endif
 #define IDLE_SLEEP_SCT (15/SUBCYCLE_TICK_MS_RD) // Approx sub-cycle ticks in idle sleep (15ms), erring on side of being too large; strictly positive.
-#define BUF_FILL_TIME_MS (((MAXIMUM_CLI_RESPONSE_CHARS*10) * 1000 + (BAUD-1)) / BAUD) // Time to read full/maximal input command buffer; ms, strictly positive.
+#define BUF_FILL_TIME_MS (((MAXIMUM_CLI_RESPONSE_CHARS*10) * 1000L + (BAUD-1)) / BAUD) // Time to read full/maximal input command buffer; ms, strictly positive.
 #define BUF_FILL_TIME_SCT (BUF_FILL_TIME_MS/SUBCYCLE_TICK_MS_RD) // Approx sub-cycle ticks to fill buf, erring on side of being too large; strictly positive.
 #define MIN_POLL_SCT max(IDLE_SLEEP_SCT, BUF_FILL_TIME_SCT)
 #if MIN_POLL_SCT > CLI_POLL_MIN_SCT
 #error "MIN_POLL_SCT > CLI_POLL_MIN_SCT" 
 #endif
 #define MIN_RX_BUFFER 16 // Minimum Arduino Serial RX buffer size.
-// DHD20131213: CAN_IDLE_15MS true seemed to be causing intermittent crashes.
-#ifdef ENABLE_AVR_IDLE_MODE
-#define CAN_IDLE_30MS ((BAUD <= 4800) || (MAXIMUM_CLI_RESPONSE_CHARS < MIN_RX_BUFFER)) // If true, cannot get RX overrun during 15--30ms idle.
+// DHD20131213: CAN_IDLE_15MS/idle15AndPoll() true seemed to be causing intermittent crashes.
+// DHD20150827: CAN_IDLE_15MS/idle15AndPoll() true causing crashes on 7% of REV9 boards.
+#if !defined(OTV0P2BASE_IDLE_NOT_RECOMMENDED) && defined(ENABLE_USE_OF_AVR_IDLE_MODE) // Allow use of IDLE mode.
+#define CAN_IDLE_15MS ((BAUD <= 4800) || (MAXIMUM_CLI_RESPONSE_CHARS < MIN_RX_BUFFER)) // If true, cannot get RX overrun during 15--30ms idle.
 #else
-#define CAN_IDLE_30MS (false)
+#define CAN_IDLE_15MS (false)
 #endif
 // Used to poll user side for CLI input until specified sub-cycle time.
 // Commands should be sent terminated by CR *or* LF; both may prevent 'E' (exit) from working properly.
@@ -877,11 +877,19 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
       break;
       }
     // Idle waiting for input, to save power, then/else do something useful with some CPU cycles...
-#if CAN_IDLE_30MS
+#if CAN_IDLE_15MS
     // Minimise power consumption leaving CPU/UART clock running, if no danger of RX overrun.
     // Don't do this too close to end of target end time to avoid missing it.
     // Note: may get woken on timer0 interrupts as well as RX and watchdog.
-    if(sct < targetMaxSCT-2) { idle15AndPoll(); continue; }
+    if(sct < targetMaxSCT-2)
+      {
+//      idle15AndPoll(); // COH-63 and others: crashes some REV0 and REV9 boards (reset).
+      // Rely on being woken by UART, or timer 0 (every ~16ms with 1MHz CPU), or backstop of timer 2.
+      set_sleep_mode(SLEEP_MODE_IDLE); // Leave everything running but the CPU...
+      sleep_mode();
+      pollIO(false);
+      continue;
+      }
 #endif
     burnHundredsOfCyclesProductivelyAndPoll(); // Use time time to poll for I/O, etc.
     }
@@ -972,11 +980,11 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
       case 'S':
         {
         Serial.print(F("Resets: "));
-        const uint8_t resetCount = eeprom_read_byte((uint8_t *)EE_START_RESET_COUNT);
+        const uint8_t resetCount = eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_RESET_COUNT);
         Serial.print(resetCount);
         Serial.println();
         Serial.print(F("Overruns: "));
-        const uint8_t overrunCount = (~eeprom_read_byte((uint8_t *)EE_START_OVERRUN_COUNTER)) & 0xff;
+        const uint8_t overrunCount = (~eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER)) & 0xff;
         Serial.print(overrunCount);
         Serial.println();
         break; // Note that status is by default printed after processing input line.
@@ -1064,19 +1072,30 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         if((n >= 3) && (NULL != (tok1 = strtok_r(buf+2, " ", &last))))
           {
           const uint8_t setN = (uint8_t) atoi(tok1);
-          const uint8_t thisHH = getHoursLT();
+          const uint8_t thisHH = OTV0P2BASE::getHoursLT();
 //          const uint8_t lastHH = (thisHH > 0) ? (thisHH-1) : 23;
           // Print label.
           switch(setN)
             {
             default: { Serial.print('?'); break; }
-            case EE_STATS_SET_TEMP_BY_HOUR: case EE_STATS_SET_TEMP_BY_HOUR_SMOOTHED: { Serial.print('C'); break; }
-            case EE_STATS_SET_AMBLIGHT_BY_HOUR: case EE_STATS_SET_AMBLIGHT_BY_HOUR_SMOOTHED: { Serial.print(F("ambl")); break; }
-            case EE_STATS_SET_OCCPC_BY_HOUR: case EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED: { Serial.print(F("occ%")); break; }
-            case EE_STATS_SET_RHPC_BY_HOUR: case EE_STATS_SET_RHPC_BY_HOUR_SMOOTHED: { Serial.print(F("RH%")); break; }
-            case EE_STATS_SET_USER1_BY_HOUR: case EE_STATS_SET_USER1_BY_HOUR_SMOOTHED: { Serial.print('u'); break; }
-#if defined(EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK)
-            case EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK: { Serial.print('W'); break; }
+            case V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR:
+            case V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR_SMOOTHED:
+                { Serial.print('C'); break; }
+            case V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR:
+            case V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR_SMOOTHED:
+                { Serial.print(F("ambl")); break; }
+            case V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR:
+            case V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED:
+                { Serial.print(F("occ%")); break; }
+            case V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR:
+            case V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR_SMOOTHED:
+                { Serial.print(F("RH%")); break; }
+            case V0P2BASE_EE_STATS_SET_USER1_BY_HOUR:
+            case V0P2BASE_EE_STATS_SET_USER1_BY_HOUR_SMOOTHED:
+                { Serial.print('u'); break; }
+#if defined(V0P2BASE_EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK)
+            case V0P2BASE_EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK:
+                { Serial.print('W'); break; }
 #endif
             }
           Serial_print_space();
@@ -1094,11 +1113,12 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
               default: { Serial.print(statRaw); break; } // Generic decimal stats.
 
               // Special formatting cases.
-              case EE_STATS_SET_TEMP_BY_HOUR: case EE_STATS_SET_TEMP_BY_HOUR_SMOOTHED:
+              case V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR:
+              case V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR_SMOOTHED:
                 // Uncompanded temperature, rounded.
                 { Serial.print((expandTempC16(statRaw)+8) >> 4); break; }
-#if defined(EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK)
-              case EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK:
+#if defined(V0P2BASE_EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK)
+              case V0P2BASE_EE_STATS_SET_WARMMODE_BY_HOUR_OF_WK:
                 // Warm mode usage bitmap by hour over week.
                 { Serial.print(statRaw, HEX); break; }
 #endif
@@ -1222,7 +1242,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
             const int hh = atoi(tok1);
             const int mm = atoi(tok2);
             // TODO: zap collected stats if time change too large (eg >> 1h).
-            if(!setHoursMinutesLT(hh, mm)) { InvalidIgnored(); }
+            if(!OTV0P2BASE::setHoursMinutesLT(hh, mm)) { InvalidIgnored(); }
             }
           }
         break;
@@ -1260,7 +1280,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         if((n >= 3) && (NULL != (tok1 = strtok_r(buf+2, " ", &last))))
           {
           const uint8_t nn = (uint8_t) atoi(tok1);
-          eeprom_smart_update_byte((uint8_t *)EE_START_STATS_TX_ENABLE, nn);
+          OTV0P2BASE::eeprom_smart_update_byte((uint8_t *)V0P2BASE_EE_START_STATS_TX_ENABLE, nn);
           }
         break;
         }

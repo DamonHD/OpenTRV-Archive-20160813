@@ -25,8 +25,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 
 #include <Wire.h> // Arduino I2C library.
 
-#include "Actuator.h"
-
 #include "V0p2_Main.h"
 #include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
 #include "V0p2_Actuators.h" // I/O code access.
@@ -59,10 +57,10 @@ void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir)
       // (Has no effect if motor is already running in the correct direction.)
       fastDigitalWrite(MOTOR_DRIVE_ML, HIGH);
       pinMode(MOTOR_DRIVE_ML, OUTPUT); // Ensure that the HIGH side is an output (can be done after, as else will be safe weak pull-up).
-      nap(WDTO_120MS); // Let H-bridge respond and settle, and motor slow down.
+      OTV0P2BASE::nap(WDTO_120MS); // Let H-bridge respond and settle, and motor slow down.
       pinMode(MOTOR_DRIVE_MR, OUTPUT); // Ensure that the LOW side is an output.
       fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull LOW last.
-      nap(WDTO_15MS); // Let H-bridge respond and settle.
+      OTV0P2BASE::nap(WDTO_15MS); // Let H-bridge respond and settle.
 //LED_HEATCALL_ON();
 //LED_UI2_OFF();
       break; // Fall through to common case.
@@ -75,10 +73,10 @@ void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir)
       // (Has no effect if motor is already running in the correct direction.)
       fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); 
       pinMode(MOTOR_DRIVE_MR, OUTPUT); // Ensure that the HIGH side is an output (can be done after, as else will be safe weak pull-up).
-      nap(WDTO_120MS); // Let H-bridge respond and settle, and motor slow down.
+      OTV0P2BASE::nap(WDTO_120MS); // Let H-bridge respond and settle, and motor slow down.
       pinMode(MOTOR_DRIVE_ML, OUTPUT); // Ensure that the LOW side is an output.
       fastDigitalWrite(MOTOR_DRIVE_ML, LOW); // Pull LOW last.
-      nap(WDTO_15MS); // Let H-bridge respond and settle.
+      OTV0P2BASE::nap(WDTO_15MS); // Let H-bridge respond and settle.
 //LED_HEATCALL_OFF();
 //LED_UI2_ON();
       break; // Fall through to common case.
@@ -89,22 +87,48 @@ void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir)
       // Everything off...
       fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Belt and braces force pin logical output state high.
       pinMode(MOTOR_DRIVE_MR, INPUT_PULLUP); // Switch to weak pull-up; slow but possibly marginally safer.
-      nap(WDTO_15MS); // Let H-bridge respond and settle.
+      OTV0P2BASE::nap(WDTO_15MS); // Let H-bridge respond and settle.
       fastDigitalWrite(MOTOR_DRIVE_ML, HIGH); // Belt and braces force pin logical output state high.
       pinMode(MOTOR_DRIVE_ML, INPUT_PULLUP); // Switch to weak pull-up; slow but possibly marginally safer.
-      nap(WDTO_15MS); // Let H-bridge respond and settle.
+      OTV0P2BASE::nap(WDTO_15MS); // Let H-bridge respond and settle.
       return; // Return, not fall through.
       }
     }
   }
 
 
+// DHD20151013: possible basis of calibration code
+//  // Run motor ~1s in the current direction; reverse at end of travel.
+//  DEBUG_SERIAL_PRINT_FLASHSTRING("Dir: ");
+//  DEBUG_SERIAL_PRINT(HardwareMotorDriverInterface::motorDriveClosing == mdir ? "closing" : "opening");
+//  DEBUG_SERIAL_PRINTLN();
+//  V1D.motorRun(mdir);
+//  OTV0P2BASE::nap(WDTO_30MS); // Run for minimum time to overcome initial initia.
+//  bool currentHigh = false;
+//  for(int i = 33; i-- > 0 && !(currentHigh = V1D.isCurrentHigh(mdir)); ) { OTV0P2BASE::nap(WDTO_30MS); }
+//  // Detect if end-stop is reached or motor current otherwise very high.
+//  if(currentHigh)
+//    {
+//    mdir = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
+//      HardwareMotorDriverInterface::motorDriveOpening : HardwareMotorDriverInterface::motorDriveClosing;
+//    }
+//  // Stop motor until next loop.
+//  V1D.motorRun(HardwareMotorDriverInterface::motorOff);
+//
+//  if(currentHigh) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Current high (reversing)"); }
+
+
+
+
 #define MI_NEEDS_ADC // Defined if MI output swing is not enough to use fast comparator.
 
-// Enable/disable end-stop detection and shaft-encoder.
-// Disabling should usually forces the motor off,
-// with a small pause for any residual movement to complete.
-void ValveMotorDirectV1HardwareDriver::enableFeedback(const bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback)
+// Maximum current reading allowed when closing the valve (against the spring).
+static const uint16_t maxCurrentReadingClosing = 600;
+// Maximum current reading allowed when opening the valve (retracting the pin, no resisting force).
+static const uint16_t maxCurrentReadingOpening = 400;
+
+// Detect if end-stop is reached or motor current otherwise very high.] indicating stall.
+bool ValveMotorDirectV1HardwareDriver::isCurrentHigh(HardwareMotorDriverInterface::motor_drive mdir) const
   {
   // Check for high motor current indicating hitting an end-stop.
 #if !defined(MI_NEEDS_ADC)
@@ -112,14 +136,27 @@ void ValveMotorDirectV1HardwareDriver::enableFeedback(const bool enable, Hardwar
 #else
   // Measure motor current against (fixed) internal reference.
   const uint16_t mi = analogueNoiseReducedRead(MOTOR_DRIVE_MI_AIN, INTERNAL);
-  const uint16_t miHigh = 250; // Typical *start* current 430 observed at 2.4V, REV7 board DHD20150205 (370@2.0V, 550@3.3V).
+//  const uint16_t miHigh = 250; // Typical *start* current 430 observed at 2.4V, REV7 board DHD20150205 (370@2.0V, 550@3.3V).
+  const uint16_t miHigh = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
+      maxCurrentReadingClosing : maxCurrentReadingOpening;
   const bool currentSense = (mi > miHigh) &&
     // Recheck the value read in case spiky.
     (analogueNoiseReducedRead(MOTOR_DRIVE_MI_AIN, INTERNAL) > miHigh) && (analogueNoiseReducedRead(MOTOR_DRIVE_MI_AIN, INTERNAL) > miHigh);
-  if(mi > ((3*miHigh)/4)) { DEBUG_SERIAL_PRINT(mi); DEBUG_SERIAL_PRINTLN(); }
+//  if(mi > ((2*miHigh)/4)) { DEBUG_SERIAL_PRINT(mi); DEBUG_SERIAL_PRINTLN(); }
 #endif
-  if(currentSense) { LED_UI2_ON(); } else { LED_UI2_OFF(); }
-  if(currentSense) { callback.signalHittingEndStop(); } 
+  return(currentSense);
+  }
+
+
+// Enable/disable end-stop detection and shaft-encoder.
+// Disabling should usually force the motor off,
+// with a small pause for any residual movement to complete.
+void ValveMotorDirectV1HardwareDriver::enableFeedback(const bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback)
+  {
+  // Check for high motor current indicating hitting an end-stop.
+  const bool highI = isCurrentHigh();
+//  if(highI) { LED_UI2_ON(); } else { LED_UI2_OFF(); }
+  if(highI) { callback.signalHittingEndStop(); } 
   }
 
 
@@ -131,6 +168,7 @@ uint8_t ValveMotorDirectV1::read()
 
   // TODO
 
+  return(0);
   }
 
 //#if 1 && defined(ALT_MAIN_LOOP) && defined(DEBUG)
@@ -222,6 +260,13 @@ void ValveMotorDirectV1::wiggle()
 // Singleton implementation/instance.
 ValveMotorDirectV1 ValveDirect;
 #endif
+
+
+
+
+
+
+
 
 
 

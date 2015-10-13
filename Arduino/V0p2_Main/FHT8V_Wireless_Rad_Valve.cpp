@@ -32,7 +32,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #ifdef USE_MODULE_FHT8VSIMPLE
 
 #include "Control.h"
-#include "EEPROM_Utils.h"
 #include "RFM22_Radio.h"
 #include "Messaging.h"
 #include "Power_Management.h"
@@ -334,8 +333,8 @@ uint8_t *FHT8VCreateValveSetCmdFrame_r(uint8_t *const bptr, fht8v_msg_t *command
   if(doTrailer)
     {
     populateCoreStats(&trailer);
-    // Record stats as if remote, but secure, and with ID.
-    recordCoreStats(true, &trailer);
+    // Record/log stats as if remote, but secure, and with ID.
+//    outputCoreStats(&Serial, true, &trailer); // FIXME
     // Ensure that no ID is encoded in the message sent on the air since it would be a repeat from the FHT8V frame.
     trailer.containsID = false;
     }
@@ -346,17 +345,17 @@ uint8_t *FHT8VCreateValveSetCmdFrame_r(uint8_t *const bptr, fht8v_msg_t *command
 // Clear both housecode parts (and thus disable local valve).
 void FHT8VClearHC()
   {
-  eeprom_smart_erase_byte((uint8_t*)EE_START_FHT8V_HC1);
-  eeprom_smart_erase_byte((uint8_t*)EE_START_FHT8V_HC2);
+  OTV0P2BASE::eeprom_smart_erase_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC1);
+  OTV0P2BASE::eeprom_smart_erase_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC2);
   }
 
 // Set (non-volatile) HC1 and HC2 for single/primary FHT8V wireless valve under control.
-void FHT8VSetHC1(uint8_t hc) { eeprom_smart_update_byte((uint8_t*)EE_START_FHT8V_HC1, hc); }
-void FHT8VSetHC2(uint8_t hc) { eeprom_smart_update_byte((uint8_t*)EE_START_FHT8V_HC2, hc); }
+void FHT8VSetHC1(uint8_t hc) { OTV0P2BASE::eeprom_smart_update_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC1, hc); }
+void FHT8VSetHC2(uint8_t hc) { OTV0P2BASE::eeprom_smart_update_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC2, hc); }
 
 // Get (non-volatile) HC1 and HC2 for single/primary FHT8V wireless valve under control (will be 0xff until set).
-uint8_t FHT8VGetHC1() { return(eeprom_read_byte((uint8_t*)EE_START_FHT8V_HC1)); }
-uint8_t FHT8VGetHC2() { return(eeprom_read_byte((uint8_t*)EE_START_FHT8V_HC2)); }
+uint8_t FHT8VGetHC1() { return(eeprom_read_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC1)); }
+uint8_t FHT8VGetHC2() { return(eeprom_read_byte((uint8_t*)V0P2BASE_EE_START_FHT8V_HC2)); }
 
 #ifndef localFHT8VTRVEnabled
 // Returns TRV if valve/radiator is to be controlled by this unit.
@@ -517,7 +516,7 @@ static void valveSettingTX(const bool allowDoubleTX)
 
 // Half second count within current minor cycle for FHT8VPollSyncAndTX_XXX().
 static uint8_t halfSecondCount;
-#if defined(TWO_S_TICK_RTC_SUPPORT)
+#if defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
 #define MAX_HSC 3 // Max allowed value of halfSecondCount.
 #else
 #define MAX_HSC 1 // Max allowed value of halfSecondCount.

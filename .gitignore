@@ -1,2 +1,4 @@
 /out_test/
 /bin/
+/Arduino/hardware/**/*.b#*
+/Arduino/hardware/**/*.s#*
