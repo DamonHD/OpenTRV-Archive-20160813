@@ -23,9 +23,93 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 #ifndef V0P2_ACTUATORS_H
 #define V0P2_ACTUATORS_H
 
-#include "AbstractRadValve.h"
 
 
+
+
+// Abstract class for motor drive.
+// Supports abstract model plus remote (wireless) and local/direct implementations.
+// Implementations may require poll() called at a fixed rate.
+class AbstractRadValve : public OTV0P2BASE::SimpleTSUint8Actuator
+  {
+  public:
+    // Returns true if this sensor reading value passed is valid, eg in range [0,100].
+    virtual bool isValid(const uint8_t value) const { return(value <= 100); }
+
+    // Returns true iff not (re)calibrating/(re)initialising/(re)syncing.
+    // By default there is no recalibration step.
+    virtual bool isCalibrated() const { return(true); }
+
+    // True if the controlled physical valve is thought to be at least partially open right now.
+    // If multiple valves are controlled then is this true only if all are at least partially open.
+    // Used to help avoid running boiler pump against closed valves.
+    // Must not be true while (re)calibrating.
+    // The default is to use the check the current computed position
+    // against the minimum open percentage.
+    virtual bool isControlledValveReallyOpen() const { return(isCalibrated() && (value >= getMinPercentOpen())); }
+
+    // Get estimated minimum percentage open for significant flow for this device; strictly positive in range [1,99].
+    // Defaults to 1 which is minimum possible legitimate value.
+    virtual uint8_t getMinPercentOpen() const { return(1); }
+  };
+
+
+// Generic callback handler for hardware valve motor driver.
+class HardwareMotorDriverInterfaceCallbackHandler
+  {
+  protected:
+    ~HardwareMotorDriverInterfaceCallbackHandler() {}
+
+  public:
+    // Called when end stop hit, eg by overcurrent detection.
+    // Can be called while run() is in progress.
+    // Is ISR-/thread- safe.
+    virtual void signalHittingEndStop() = 0;
+  
+    // Called when encountering leading edge of a mark in the shaft rotation in forward direction (falling edge in reverse).
+    // Can be called while run() is in progress.
+    // Is ISR-/thread- safe.
+    virtual void signalShaftEncoderMarkStart() = 0;
+  };
+
+// Interface for low-level hardware motor driver.
+class HardwareMotorDriverInterface
+  {
+  protected:
+    ~HardwareMotorDriverInterface() {}
+
+  public:
+    // Legal motor drive states.
+    enum motor_drive
+      {
+      motorOff = 0, // Motor switched off (default).
+      motorDriveClosing, // Drive towards the valve-closed position.
+      motorDriveOpening, // Drive towards the valve-open position.
+      motorStateInvalid // Higher than any valid state.
+      };
+
+    // Call to actually run/stop low-level motor.
+    // May take as much as 200ms eg to change direction.
+    // Stopping (removing power) should typically be very fast, << 100ms.
+    //   * start  if true then this routine starts the motor from cold,
+    //            else this runs the motor for a short continuation period;
+    //            at least one continuation should be performed before testing
+    //            for high current loads at end stops
+    virtual void motorRun(motor_drive dir, bool start = true) = 0;
+//
+//    // Detect if end-stop is reached or motor current otherwise very high.
+//    virtual bool isCurrentHigh();
+
+    // Enable/disable end-stop detection and shaft-encoder.
+    // Disabling should usually forces the motor off,
+    // with a small pause for any residual movement to complete.
+    virtual void enableFeedback(bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback) = 0;
+
+    // If true then enableFeedback(true) needs to be called in a fairly tight loop
+    // while the motor is running and for a short while after
+    // to capture end-stop hits, etc.
+    virtual bool needsPoll() const = 0;
+  };
 
 // Generic (unit-testable) motor diver login using end-stop detection and simple shaft-encoder.
 // Designed to be embedded in a motor controller instance.
@@ -51,19 +135,10 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
       };
 
   private:
-    // Major state of driver.
-    // On power-up (or full reset) should be 0/init.
-    // Stored as a uint8_t to save a little space and to make atomic operations easier.
-    // Marked volatile so that individual reads are ISR-/thread- safe without a mutex.
-    // Hold a mutex to do compound operations such as read/modify/write.
-    volatile /*driverState*/ uint8_t state;
-
     // Clicks from one end of the range to the other; 0 if not initialised or no movement tracker.
-    // Set during calibration.
     uint16_t clicksFullTravel;
 
     // Current clicks from closed end of travel.
-    // Set during calibration.
     // ISR-/thread- safe with a mutex.
     volatile uint16_t clicksFromClosed;
 
@@ -71,6 +146,11 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     uint16_t ticksFromOpen;
     // Measured (during calibration) sub-cycle ticks (1/128s) from open to closed.
     uint16_t ticksFromClosed;
+
+    // Basic state of driver.
+    // Marked volatile so that individual reads are ISR-/thread- safe without a mutex.
+    // Hold a mutex to do compound operations such as read/modify/write.
+    volatile /*driverState*/ uint8_t state;
 
     // Nominal motor drive status, ie what it should be doing.
     // (Motor may not actually be running all the time that this indicates itself not off.)
@@ -82,8 +162,8 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Target % open in range [0,100].
     uint8_t targetPC;
 
-//    // True if movement can be 'lazy'.
-//    bool lazy;
+    // True if movement can be 'lazy'.
+    bool lazy;
 
     // Turn motor off, or on in a given drive direction.
     // Sets state accordingly.
@@ -97,116 +177,113 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Called when end stop hit, eg by overcurrent detection.
     // Can be called while run() is in progress.
     // Is ISR-/thread- safe.
-    virtual void signalHittingEndStop() { /* TODO */ }
+    virtual void signalHittingEndStop();
 
     // Called when encountering leading edge of a mark in the shaft rotation in forward direction (falling edge in reverse).
     // Can be called while run() is in progress.
     // Is ISR-/thread- safe.
-    virtual void signalShaftEncoderMarkStart() { /* TODO */ }
+    virtual void signalShaftEncoderMarkStart();
 
-//    // Call when given user signal that valve has been fitted (ie is fully on).
-//    // Can be called while run() is in progress.
-//    // Is ISR-/thread- safe.
-//    void signalValveFitted();
-//
-//    // Set target % open.
-//    // Can optionally be 'lazy' eg move more slowly or avoid tiny movements entirely.
-//    void setTargetPercentOpen(uint8_t newTargetPC, bool beLazy = false) { targetPC = min(newTargetPC, 100); lazy = beLazy; }
-//
-//    // Used to run motor, adjust state, etc for up to specified maximum number of milliseconds.
-//    // Returns true if more work remaining to get into target state.
-//    bool run(uint16_t maxms, HardwareMotorDriverInterface &driver);
-//
-//    // Returns true iff not (re)calibrating/(re)initialising/(re)syncing.
-//    // Initially false until power-up and at least initial calibration are complete.
-//    bool isCalibrated() const { return((state > (uint8_t)valveCalibrating) && (0 != clicksFullTravel)); }
-//
-//    // Returns true if device can track movement between end stops.
-//    // Without this at best the logic has to guess and the valve control logic
-//    // should possibly be more concerned with nudging open/closed
-//    // than trying to hit some arbitrary percentage open.
-//    bool hasMovementTracker() const { return(0 != clicksFullTravel); }
-//
-//    // True iff power-up initialisation (eg including allowing user to fit to valve base) is done.
-//    bool isPowerUpDone() const { return(state >= (uint8_t)valveNormal); }
-//
-//    // Get current motor drive status (off else direction of running).
-//    HardwareMotorDriverInterface::motor_drive getMotorDriveStatus() const { return((HardwareMotorDriverInterface::motor_drive) motorDriveStatus); }
+    // Call when given user signal that valve has been fitted (ie is fully on).
+    // Can be called while run() is in progress.
+    // Is ISR-/thread- safe.
+    void signalValveFitted();
+
+    // Set target % open.
+    // Can optionally be 'lazy' eg move more slowly or avoid tiny movements entirely.
+    void setTargetPercentOpen(uint8_t newTargetPC, bool beLazy = false) { targetPC = min(newTargetPC, 100); lazy = beLazy; }
+
+    // Used to run motor, adjust state, etc for up to specified maximum number of milliseconds.
+    // Returns true if more work remaining to get into target state.
+    bool run(uint16_t maxms, HardwareMotorDriverInterface &driver);
+
+    // Returns true iff not (re)calibrating/(re)initialising/(re)syncing.
+    // Initially false until power-up and at least initial calibration are complete.
+    bool isCalibrated() const { return((state > (uint8_t)valveCalibrating) && (0 != clicksFullTravel)); }
+
+    // Returns true if device can track movement between end stops.
+    // Without this at best the logic has to guess and the valve control logic
+    // should possibly be more concerned with nudging open/closed
+    // than trying to hit some arbitrary percentage open.
+    bool hasMovementTracker() const { return(0 != clicksFullTravel); }
+
+    // True iff power-up initialisation (eg including allowing user to fit to valve base) is done.
+    bool isPowerUpDone() const { return(state >= (uint8_t)valveNormal); }
+
+    // Get current motor drive status (off else direction of running).
+    HardwareMotorDriverInterface::motor_drive getMotorDriveStatus() const { return((HardwareMotorDriverInterface::motor_drive) motorDriveStatus); }
   };
 
-
 #if defined(LOCAL_TRV) && defined(DIRECT_MOTOR_DRIVE_V1)
-#define HAS_VALVEDIRECT
 // Implementation for V1 (REV7/DORM1) motor.
 // Usually not instantiated except within ValveMotorDirectV1.
 // Creating multiple instances almost certainly a BAD IDEA.
 class ValveMotorDirectV1HardwareDriver : public HardwareMotorDriverInterface
   {
-  protected:
-    // Detect if end-stop is reached or motor current otherwise very high.
-    virtual bool isCurrentHigh(HardwareMotorDriverInterface::motor_drive mdir = motorDriveOpening) const;
-
   public:
     // Call to actually run/stop low-level motor.
     // May take as much as 200ms eg to change direction.
     // Stopping (removing power) should typically be very fast, << 100ms.
-    //   * dir    direction to run motor (or off/stop)
-    //   * callback  callback handler
     //   * start  if true then this routine starts the motor from cold,
     //            else this runs the motor for a short continuation period;
     //            at least one continuation should be performed before testing
     //            for high current loads at end stops
-    virtual void motorRun(motor_drive dir, HardwareMotorDriverInterfaceCallbackHandler &callback, bool start = true);
+    virtual void motorRun(motor_drive dir, bool start = true);
+
+    // Detect if end-stop is reached or motor current otherwise very high.
+    virtual bool isCurrentHigh(HardwareMotorDriverInterface::motor_drive mdir = motorDriveOpening) const;
+
+    // Enable/disable end-stop detection and shaft-encoder.
+    // Disabling should usually force the motor off,
+    // with a small pause for any residual movement to complete.
+    virtual void enableFeedback(bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback);
+
+    // If true then enableFeedback(true) needs to be called in a fairly tight loop
+    // while the motor is running and for a short while after
+    // to capture end-stop hits, etc.
+    // Always true for this driver.
+    virtual bool needsPoll() const { return(true); }
   };
 
 // Actuator/driver for direct local (radiator) valve motor control.
 class ValveMotorDirectV1 : public AbstractRadValve
   {
   private:
-    // Driver for the V1/DORM1 hardware.
-    ValveMotorDirectV1HardwareDriver driver;
-    // Logic to manage state, etc.
-    CurrentSenseValveMotorDirect logic;
+//    CurrentSenseValveMotorDirect logic;
+
+  protected:
+    // Turn motor off, or on in a given drive direction.
+    // This routine is very careful to avoid setting outputs into any illegal/'bad' state.
+    // Sets flags accordingly.
+    // Does not provide any monitoring of stall, position encoding, etc.
+    // May take significant time (~150ms) to gently stop motor.
+//    void motorDrive(motor_drive dir) { logic.setMotorDrive(dir); }
 
   public:
     // Regular poll/update.
     virtual uint8_t read();
 
-    // Handle simple interrupt.
-    // Fast and ISR (Interrupt Service Routines) safe.
-    // Returns true if interrupt was successfully handled and cleared
-    // else another interrupt handler in the chain may be called
-    // to attempt to clear the interrupt.
-    virtual bool handleInterruptSimple() { /* TODO */ }
-
-    // Returns true iff not in error state and not (re)calibrating/(re)initialising/(re)syncing.
-    // By default there is no recalibration step.
-    virtual bool isInNormalRunState() const { return(false); }
-
-    // Returns true if in an error state,
-    virtual bool isInErrorState() const { return(false); }
+//    // Handle simple interrupt.
+//    // Fast and ISR (Interrupt Service Routines) safe.
+//    // Returns true if interrupt was successfully handled and cleared
+//    // else another interrupt handler in the chain may be called
+//    // to attempt to clear the interrupt.
+//    virtual bool handleInterruptSimple();
 
     // Minimally wiggles the motor to give tactile feedback and/or show to be working.
+    // Does not itself track movement against shaft encoder, etc, or check for stall.
     // May take a significant fraction of a second.
     // Finishes with the motor turned off.
-    virtual void wiggle();
+    void wiggle();
+
+//#if defined(ALT_MAIN_LOOP) && defined(DEBUG)
+//  // Drive motor back and forth (toggle direction each call) just for testing/fun.
+//  void flip();
+//#endif
   };
 // Singleton implementation/instance.
 extern ValveMotorDirectV1 ValveDirect;
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -228,12 +305,13 @@ extern ValveMotorDirectV1 ValveDirect;
 #define DEFAULT_VALVE_PC_MODERATELY_OPEN 35
 
 
+
 #if defined(ENABLE_BOILER_HUB)
 // Internal logic for simple on/off boiler output, fully testable.
 class OnOffBoilerDriverLogic
   {
   public:
-    // Maximum distinct radiators tracked by this system.
+    // MAximum distinct radiators tracked by this system.
     // The algorithms uses will assume that this is a smallish number,
     // and may work best of a power of two.
     // Reasonable candidates are 8 or 16.

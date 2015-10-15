@@ -41,14 +41,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 // Call to actually run/stop low-level motor.
 // May take as much as 200ms eg to change direction.
 // Stopping (removing power) should typically be very fast, << 100ms.
-//   * dir    direction to run motor (or off/stop)
-//   * callback  callback handler
 //   * start  if true then this routine starts the motor from cold,
 //            else this runs the motor for a short continuation period;
 //            at least one continuation should be performed before testing
 //            for high current loads at end stops
 // TODO: implement start
-void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir, HardwareMotorDriverInterfaceCallbackHandler &callback, const bool start)
+void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir, const bool start)
   {
   // *** MUST NEVER HAVE L AND R LOW AT THE SAME TIME else board may be destroyed at worst. ***
   // Operates as quickly as reasonably possible, eg to move to stall detection quickly...
@@ -104,61 +102,30 @@ void ValveMotorDirectV1HardwareDriver::motorRun(const motor_drive dir, HardwareM
   }
 
 
-// DHD20151015: possible basis of calibration code
-// Run motor ~1s in the current direction; reverse at end of travel.
+// DHD20151013: possible basis of calibration code
+//  // Run motor ~1s in the current direction; reverse at end of travel.
 //  DEBUG_SERIAL_PRINT_FLASHSTRING("Dir: ");
 //  DEBUG_SERIAL_PRINT(HardwareMotorDriverInterface::motorDriveClosing == mdir ? "closing" : "opening");
 //  DEBUG_SERIAL_PRINTLN();
-//  bool currentHigh = false;
 //  V1D.motorRun(mdir);
-//  static uint16_t count;
-//  uint8_t sctStart = getSubCycleTime();
-//  uint8_t sctMinRunTime = sctStart + 4; // Min run time 32ms to avoid false readings.
-//  uint8_t sct;
-//  while(((sct = getSubCycleTime()) <= ((3*GSCT_MAX)/4)) && !(currentHigh = V1D.isCurrentHigh(mdir)))
-//      { 
-////      if(HardwareMotorDriverInterface::motorDriveClosing == mdir)
-////        {
-////        // BE VERY CAREFUL HERE: a wrong move could destroy the H-bridge.
-////        fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Blip high to remove power.
-////        while(getSubCycleTime() == sct) { } // Off for ~8ms.
-////        fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull LOW to re-enable power.
-////        }
-//      // Wait until end of tick or minimum period.
-//      if(sct < sctMinRunTime) { while(getSubCycleTime() <= sctMinRunTime) { } }
-//      else { while(getSubCycleTime() == sct) { } }
-//      }
-//  uint8_t sctEnd = getSubCycleTime();
-//  // Stop motor until next loop (also ensures power off).
-//  V1D.motorRun(HardwareMotorDriverInterface::motorOff);
-//  // Detect if end-stop is reached or motor current otherwise very high and reverse.
-//  count += (sctEnd - sctStart);
+//  OTV0P2BASE::nap(WDTO_30MS); // Run for minimum time to overcome initial initia.
+//  bool currentHigh = false;
+//  for(int i = 33; i-- > 0 && !(currentHigh = V1D.isCurrentHigh(mdir)); ) { OTV0P2BASE::nap(WDTO_30MS); }
+//  // Detect if end-stop is reached or motor current otherwise very high.
 //  if(currentHigh)
 //    {
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("Current high (reversing) at tick count ");
-//    DEBUG_SERIAL_PRINT(count);
-//    DEBUG_SERIAL_PRINTLN();
-//    // DHD20151013:
-//    //Typical run is 1400 to 1500 ticks
-//    //(128 ticks = 1s, so 1 tick ~7.8ms)
-//    //with closing taking longer
-//    //(against the valve spring)
-//    //than opening.
-//    //
-//    //Min run period to avoid false end-stop reports
-//    //is ~30ms or ~4 ticks.
-//    //
-//    //Implies a nominal precision of ~4/1400 or << 1%,
-//    //but an accuracy of ~1500/1400 as poor as ~10%.
-//    count = 0;
-//    // Reverse.
 //    mdir = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
 //      HardwareMotorDriverInterface::motorDriveOpening : HardwareMotorDriverInterface::motorDriveClosing;
 //    }
+//  // Stop motor until next loop.
+//  V1D.motorRun(HardwareMotorDriverInterface::motorOff);
+//
+//  if(currentHigh) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Current high (reversing)"); }
 
 
-// IF DEFINED: MI output swing asymmetric or is not enough to use fast comparator.
-#define MI_NEEDS_ADC
+
+
+#define MI_NEEDS_ADC // Defined if MI output swing is not enough to use fast comparator.
 
 // Maximum current reading allowed when closing the valve (against the spring).
 static const uint16_t maxCurrentReadingClosing = 600;
@@ -186,40 +153,114 @@ bool ValveMotorDirectV1HardwareDriver::isCurrentHigh(HardwareMotorDriverInterfac
   }
 
 
-//// Enable/disable end-stop detection and shaft-encoder.
-//// Disabling should usually force the motor off,
-//// with a small pause for any residual movement to complete.
-//void ValveMotorDirectV1HardwareDriver::enableFeedback(const bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback)
-//  {
-//  // Check for high motor current indicating hitting an end-stop.
-//  const bool highI = isCurrentHigh();
-////  if(highI) { LED_UI2_ON(); } else { LED_UI2_OFF(); }
-//  if(highI) { callback.signalHittingEndStop(); } 
-//  }
+// Enable/disable end-stop detection and shaft-encoder.
+// Disabling should usually force the motor off,
+// with a small pause for any residual movement to complete.
+void ValveMotorDirectV1HardwareDriver::enableFeedback(const bool enable, HardwareMotorDriverInterfaceCallbackHandler &callback)
+  {
+  // Check for high motor current indicating hitting an end-stop.
+  const bool highI = isCurrentHigh();
+//  if(highI) { LED_UI2_ON(); } else { LED_UI2_OFF(); }
+  if(highI) { callback.signalHittingEndStop(); } 
+  }
 
 
 // Actuator/driver for direct local (radiator) valve motor control.
 uint8_t ValveMotorDirectV1::read()
   {
-  // For now, just wiggle.
-  wiggle();
+  // Call the generic read() first.
+//  AbstractCurrentSenseValveMotorDirectV1::read();
 
   // TODO
 
-  return(value);
+  return(0);
   }
 
+//#if 1 && defined(ALT_MAIN_LOOP) && defined(DEBUG)
+//// Drive motor back and forth (toggle direction each call) just for testing/fun.
+//void ValveMotorDirectV1::flip()
+//  {
+//  static bool open;
+//  open = !open;
+//  motorDrive(open ? motorDriveOpening : motorDriveClosing);
+//  }
+//#endif
 
 // Minimally wiggles the motor to give tactile feedback and/or show to be working.
+// Does not itself track movement against shaft encoder, etc, or check for stall.
 // May take a significant fraction of a second.
 // Finishes with the motor turned off.
 void ValveMotorDirectV1::wiggle()
   {
-  driver.motorRun(HardwareMotorDriverInterface::motorOff, logic);
-  driver.motorRun(HardwareMotorDriverInterface::motorDriveOpening, logic, true);
-  driver.motorRun(HardwareMotorDriverInterface::motorDriveClosing, logic, true);
-  driver.motorRun(HardwareMotorDriverInterface::motorOff, logic);
+//  motorDrive(motorOff);
+//  motorDrive(motorDriveOpening);
+//  nap(WDTO_120MS);
+//  motorDrive(motorDriveClosing);
+//  nap(WDTO_120MS);
+//  motorDrive(motorOff);
   }
+
+//// Turn motor off, or on for a given drive direction.
+//// This routine is very careful to avoid setting outputs into any illegal/'bad' state.
+//// Sets flags accordingly.
+//// Does not provide any monitoring of stall, position encoding, etc.
+//// May take significant time (~150ms) to gently stop motor.
+//void ValveMotorDirectV1::motorDrive(const motor_drive dir)
+//  {
+//  // *** MUST NEVER HAVE L AND R LOW AT THE SAME TIME else board may be destroyed at worst. ***
+//  // Operates as quickly as reasonably possible, eg to move to stall detection quickly...
+//  // TODO: consider making atomic to block some interrupt-related accidents...
+//  // TODO: note that the mapping between L/R and open/close not yet defined.
+//  switch(dir)
+//    {
+//    case motorDriveOpening:
+//      {
+//      fastDigitalWrite(MOTOR_DRIVE_ML, HIGH); // Pull one side high immediately *FIRST* for safety.
+//      nap(WDTO_120MS); // Let H-bridge respond and settle, and motor slow down.
+//      pinMode(MOTOR_DRIVE_MR, OUTPUT); // Ensure that the LOW side is an output.
+//      fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull other side side low after.
+//      nap(WDTO_15MS); // Let H-bridge respond and settle.
+////LED_HEATCALL_ON();
+////LED_UI2_OFF();
+//      break; // Fall through to common case.
+//      }
+//
+//    case motorDriveClosing:
+//      {
+//      fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Pull one side high immediately *FIRST* for safety.
+//      nap(WDTO_120MS); // Let H-bridge respond and settle.
+//      pinMode(MOTOR_DRIVE_ML, OUTPUT); // Ensure that the LOW side is an output.
+//      fastDigitalWrite(MOTOR_DRIVE_ML, LOW); // Pull other side side low after.
+//      nap(WDTO_15MS); // Let H-bridge respond and settle.
+////LED_HEATCALL_OFF();
+////LED_UI2_ON();
+//      break; // Fall through to common case.
+//      }
+//
+//    case motorOff: default: // Explicit off, and default for safety.
+//      {
+//      // Everything off...
+//      fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Belt and braces force pin logical output state high.
+//      pinMode(MOTOR_DRIVE_MR, INPUT_PULLUP); // Switch to weak pull-up; slow but possibly marginally safer.
+//      nap(WDTO_15MS); // Let H-bridge respond and settle.
+//      fastDigitalWrite(MOTOR_DRIVE_ML, HIGH); // Belt and braces force pin logical output state high.
+//      pinMode(MOTOR_DRIVE_ML, INPUT_PULLUP); // Switch to weak pull-up; slow but possibly marginally safer.
+//      nap(WDTO_15MS); // Let H-bridge respond and settle.
+//      motorDriveStatus = motorOff; // Ensure value state even if 'dir' invalid.
+//      return; // Return, not fall through.
+//      }
+//    }
+//
+//  // If state has changed to new 'active' state,
+//  // force both lines to outputs (which may be relatively slow)
+//  // and update this instance's state.
+//  if(motorDriveStatus != dir) 
+//    {
+//    pinMode(MOTOR_DRIVE_ML, OUTPUT);
+//    pinMode(MOTOR_DRIVE_MR, OUTPUT);
+//    motorDriveStatus = dir;
+//    }
+//  }
 
 // Singleton implementation/instance.
 ValveMotorDirectV1 ValveDirect;
