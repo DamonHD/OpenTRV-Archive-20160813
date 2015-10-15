@@ -337,14 +337,6 @@ void loopAlt()
 
 
 
-  // Measure motor count against (fixed) internal reference.
-  power_intermittent_peripherals_enable(true);
-  const uint16_t mc = analogueNoiseReducedRead(MOTOR_DRIVE_MC_AIN, INTERNAL);
-  void power_intermittent_peripherals_disable();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("Count input: ");
-  DEBUG_SERIAL_PRINT(mc);
-  DEBUG_SERIAL_PRINTLN();
-
 
   // Run motor ~1s in the current direction; reverse at end of travel.
   DEBUG_SERIAL_PRINT_FLASHSTRING("Dir: ");
@@ -352,34 +344,61 @@ void loopAlt()
   DEBUG_SERIAL_PRINTLN();
   bool currentHigh = false;
   V1D.motorRun(mdir);
-  for(int i = 33; i-- > 0 && !(currentHigh = V1D.isCurrentHigh(mdir)); )
-      {
-      const bool odd = 0 != (i & 1);
-      bool reducedDutyCycle = false;
-      if(odd)
-        {
-        if(HardwareMotorDriverInterface::motorDriveClosing == mdir)
-          {
-          // BE VERY CAREFUL HERE: a wrong move could destroy the H-bridge.
-          fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Blip high to remove drive.
-          OTV0P2BASE::nap(WDTO_15MS);
-          fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull LOW last.
-          }
-        }
-      if(reducedDutyCycle) { OTV0P2BASE::nap(WDTO_15MS); continue; }
-      OTV0P2BASE::nap(WDTO_30MS);
+  static uint16_t count;
+  uint8_t sctStart = getSubCycleTime();
+  uint8_t sctMinRunTime = sctStart + 4; // Min run time 32ms to avoid false readings.
+  uint8_t sct;
+  while(((sct = getSubCycleTime()) <= ((3*GSCT_MAX)/4)) && !(currentHigh = V1D.isCurrentHigh(mdir)))
+      { 
+//      if(HardwareMotorDriverInterface::motorDriveClosing == mdir)
+//        {
+//        // BE VERY CAREFUL HERE: a wrong move could destroy the H-bridge.
+//        fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Blip high to remove power.
+//        while(getSubCycleTime() == sct) { } // Off for ~8ms.
+//        fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull LOW to re-enable power.
+//        }
+      // Wait until end of tick or minimum period.
+      if(sct < sctMinRunTime) { while(getSubCycleTime() <= sctMinRunTime) { } }
+      else { while(getSubCycleTime() == sct) { } }
       }
-  // Stop motor until next loop.
+  uint8_t sctEnd = getSubCycleTime();
+  // Stop motor until next loop (also ensures power off).
   V1D.motorRun(HardwareMotorDriverInterface::motorOff);
-  // Detect if end-stop is reached or motor current otherwise very high.
+  // Detect if end-stop is reached or motor current otherwise very high and reverse.
+  count += (sctEnd - sctStart);
   if(currentHigh)
     {
+    DEBUG_SERIAL_PRINT_FLASHSTRING("Current high (reversing) at tick count ");
+    DEBUG_SERIAL_PRINT(count);
+    DEBUG_SERIAL_PRINTLN();
+    // DHD20151013:
+    //Typical run is 1400 to 1500 ticks
+    //(128 ticks = 1s, so 1 tick ~7.8ms)
+    //with closing taking longer
+    //(against the valve spring)
+    //than opening.
+    //
+    //Min run period to avoid false end-stop reports
+    //is ~30ms or ~4 ticks.
+    //
+    //Implies a nominal precision of ~4/1400 or << 1%,
+    //but an accuracy of ~1500/1400 as poor as ~10%.
+    count = 0;
+    // Reverse.
     mdir = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
       HardwareMotorDriverInterface::motorDriveOpening : HardwareMotorDriverInterface::motorDriveClosing;
     }
 
-  if(currentHigh) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Current high (reversing)"); }
 
+
+
+  // Measure motor count against (fixed) internal reference.
+  power_intermittent_peripherals_enable(true);
+  const uint16_t mc = analogueNoiseReducedRead(MOTOR_DRIVE_MC_AIN, INTERNAL);
+  void power_intermittent_peripherals_disable();
+  DEBUG_SERIAL_PRINT_FLASHSTRING("Count input: ");
+  DEBUG_SERIAL_PRINT(mc);
+  DEBUG_SERIAL_PRINTLN();
 
 
   // Command-Line Interface (CLI) polling.
