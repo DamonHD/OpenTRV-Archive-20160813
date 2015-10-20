@@ -41,6 +41,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 // IF DEFINED: turn on lights to match motor drive for debug purposes.
 //#define MOTOR_DEBUG_LEDS
 
+//DHD20151020:
+//Suggested features/impl:
+//1) Try calibration and movement in minimum-size steps.
+//2) Possibly try taking larger steps when very far from target.
+//3) Make targetPC vs currentPC tolerance >=1.5* actual minimum movement size.
+//4) Auto-continue set-up without explicit signal from user that the valve has been fitted to the tail after 10--15m esp if temperatures v out of range, eg to assist with auto recovery from unit restart.
+//5) Don't recalibrate in the dark to avoid waking/disturbing occupants.
+//6) When driving to target 0% or 100% actually force feedback from end-stop to effectively recalibrate on the fly.
 
 // Approx minimum time to let H-bridge settle/stabilise (ms).
 static const uint8_t minMotorHBridgeSettleMS = 8;
@@ -55,8 +63,15 @@ static const uint8_t minMotorRunupTicks = max(1, minMotorRunupMS / SUBCYCLE_TICK
 
 //// Approx minimum runtime to get motor to reverse and stop and not give false high-current readings (ms).
 //static const uint8_t minMotorReverseMS = 128;
-//// Min sub-cycle ticks to run up.
+//// Min sub-cycle ticks to reverse.
 //static const uint8_t minMotorReverseTicks = max(1, minMotorReverseMS / SUBCYCLE_TICK_MS_RD);
+
+// Runtime for dead-reckoning adjustments (from stopped) (ms).
+// Based on DHD20151020 DORM1 prototype rig-up and NiMH battery; 250ms+ seems good.
+static const uint16_t minMotorDRMS = 500;
+// Min sub-cycle ticks for dead reckoning.
+static const uint8_t minMotorDRTicks = max(1, (uint8_t)(minMotorDRMS / SUBCYCLE_TICK_MS_RD));
+
 
 // Spin for up to the specified number of SCT ticks, monitoring current and position encoding.
 //   * maxRunTicks  maximum sub-cycle ticks to attempt to run/spin for); strictly positive
@@ -432,8 +447,8 @@ void CurrentSenseValveMotorDirect::poll()
           {
           // Run pin to fully extended (valve closed).
           endStopDetected = false; // Clear the end-stop detection flag ready.
-          // Run motor as far as possible on this sub-cycle.
-          hw->motorRun(~0, HardwareMotorDriverInterface::motorDriveClosing, *this);
+          // Run motor for standard 'dead reckoning' pulse time.
+          hw->motorRun(minMotorDRTicks, HardwareMotorDriverInterface::motorDriveClosing, *this);
           // Stop motor until next loop (also ensures power off).
           hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
           // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
@@ -442,9 +457,6 @@ void CurrentSenseValveMotorDirect::poll()
             endStopDetected = false;
             const uint16_t tfotc = ticksFromOpen;
             perState.calibrating.ticksFromOpenToClosed = tfotc;
-DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromOpenToClosed: ");
-DEBUG_SERIAL_PRINT(tfotc);
-DEBUG_SERIAL_PRINTLN();
             ticksFromOpen = MAX_TICKS_FROM_OPEN; // Reset tick count to maximum.
             ++perState.calibrating.calibState; // Move to next micro state.
             }
@@ -454,8 +466,8 @@ DEBUG_SERIAL_PRINTLN();
           {
           // Run pin to fully retracted again (valve open).
           endStopDetected = false; // Clear the end-stop detection flag ready.
-          // Run motor as far as possible on this sub-cycle.
-          hw->motorRun(~0, HardwareMotorDriverInterface::motorDriveOpening, *this);
+          // Run motor for standard 'dead reckoning' pulse time.
+          hw->motorRun(minMotorDRTicks, HardwareMotorDriverInterface::motorDriveOpening, *this);
           // Stop motor until next loop (also ensures power off).
           hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
           // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
@@ -463,12 +475,13 @@ DEBUG_SERIAL_PRINTLN();
             {
             endStopDetected = false;
             const uint16_t tfcto = MAX_TICKS_FROM_OPEN - ticksFromOpen;
-            perState.calibrating.ticksFromClosedToOpen = tfcto;
-DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromClosedToOpen: ");
-DEBUG_SERIAL_PRINT(tfcto);
-DEBUG_SERIAL_PRINTLN();
-            ticksFromOpen = 0; // Reset tick count.
-            ++perState.calibrating.calibState; // Move to next micro state.
+            if(tfcto >= (perState.calibrating.ticksFromOpenToClosed >> 1))
+              {
+              // Help avoid premature termination of this direction.
+              perState.calibrating.ticksFromClosedToOpen = tfcto;
+              ticksFromOpen = 0; // Reset tick count.
+              ++perState.calibrating.calibState; // Move to next micro state.
+              }
             }
           break;
           }
@@ -478,6 +491,13 @@ DEBUG_SERIAL_PRINTLN();
           ticksFromOpenToClosed = perState.calibrating.ticksFromOpenToClosed;
           ticksFromClosedToOpen = perState.calibrating.ticksFromClosedToOpen;
 
+DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromOpenToClosed: ");
+DEBUG_SERIAL_PRINT(ticksFromOpenToClosed);
+DEBUG_SERIAL_PRINTLN();
+
+DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromClosedToOpen: ");
+DEBUG_SERIAL_PRINT(ticksFromClosedToOpen);
+DEBUG_SERIAL_PRINTLN();
 
 
           // TODO
