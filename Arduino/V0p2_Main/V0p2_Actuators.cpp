@@ -35,9 +35,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 
 
 
-#ifdef HAS_DORM1_VALVE_DRIVE
-//#ifdef DIRECT_MOTOR_DRIVE_V1
-
 // IF DEFINED: turn on lights to match motor drive for debug purposes.
 //#define MOTOR_DEBUG_LEDS
 
@@ -49,6 +46,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 //4) Auto-continue set-up without explicit signal from user that the valve has been fitted to the tail after 10--15m esp if temperatures v out of range, eg to assist with auto recovery from unit restart.
 //5) Don't recalibrate in the dark to avoid waking/disturbing occupants.
 //6) When driving to target 0% or 100% actually force feedback from end-stop to effectively recalibrate on the fly.
+
 
 // Approx minimum time to let H-bridge settle/stabilise (ms).
 static const uint8_t minMotorHBridgeSettleMS = 8;
@@ -67,11 +65,25 @@ static const uint8_t minMotorRunupTicks = max(1, minMotorRunupMS / SUBCYCLE_TICK
 //static const uint8_t minMotorReverseTicks = max(1, minMotorReverseMS / SUBCYCLE_TICK_MS_RD);
 
 // Runtime for dead-reckoning adjustments (from stopped) (ms).
+// Smaller values nominally allow greater precision when dead-reckoning,
+// but may force the calibration to take longer.
 // Based on DHD20151020 DORM1 prototype rig-up and NiMH battery; 250ms+ seems good.
-static const uint16_t minMotorDRMS = 500;
+static const uint8_t minMotorDRMS = 250;
 // Min sub-cycle ticks for dead reckoning.
 static const uint8_t minMotorDRTicks = max(1, (uint8_t)(minMotorDRMS / SUBCYCLE_TICK_MS_RD));
 
+// Absolute limit in sub-cycle beyond which motor should not be started.
+// This should allow meaningful movement and stop and settle and no sub-cycle overrun.
+// Allows for up to 120ms enforced sleep either side of motor run for example.
+static const uint8_t sctAbsLimit = GSCT_MAX - max(1, ((GSCT_MAX+1)/10)) - minMotorRunupTicks - (uint8_t)(240 / SUBCYCLE_TICK_MS_RD);
+
+// Absolute limit in sub-cycle beyond which motor should not be started for dead-reckoning pulse.
+// This should allow meaningful movement and no sub-cycle overrun.
+static const uint8_t sctAbsLimitDR = sctAbsLimit - minMotorDRTicks;
+
+
+#ifdef HAS_DORM1_VALVE_DRIVE
+//#ifdef DIRECT_MOTOR_DRIVE_V1
 
 // Spin for up to the specified number of SCT ticks, monitoring current and position encoding.
 //   * maxRunTicks  maximum sub-cycle ticks to attempt to run/spin for); strictly positive
@@ -92,8 +104,6 @@ bool ValveMotorDirectV1HardwareDriver::spinSCTTicks(const uint8_t maxRunTicks, c
   // Sub-cycle time now.
   const uint8_t sctStart = getSubCycleTime();
   // Only run up to ~90% point of the minor cycle to leave time for other processing.
-  // Always leave at least one tick clear below maximum.
-  const uint8_t sctAbsLimit = GSCT_MAX - max(1, ((GSCT_MAX+1)/10));
   uint8_t sct = getSubCycleTime();
   const uint8_t maxTicksBeforeAbsLimit = (sctAbsLimit - sct);
   // Abort immediately if not enough time to do minimum run.
@@ -227,7 +237,11 @@ LED_HEATCALL_OFF();
 #endif
       // Let H-bridge respond and settle.
       // Accumulate any shaft movement & time to the previous direction if not already stopped.
-      spinSCTTicks(minMotorHBridgeSettleTicks, 0, (motor_drive)prev_dir, callback); 
+      // Wait longer if not previously off to allow for inertia, if shaft encoder is in use.
+      const bool shaftEncoderInUse = false; // FIXME.
+      const bool wasOffBefore = (HardwareMotorDriverInterface::motorOff == prev_dir);
+      const bool longerWait = shaftEncoderInUse || !wasOffBefore;
+      spinSCTTicks(!longerWait ? minMotorHBridgeSettleTicks : minMotorRunupTicks, !longerWait ? 0 : minMotorRunupTicks/2, (motor_drive)prev_dir, callback); 
       fastDigitalWrite(MOTOR_DRIVE_ML, HIGH); // Belt and braces force pin logical output state high.
       pinMode(MOTOR_DRIVE_ML, INPUT_PULLUP); // Switch to weak pull-up; slow but possibly marginally safer.
 #ifdef MOTOR_DEBUG_LEDS
@@ -245,66 +259,13 @@ LED_UI2_OFF();
   }
 
 
-// DHD20151015: possible basis of calibration code
-// Run motor ~1s in the current direction; reverse at end of travel.
-//  DEBUG_SERIAL_PRINT_FLASHSTRING("Dir: ");
-//  DEBUG_SERIAL_PRINT(HardwareMotorDriverInterface::motorDriveClosing == mdir ? "closing" : "opening");
-//  DEBUG_SERIAL_PRINTLN();
-//  bool currentHigh = false;
-//  V1D.motorRun(mdir);
-//  static uint16_t count;
-//  uint8_t sctStart = getSubCycleTime();
-//  uint8_t sctMinRunTime = sctStart + 4; // Min run time 32ms to avoid false readings.
-//  uint8_t sct;
-//  while(((sct = getSubCycleTime()) <= ((3*GSCT_MAX)/4)) && !(currentHigh = V1D.isCurrentHigh(mdir)))
-//      { 
-////      if(HardwareMotorDriverInterface::motorDriveClosing == mdir)
-////        {
-////        // BE VERY CAREFUL HERE: a wrong move could destroy the H-bridge.
-////        fastDigitalWrite(MOTOR_DRIVE_MR, HIGH); // Blip high to remove power.
-////        while(getSubCycleTime() == sct) { } // Off for ~8ms.
-////        fastDigitalWrite(MOTOR_DRIVE_MR, LOW); // Pull LOW to re-enable power.
-////        }
-//      // Wait until end of tick or minimum period.
-//      if(sct < sctMinRunTime) { while(getSubCycleTime() <= sctMinRunTime) { } }
-//      else { while(getSubCycleTime() == sct) { } }
-//      }
-//  uint8_t sctEnd = getSubCycleTime();
-//  // Stop motor until next loop (also ensures power off).
-//  V1D.motorRun(HardwareMotorDriverInterface::motorOff);
-//  // Detect if end-stop is reached or motor current otherwise very high and reverse.
-//  count += (sctEnd - sctStart);
-//  if(currentHigh)
-//    {
-//    DEBUG_SERIAL_PRINT_FLASHSTRING("Current high (reversing) at tick count ");
-//    DEBUG_SERIAL_PRINT(count);
-//    DEBUG_SERIAL_PRINTLN();
-//    // DHD20151013:
-//    //Typical run is 1400 to 1500 ticks
-//    //(128 ticks = 1s, so 1 tick ~7.8ms)
-//    //with closing taking longer
-//    //(against the valve spring)
-//    //than opening.
-//    //
-//    //Min run period to avoid false end-stop reports
-//    //is ~30ms or ~4 ticks.
-//    //
-//    //Implies a nominal precision of ~4/1400 or << 1%,
-//    //but an accuracy of ~1500/1400 as poor as ~10%.
-//    count = 0;
-//    // Reverse.
-//    mdir = (HardwareMotorDriverInterface::motorDriveClosing == mdir) ?
-//      HardwareMotorDriverInterface::motorDriveOpening : HardwareMotorDriverInterface::motorDriveClosing;
-//    }
-
-
 // IF DEFINED: MI output swing asymmetric or is not enough to use fast comparator.
 #define MI_NEEDS_ADC
 
 // Maximum current reading allowed when closing the valve (against the spring).
 static const uint16_t maxCurrentReadingClosing = 600;
 // Maximum current reading allowed when opening the valve (retracting the pin, no resisting force).
-static const uint16_t maxCurrentReadingOpening = 400;
+static const uint16_t maxCurrentReadingOpening = 500; // DHD20151023: 400 seemed marginal.
 
 // Detect if end-stop is reached or motor current otherwise very high.] indicating stall.
 bool ValveMotorDirectV1HardwareDriver::isCurrentHigh(HardwareMotorDriverInterface::motor_drive mdir) const
@@ -325,12 +286,21 @@ bool ValveMotorDirectV1HardwareDriver::isCurrentHigh(HardwareMotorDriverInterfac
   return(currentSense);
   }
 
+// Regular poll/update.
+// This and get() return the actual estimated valve position.
+uint8_t ValveMotorDirectV1::read()
+  {
+  logic.poll();
+  value = logic.getCurrentPC();
+  return(value);
+  }
+
 // Set new target value (if in range).
 // Returns true if specified value accepted.
+// Does not set 'value' as that tracks actual position, not target.
 bool ValveMotorDirectV1::set(const uint8_t newValue)
   {
   if(newValue > 100) { return(false); }
-  value = newValue; 
   logic.setTargetPC(newValue);
   return(true);
   }
@@ -340,7 +310,96 @@ ValveMotorDirectV1 ValveDirect;
 
 
 
-// Minimally wiggles the motor to give tactile feedback and/or show to be working.
+
+// Called with each motor run sub-cycle tick.
+// Is ISR-/thread- safe.
+void CurrentSenseValveMotorDirect::signalRunSCTTick(const bool opening)
+  {
+  ATOMIC_BLOCK (ATOMIC_RESTORESTATE)
+    {
+    // Crudely avoid/ignore underflow/overflow for now.
+    // Accumulate ticks in different directions in different counters
+    // and resolve/reconcile later in significant chunks.
+    if(!opening)
+      {
+      if(ticksFromOpen < MAX_TICKS_FROM_OPEN) { ++ticksFromOpen; }
+      }
+    else
+      {
+      if(ticksReverse < MAX_TICKS_FROM_OPEN) { ++ticksReverse; }
+      }
+    }
+  }
+
+
+// (Re)populate structure and compute derived parameters.
+// Ensures that all necessary items are gathered at once and none forgotten!
+// Returns true in case of success.
+// May return false and force error state if inputs unusable,
+// though will still try to compute all values.
+bool CurrentSenseValveMotorDirect::CalibrationParameters::updateAndCompute(const uint16_t _ticksFromOpenToClosed, const uint16_t _ticksFromClosedToOpen)
+  {
+  ticksFromOpenToClosed = _ticksFromOpenToClosed;
+  ticksFromClosedToOpen = _ticksFromClosedToOpen;
+
+  // Compute approx precision in % as min ticks / DR size in range [0,100].
+  // Inflate estimate slightly to allow for inertia, etc.
+  approxPrecisionPC = (uint8_t) min(100, (128UL*minMotorDRTicks) / min(_ticksFromOpenToClosed, _ticksFromClosedToOpen));
+
+  // Compute a small conversion ratio back and forth
+  // which does not add too much error but allows single dead-reckoning steps
+  // to be converted back and forth.
+  uint16_t tfotc = _ticksFromOpenToClosed;
+  uint16_t tfcto = _ticksFromClosedToOpen;
+  while(max(tfotc, tfcto) > minMotorDRTicks)
+    {
+    tfotc >>= 1;
+    tfcto >>= 1;
+    }
+  tfotcSmall = tfotc;
+  tfctoSmall = tfcto;
+
+  // Fail if precision far too poor to be usable.
+  if(approxPrecisionPC > 25) { return(false); }
+  // Fail if lower ratio value so low (< 4 bits) as to introduce huge error.
+  if(min(tfotc, tfcto) < 8) { return(false); }
+
+  // All OK.
+  return(true);
+  }
+
+
+// Compute reconciliation/adjustment of ticks, and compute % position [0,100].
+// Reconcile any reverse ticks (and adjust with forward ticks if needed).
+// Call after moving the valve in normal mode.
+// Unit testable.
+uint8_t CurrentSenseValveMotorDirect::CalibrationParameters::computePosition(
+            volatile uint16_t &ticksFromOpen,
+            volatile uint16_t &ticksReverse) const
+  {
+  // Back out the effect of reverse ticks in blocks for dead-reckoning...
+  // Should only usually be about 1 block at a time,
+  // so don't do anything too clever here.
+  while(ticksReverse >= tfctoSmall)
+    {
+    if(0 == tfctoSmall) { break; } // Prevent hang if not initialised correctly.
+    ticksReverse -= tfctoSmall;
+    if(ticksFromOpen > tfotcSmall) { ticksFromOpen -= tfotcSmall; }
+    else { ticksFromOpen = 0; }
+    }
+
+  // TODO: use shaft encoder tracking by preference, ie when available.
+
+  // Do simple % open calcs for range extremes, based on dead-reckoning.
+  if(0 == ticksFromOpen) { return(100); }
+  if(ticksFromOpen >= ticksFromOpenToClosed) { return(0); }
+  // Compute percentage open for intermediate position, based on dead-reckoning.
+  // TODO: optimise!
+  return((uint8_t) (((ticksFromOpenToClosed - ticksFromOpen) * 100UL) / ticksFromOpenToClosed));
+  }
+
+
+// Minimally wiggle the motor to give tactile feedback and/or show to be working.
 // May take a significant fraction of a second.
 // Finishes with the motor turned off.
 void CurrentSenseValveMotorDirect::wiggle()
@@ -351,25 +410,52 @@ void CurrentSenseValveMotorDirect::wiggle()
   hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
   }
 
-
-// Called with each motor run sub-cycle tick.
-// Is ISR-/thread- safe.
-void CurrentSenseValveMotorDirect::signalRunSCTTick(const bool opening)
+// Run fast towards/to end stop as far as possible in this call.
+// Terminates significantly before the end of the sub-cycle.
+// Possibly allows partial recalibration, or at least re-homing.
+// Returns true if end-stop has apparently been hit,
+// else will require one or more further calls in new sub-cycles
+// to hit the end-stop.
+bool CurrentSenseValveMotorDirect::runFastTowardsEndStop(const bool toOpen)
   {
-  ATOMIC_BLOCK (ATOMIC_RESTORESTATE)
-    {
-    // Crudely avoid/ignore underflow/overflow for now.
-    if(!opening)
-      {
-      if(ticksFromOpen < MAX_TICKS_FROM_OPEN) { ++ticksFromOpen; }
-      }
-    else
-      {
-      if(ticksFromOpen > 0) { --ticksFromOpen; }
-      }
-    }
+  // Clear the end-stop detection flag ready.
+  endStopDetected = false;
+  // Run motor as far as possible on this sub-cycle.
+  hw->motorRun(~0, toOpen ?
+      HardwareMotorDriverInterface::motorDriveOpening
+    : HardwareMotorDriverInterface::motorDriveClosing, *this);
+  // Stop motor and ensure power off.
+  hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
+  // Report if end-stop has apparently been hit. 
+  return(endStopDetected);
   }
 
+// Run at 'normal' speed towards/to end for a fixed time/distance.
+// Terminates significantly before the end of the sub-cycle.
+// Runs at same speed as during calibration.
+// Does the right thing with dead-reckoning and/or position detection.
+// Returns true if end-stop has apparently been hit.
+bool CurrentSenseValveMotorDirect::runTowardsEndStop(const bool toOpen)
+  {
+  // Clear the end-stop detection flag ready.
+  endStopDetected = false;
+  // Run motor as far as possible on this sub-cycle.
+  hw->motorRun(minMotorDRTicks, toOpen ?
+      HardwareMotorDriverInterface::motorDriveOpening
+    : HardwareMotorDriverInterface::motorDriveClosing, *this);
+  // Stop motor and ensure power off.
+  hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
+  // Report if end-stop has apparently been hit. 
+  return(endStopDetected);
+  }
+
+
+// Report an apparent serious tracking error that may need full recalibration.
+void CurrentSenseValveMotorDirect::trackingError()
+  {
+  // TODO: possibly ignore tracking errors for a minimum interval.
+  needsRecalibrating = true;
+  }
 
 // Poll.
 // Regular poll every 1s or 2s,
@@ -394,13 +480,8 @@ void CurrentSenseValveMotorDirect::poll()
     case valvePinWithdrawing:
       {
 //DEBUG_SERIAL_PRINTLN_FLASHSTRING("  valvePinWithdrawing");
-      endStopDetected = false; // Clear the end-stop detection flag ready.
-      // Run motor as far as possible on this sub-cycle.
-      hw->motorRun(~0, HardwareMotorDriverInterface::motorDriveOpening, *this);
-      // Stop motor until next loop (also ensures power off).
-      hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
       // Once end-stop has been hit, move to state to wait for user signal and then start calibration. 
-      if(endStopDetected) { changeState(valvePinWithdrawn); }
+      if(runFastTowardsEndStop(true)) { changeState(valvePinWithdrawn); }
       break;
       }
 
@@ -416,96 +497,101 @@ void CurrentSenseValveMotorDirect::poll()
       break;
       }
 
-    // Running (initial) calibration cycle.
+    // Running (initial or re-) calibration cycle.
     case valveCalibrating:
       {
 //DEBUG_SERIAL_PRINTLN_FLASHSTRING("  valveCalibrating");
-      DEBUG_SERIAL_PRINT_FLASHSTRING("    calibState: ");
-      DEBUG_SERIAL_PRINT(perState.calibrating.calibState);
-      DEBUG_SERIAL_PRINTLN();
+//      DEBUG_SERIAL_PRINT_FLASHSTRING("    calibState: ");
+//      DEBUG_SERIAL_PRINT(perState.calibrating.calibState);
+//      DEBUG_SERIAL_PRINTLN();
       // Select activity based on micro-state.
       switch(perState.calibrating.calibState)
         {
         case 0:
           {
-          // Ensure pin is fully withdrawn before starting calibration proper.
-          endStopDetected = false; // Clear the end-stop detection flag ready.
-          // Run motor as far as possible on this sub-cycle.
-          hw->motorRun(~0, HardwareMotorDriverInterface::motorDriveOpening, *this);
-          // Stop motor until next loop (also ensures power off).
-          hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
-          // Once end-stop has been hit, prepare to start calibration run in opposite direction. 
-          if(endStopDetected)
-            {
-            endStopDetected = false;
-            ticksFromOpen = 0; // Reset tick count.
-            ++perState.calibrating.calibState; // Move to next micro state.
-            }
+#if 1 && defined(DEBUG)
+DEBUG_SERIAL_PRINTLN_FLASHSTRING("+calibrating");
+#endif            
+          ++perState.calibrating.calibState; // Move to next micro state.
           break;
           }
         case 1:
           {
-          // Run pin to fully extended (valve closed).
-          endStopDetected = false; // Clear the end-stop detection flag ready.
-          // Run motor for standard 'dead reckoning' pulse time.
-          hw->motorRun(minMotorDRTicks, HardwareMotorDriverInterface::motorDriveClosing, *this);
-          // Stop motor until next loop (also ensures power off).
-          hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
-          // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
-          if(endStopDetected)
+          // Run fast to fully open. 
+          if(runFastTowardsEndStop(true))
             {
-            endStopDetected = false;
-            const uint16_t tfotc = ticksFromOpen;
-            perState.calibrating.ticksFromOpenToClosed = tfotc;
-            ticksFromOpen = MAX_TICKS_FROM_OPEN; // Reset tick count to maximum.
+            // Reset tick count.
+            ticksFromOpen = 0;
+            ticksReverse = 0;
             ++perState.calibrating.calibState; // Move to next micro state.
             }
           break;
           }
         case 2:
           {
-          // Run pin to fully retracted again (valve open).
-          endStopDetected = false; // Clear the end-stop detection flag ready.
-          // Run motor for standard 'dead reckoning' pulse time.
-          hw->motorRun(minMotorDRTicks, HardwareMotorDriverInterface::motorDriveOpening, *this);
-          // Stop motor until next loop (also ensures power off).
-          hw->motorRun(0, HardwareMotorDriverInterface::motorOff, *this);
-          // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
-          if(endStopDetected)
+          // Run pin to fully extended (valve closed).
+          // Be prepared to run the (usually small) dead-reckoning pulse while lots of sub-cycle still available.
+          do
             {
-            endStopDetected = false;
-            const uint16_t tfcto = MAX_TICKS_FROM_OPEN - ticksFromOpen;
-            if(tfcto >= (perState.calibrating.ticksFromOpenToClosed >> 1))
+            // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
+            if(runTowardsEndStop(false))
               {
-              // Help avoid premature termination of this direction.
-              perState.calibrating.ticksFromClosedToOpen = tfcto;
-              ticksFromOpen = 0; // Reset tick count.
+              const uint16_t tfotc = ticksFromOpen;
+              perState.calibrating.ticksFromOpenToClosed = tfotc;
               ++perState.calibrating.calibState; // Move to next micro state.
+              break;
               }
-            }
+            } while(getSubCycleTime() <= sctAbsLimitDR);
           break;
           }
         case 3:
           {
-          // Set all calibration parameters and current position.
-          ticksFromOpenToClosed = perState.calibrating.ticksFromOpenToClosed;
-          ticksFromClosedToOpen = perState.calibrating.ticksFromClosedToOpen;
+          // Run pin to fully retracted again (valve open). 
+          // Be prepared to run the (usually small) pulse while lots of sub-cycle still available.
+          do
+            {
+            // Once end-stop has been hit, capture run length and prepare to run in opposite direction. 
+            if(runTowardsEndStop(true))
+              {
+              const uint16_t tfcto = ticksReverse;
+              // Help avoid premature termination of this direction
+              // by NOT terminating this run if much shorter than run in other direction.
+              if(tfcto >= (perState.calibrating.ticksFromOpenToClosed >> 1))
+                {
+                perState.calibrating.ticksFromClosedToOpen = tfcto;
+                // Reset tick count.
+                ticksFromOpen = 0;
+                ticksReverse = 0;
+                ++perState.calibrating.calibState; // Move to next micro state.
+                }
+              break; // In all cases when end-stop hit don't try to run further in this sub-cycle.
+              }
+            } while(getSubCycleTime() <= sctAbsLimitDR);
+          break;
+          }
+        case 4:
+          {
+          // Set all measured calibration input parameters and current position.
+          cp.updateAndCompute(perState.calibrating.ticksFromOpenToClosed, perState.calibrating.ticksFromClosedToOpen);
 
+#if 1 && defined(DEBUG)
 DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromOpenToClosed: ");
-DEBUG_SERIAL_PRINT(ticksFromOpenToClosed);
+DEBUG_SERIAL_PRINT(cp.getTicksFromOpenToClosed());
 DEBUG_SERIAL_PRINTLN();
-
 DEBUG_SERIAL_PRINT_FLASHSTRING("    ticksFromClosedToOpen: ");
-DEBUG_SERIAL_PRINT(ticksFromClosedToOpen);
+DEBUG_SERIAL_PRINT(cp.getTicksFromClosedToOpen());
 DEBUG_SERIAL_PRINTLN();
-
-
-          // TODO
-
-
+DEBUG_SERIAL_PRINT_FLASHSTRING("    precision %: ");
+DEBUG_SERIAL_PRINT(cp.getApproxPrecisionPC());
+DEBUG_SERIAL_PRINTLN();
+#endif
 
           // Move to normal valve running state...
+          needsRecalibrating = false;
           currentPC = 100; // Valve is currently fully open.
+          // Reset tick count.
+          ticksFromOpen = 0;
+          ticksReverse = 0;
           changeState(valveNormal);
           break;
           }
@@ -520,22 +606,116 @@ DEBUG_SERIAL_PRINTLN();
       {
 //DEBUG_SERIAL_PRINTLN_FLASHSTRING("  valveNormal");
 
-      // If the current estimated position does not match the target
-      // then (incrementally) try to adjust to match.
-      if(currentPC != targetPC)
+      // Recalibrate if a serious tracking error was detected.
+      if(needsRecalibrating)
         {
 #if 1 && defined(DEBUG)
-DEBUG_SERIAL_PRINT_FLASHSTRING("  valve needs adj: ");
+DEBUG_SERIAL_PRINTLN_FLASHSTRING("!needsRecalibrating");
+#endif
+        changeState(valveCalibrating);
+        break;
+        }
+
+      // If the current estimated position matches the target
+      // then there is usually nothing to do.
+      if(currentPC == targetPC) { break; }
+
+      // If the current estimated position does NOT match the target
+      // then (incrementally) try to adjust to match.
+#if 1 && defined(DEBUG)
+DEBUG_SERIAL_PRINT_FLASHSTRING("  valve err: @");
 DEBUG_SERIAL_PRINT(currentPC);
 DEBUG_SERIAL_PRINT_FLASHSTRING(" vs target ");
 DEBUG_SERIAL_PRINT(targetPC);
 DEBUG_SERIAL_PRINTLN();
 #endif
 
-        // TODO
+      // Special case where target is an end-point (or close to).
+      // Run fast to the end-stop.
+      // Be eager and pull to end stop if near for continuous auto-recalibration.
+      // Must work when eps is zero (ie with sub-percent precision).
+      const uint8_t eps = cp.getApproxPrecisionPC();
+      const bool toOpenFast = (targetPC >= (100 - 2*eps));
+      if(toOpenFast || (targetPC <= max(2*eps, DEFAULT_MIN_VALVE_PC_REALLY_OPEN/2)))
+        {
+        // If not apparently yet at end-stop
+        // (ie not at correct end stop or with spurious unreconciled ticks)
+        // then try again to run to end-stop.
+        if((0 == ticksReverse) && (currentPC == (toOpenFast ? 100 : 0))) { break; } // Done
+        else if(runFastTowardsEndStop(toOpenFast))
+            {
+            // TODO: may need to protect against spurious stickiness before end...
+            // Reset positional values.
+            currentPC = toOpenFast ? 100 : 0;
+            ticksReverse = 0;
+            ticksFromOpen = toOpenFast ? 0 : cp.getTicksFromOpenToClosed();
+            }
+        // Estimate intermediate position.
+        else { recomputePosition(); }
+#if 1 && defined(DEBUG)
+if(toOpenFast) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("-->"); } else { DEBUG_SERIAL_PRINTLN_FLASHSTRING("--<"); }
+#endif
+        break;
         }
 
-      // TODO
+      // More general case where target position is somewhere between end-stops.
+      // Don't do anything if close enough, ie within computed precision (eps).
+      // Else move incrementally to reduce the error.
+      // (Incremental small moves may also help when absolute accuracy not that good,
+      // allowing closed-loop feedback time to work.)
+
+      // Not open enough.
+      if((targetPC > currentPC) && (targetPC >= currentPC + eps)) // Overflow not possible with eps addition.
+        {
+        // TODO: use shaft encoder positioning by preference, ie when available.
+        const bool hitEndStop = runTowardsEndStop(true);
+        recomputePosition();
+        // Hit the end-stop, possibly prematurely.
+        if(hitEndStop)
+          {
+          // Report serious tracking error.
+          if(currentPC < min(DEFAULT_VALVE_PC_MODERATELY_OPEN, 100 - 8*eps))
+            { trackingError(); }
+          // Silently auto-adjust when end-stop hit close to expected position.
+          else
+            {
+            currentPC = 100;
+            ticksReverse = 0;
+            ticksFromOpen = 0;
+            }
+          }
+#if 1 && defined(DEBUG)
+DEBUG_SERIAL_PRINTLN_FLASHSTRING("->");
+#endif
+        break;
+        }
+      // Not closed enough.
+      else if((targetPC < currentPC) && (targetPC + eps <= currentPC)) // Overflow not possible with eps addition.
+        {
+        // TODO: use shaft encoder positioning by preference, ie when available.
+        const bool hitEndStop = runTowardsEndStop(false);
+        recomputePosition();
+        // Hit the end-stop, possibly prematurely.
+        if(hitEndStop)
+          {
+          // Report serious tracking error.
+          if(currentPC > max(min(DEFAULT_VALVE_PC_MODERATELY_OPEN-1, 2*DEFAULT_VALVE_PC_MODERATELY_OPEN), 8*eps))
+            { trackingError(); }
+          // Silently auto-adjust when end-stop hit close to expected position.
+          else
+            {
+            currentPC = 0;
+            ticksReverse = 0;
+            ticksFromOpen = cp.getTicksFromOpenToClosed();
+            }
+          }
+#if 1 && defined(DEBUG)
+DEBUG_SERIAL_PRINTLN_FLASHSTRING("-<");
+#endif
+        break;
+        }
+
+      // Within eps; do nothing.
 
       break;
       }

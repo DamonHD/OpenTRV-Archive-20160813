@@ -38,6 +38,57 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Set as a limit to allow a timeout when things go wrong. 
     static const uint8_t MAX_TRAVEL_S = 4 * 60; // 4 minutes.
 
+    // Calibration parameters.
+    // Data received during the calibration process,
+    // and outputs derived from it.
+    // Contains (unit-testable) computations.
+    class CalibrationParameters
+        {
+        private:
+          // Data gathered during calibration process.
+          // Ticks counted (sub-cycle ticks for complete run from fully-open to fully-closed, end-stop to end-stop).
+          uint16_t ticksFromOpenToClosed;
+          // Ticks counted (sub-cycle ticks for complete run from fully-closed to fully-open, end-stop to end-stop).
+          uint16_t ticksFromClosedToOpen;
+  
+          // Computed parameters based on measurements during calibration process.
+          // Approx precision in % as min ticks / DR size in range [1,100].
+          uint8_t approxPrecisionPC;
+          // A reduced ticks open/closed in ratio to allow small conversions.
+          uint8_t tfotcSmall, tfctoSmall;
+
+//          // Ticks per percent in the open-to-closed direction; computed during tracking.
+//          uint8_t ticksPerPercentOpenToClosed;
+
+        public:
+          CalibrationParameters() : ticksFromOpenToClosed(0), ticksFromClosedToOpen(0) { }
+
+          // (Re)populate structure and compute derived parameters.
+          // Ensures that all necessary items are gathered at once and none forgotten!
+          // Returns true in case of success.
+          // May return false and force error state if inputs unusable.
+          bool updateAndCompute(uint16_t ticksFromOpenToClosed, uint16_t ticksFromClosedToOpen);
+
+          // Get a ticks either way.
+          inline uint16_t getTicksFromOpenToClosed() { return(ticksFromOpenToClosed); }
+          inline uint16_t getTicksFromClosedToOpen() { return(ticksFromClosedToOpen); }
+
+          // Approx precision in % as min ticks / DR size in range [0,100].
+          // A return value of zero indicates that sub-percent precision is possible.
+          inline uint8_t getApproxPrecisionPC() { return(approxPrecisionPC); }
+
+          // Get a reduced ticks open/closed in ratio to allow small conversions; at least a few bits.
+          inline uint8_t getTfotcSmall() { return(tfotcSmall); }
+          inline uint8_t getTfctoSmall() { return(tfctoSmall); }
+
+          // Compute reconciliation/adjustment of ticks, and compute % position [0,100].
+          // Reconcile any reverse ticks (and adjust with forward ticks if needed).
+          // Call after moving the valve in normal mode.
+          // Unit testable.
+          uint8_t computePosition(volatile uint16_t &ticksFromOpen,
+                                  volatile uint16_t &ticksReverse) const;
+        };
+
   private:
     // Hardware interface instance, passed by reference.
     // Must have a lifetime exceeding that of this enclosing object.
@@ -94,15 +145,13 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Marked volatile for thread-safe lock-free access (with care).
     volatile bool endStopDetected;
 
-//    // Set when valve needs recalibration, eg because dead-reckoning found to be significantly wrong.
-//    // May also need recalibrating after (say) a few weeks to allow for battery/speed droop.
-//    bool needsRecalibrating;
+    // Set when valve needs recalibration, eg because dead-reckoning found to be significantly wrong.
+    // May also need recalibrating after (say) a few weeks to allow for battery/speed droop.
+    bool needsRecalibrating;
 
-    // Set during calibration.
-    uint16_t ticksFromOpenToClosed;
-    uint16_t ticksFromClosedToOpen;
-    // Ticks per percent in the open-to-closed direction; computed during tracking.
-    uint8_t ticksPerPercentOpenToClosed;
+    // Calibration parameters gathered/computed from the calibration step.
+    // Logically read-only other than during (re)calibration.
+    CalibrationParameters cp;
 
     // Current sub-cycle ticks from fully-open (reference) end of travel, towards fully closed.
     // This is nominally ticks in the open-to-closed direction
@@ -112,7 +161,9 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Significant underflow might be (say) the minimum valve-open percentage.
     // ISR-/thread- safe with a mutex.
     volatile uint16_t ticksFromOpen;
-    // Maximum permitted value of ticksFromOpen;
+    // Reverse ticks not yet folded into ticksFromOpen;
+    volatile uint16_t ticksReverse;
+    // Maximum permitted value of ticksFromOpen (and ticksReverse).
     static const uint16_t MAX_TICKS_FROM_OPEN = ~0;
 
     // Current nominal percent open in range [0,100].
@@ -122,11 +173,34 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Maintained across all states; defaults to 'closed'/0.
     uint8_t targetPC;
 
+    // Run fast towards/to end stop as far as possible in this call.
+    // Terminates significantly before the end of the sub-cycle.
+    // Possibly allows partial recalibration, or at least re-homing.
+    // Returns true if end-stop has apparently been hit,
+    // else will require one or more further calls in new sub-cycles
+    // to hit the end-stop.
+    bool runFastTowardsEndStop(bool toOpen);
+
+    // Run at 'normal' speed towards/to end for a fixed time/distance.
+    // Terminates significantly before the end of the sub-cycle.
+    // Runs at same speed as during calibration.
+    // Does the right thing with dead-reckoning and/or position detection.
+    // Returns true if end-stop has apparently been hit.
+    bool runTowardsEndStop(bool toOpen);
+
+    // Compute and apply reconciliation/adjustment of ticks and % position.
+    // Uses computePosition() to adjust internal state.
+    // Call after moving the valve in normal mode.    
+    void recomputePosition() { currentPC = cp.computePosition(ticksFromOpen, ticksReverse); }
+
+    // Report an apparent serious tracking error that may need full recalibration.
+    void trackingError();
+
   public:
     // Create an instance, passing in a reference to the non-NULL hardware driver.
     // The hardware driver instance lifetime must be longer than this instance.
     CurrentSenseValveMotorDirect(HardwareMotorDriverInterface * const hwDriver) :
-        hw(hwDriver), targetPC(0)
+        hw(hwDriver), currentPC(0), targetPC(0)
         { changeState(init); }
 
     // Poll.
@@ -138,13 +212,17 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     // Get major state, mostly for testing.
     driverState getState() const { return((driverState) state); }
 
+    // Get current estimated actual % open in range [0,100].
+    uint8_t getCurrentPC() { return(currentPC); }
+
     // Get current target % open in range [0,100].
     uint8_t getTargetPC() { return(targetPC); }
 
     // Set current target % open in range [0,100].
-    void setTargetPC(const uint8_t newPC) { targetPC = newPC; }
+    // Coerced into range.
+    void setTargetPC(uint8_t newPC) { targetPC = min(newPC, 100); }
 
-    // Minimally wiggles the motor to give tactile feedback and/or show to be working.
+    // Minimally wiggle the motor to give tactile feedback and/or show to be working.
     // May take a significant fraction of a second.
     // Finishes with the motor turned off.
     virtual void wiggle();
@@ -172,38 +250,10 @@ class CurrentSenseValveMotorDirect : public HardwareMotorDriverInterfaceCallback
     virtual bool isInErrorState() const { return(state >= (uint8_t)valveError); }
 
 
-
-
-
-
 //    // Call when given user signal that valve has been fitted (ie is fully on).
 //    // Can be called while run() is in progress.
 //    // Is ISR-/thread- safe.
 //    void signalValveFitted();
-//
-//    // Set target % open.
-//    // Can optionally be 'lazy' eg move more slowly or avoid tiny movements entirely.
-//    void setTargetPercentOpen(uint8_t newTargetPC, bool beLazy = false) { targetPC = min(newTargetPC, 100); lazy = beLazy; }
-//
-//    // Used to run motor, adjust state, etc for up to specified maximum number of milliseconds.
-//    // Returns true if more work remaining to get into target state.
-//    bool run(uint16_t maxms, HardwareMotorDriverInterface &driver);
-//
-//    // Returns true iff not (re)calibrating/(re)initialising/(re)syncing.
-//    // Initially false until power-up and at least initial calibration are complete.
-//    bool isCalibrated() const { return((state > (uint8_t)valveCalibrating) && (0 != clicksFullTravel)); }
-//
-//    // Returns true if device can track movement between end stops.
-//    // Without this at best the logic has to guess and the valve control logic
-//    // should possibly be more concerned with nudging open/closed
-//    // than trying to hit some arbitrary percentage open.
-//    bool hasMovementTracker() const { return(0 != clicksFullTravel); }
-//
-//    // True iff power-up initialisation (eg including allowing user to fit to valve base) is done.
-//    bool isPowerUpDone() const { return(state >= (uint8_t)valveNormal); }
-//
-//    // Get current motor drive status (off else direction of running).
-//    HardwareMotorDriverInterface::motor_drive getMotorDriveStatus() const { return((HardwareMotorDriverInterface::motor_drive) motorDriveStatus); }
   };
 
 
@@ -257,7 +307,8 @@ class ValveMotorDirectV1 : public AbstractRadValve
     ValveMotorDirectV1() : logic(&driver) { }
 
     // Regular poll/update.
-    virtual uint8_t read() { logic.poll(); return(value); }
+    // This and get() return the actual estimated valve position.
+    virtual uint8_t read();
 
     // Set new target value (if in range).
     // Returns true if specified value accepted.
@@ -297,7 +348,7 @@ extern ValveMotorDirectV1 ValveDirect;
 // Default minimum valve percentage open to be considered actually/significantly open; [1,100].
 // Setting this above 0 delays calling for heat from a central boiler until water is likely able to flow.
 // (It may however be possible to scavenge some heat if a particular valve opens below this and the circulation pump is already running, for example.)
-// DHD20130522: FHT8V + valve heads I have been using are not typically open until around 6%; at least one opens at ~20%.
+// DHD20130522: FHT8V + valve heads in use have not typically been open until around 6%; at least one opens at ~20%.
 // Allowing valve to linger at just below this level without calling for heat when shutting
 // may allow comfortable boiler pump overrun in older systems with no/poor bypass to avoid overheating.
 // DHD20151014: may need reduction to <5 for use in high-pressure systems.
@@ -307,8 +358,8 @@ extern ValveMotorDirectV1 ValveDirect;
 // For many valves much of the time this may be effectively fully open,
 // ie no change beyond this makes significant difference to heat delivery.
 // Should be significantly higher than DEFAULT_MIN_VALVE_PC_REALLY_OPEN.
-// DHD20151014: may need boost to ~50 for tricky all-in-one units.
-#define DEFAULT_VALVE_PC_MODERATELY_OPEN 35
+// DHD20151014: has been ~33% but ~66% more robust, eg for tricky all-in-one units.
+#define DEFAULT_VALVE_PC_MODERATELY_OPEN 66
 
 
 #if defined(ENABLE_BOILER_HUB)

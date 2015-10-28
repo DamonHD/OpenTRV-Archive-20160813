@@ -59,16 +59,16 @@ static void error(int err, int line)
   {
   for( ; ; )
     {
-    serialPrintAndFlush(F("***Test FAILED*** val="));
-    serialPrintAndFlush(err, DEC);
-    serialPrintAndFlush(F(" =0x"));
-    serialPrintAndFlush(err, HEX);
+    OTV0P2BASE::serialPrintAndFlush(F("***Test FAILED*** val="));
+    OTV0P2BASE::serialPrintAndFlush(err, DEC);
+    OTV0P2BASE::serialPrintAndFlush(F(" =0x"));
+    OTV0P2BASE::serialPrintAndFlush(err, HEX);
     if(0 != line)
       {
-      serialPrintAndFlush(F(" at line "));
-      serialPrintAndFlush(line);
+      OTV0P2BASE::serialPrintAndFlush(F(" at line "));
+      OTV0P2BASE::serialPrintAndFlush(line);
       }
-    serialPrintlnAndFlush();
+    OTV0P2BASE::serialPrintlnAndFlush();
     LED_HEATCALL_ON();
     tinyPause();
     LED_HEATCALL_OFF();
@@ -97,12 +97,12 @@ static void testLibVersions()
 #if !(0 == ARDUINO_LIB_OTV0P2BASE_VERSION_MAJOR) || !(8 <= ARDUINO_LIB_OTV0P2BASE_VERSION_MINOR)
 #error Wrong OTV0p2Base library version!
 #endif
-#if !(0 == ARDUINO_LIB_OTRADIOLINK_VERSION_MAJOR) || !(8 <= ARDUINO_LIB_OTRADIOLINK_VERSION_MINOR)
+#if !(0 == ARDUINO_LIB_OTRADIOLINK_VERSION_MAJOR) || !(9 <= ARDUINO_LIB_OTRADIOLINK_VERSION_MINOR)
 #error Wrong OTRadioLink library version!
 #endif
 //  AssertIsEqual(0, ARDUINO_LIB_OTRADIOLINK_VERSION_MAJOR);
 //  AssertIsTrue(1 <= ARDUINO_LIB_OTRADIOLINK_VERSION_MINOR); // Minimum acceptable minor version.
-#if !(0 == ARDUINO_LIB_OTRFM23BLINK_VERSION_MAJOR) || !(8 <= ARDUINO_LIB_OTRFM23BLINK_VERSION_MINOR)
+#if !(0 == ARDUINO_LIB_OTRFM23BLINK_VERSION_MAJOR) || !(9 <= ARDUINO_LIB_OTRFM23BLINK_VERSION_MINOR)
 #error Wrong OTRFM23BLink library version!
 #endif
 #ifdef ALLOW_CC1_SUPPORT
@@ -131,6 +131,61 @@ class DummyHardwareDriver : public HardwareMotorDriverInterface
     bool currentHigh;
   };
 
+
+// Test calibration calculations in CurrentSenseValveMotorDirect.
+// Also check some of the use of those calculations.
+static void testCSVMDC()
+  {
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("CSVMDC");
+  CurrentSenseValveMotorDirect::CalibrationParameters cp;
+  volatile uint16_t ticksFromOpen, ticksReverse;
+  // Test the calculations with one plausible calibration data set.
+  AssertIsTrue(cp.updateAndCompute(1601U, 1105U)); // Must not fail...
+  AssertIsEqual(4, cp.getApproxPrecisionPC());
+  AssertIsEqual(25, cp.getTfotcSmall());
+  AssertIsEqual(17, cp.getTfctoSmall());
+  // Check that a calibration instance can be reused correctly.
+  const uint16_t tfo2 = 1803U;
+  const uint16_t tfc2 = 1373U;
+  AssertIsTrue(cp.updateAndCompute(tfo2, tfc2)); // Must not fail...
+  AssertIsEqual(3, cp.getApproxPrecisionPC());
+  AssertIsEqual(28, cp.getTfotcSmall());
+  AssertIsEqual(21, cp.getTfctoSmall());
+  // Check that computing position works...
+  // Simple case: fully closed, no accumulated reverse ticks.
+  ticksFromOpen = tfo2;
+  ticksReverse = 0;
+  AssertIsEqual(0, cp.computePosition(ticksFromOpen, ticksReverse));
+  AssertIsEqual(tfo2, ticksFromOpen);
+  AssertIsEqual(0, ticksReverse);
+  // Simple case: fully open, no accumulated reverse ticks.
+  ticksFromOpen = 0;
+  ticksReverse = 0;
+  AssertIsEqual(100, cp.computePosition(ticksFromOpen, ticksReverse));
+  AssertIsEqual(0, ticksFromOpen);
+  AssertIsEqual(0, ticksReverse);
+  // Try at half-way mark, no reverse ticks.
+  ticksFromOpen = tfo2 / 2;
+  ticksReverse = 0;
+  AssertIsEqual(50, cp.computePosition(ticksFromOpen, ticksReverse));
+  AssertIsEqual(tfo2/2, ticksFromOpen);
+  AssertIsEqual(0, ticksReverse);
+  // Try at half-way mark with just one reverse tick (nothing should change).
+  ticksFromOpen = tfo2 / 2;
+  ticksReverse = 1;
+  AssertIsEqual(50, cp.computePosition(ticksFromOpen, ticksReverse));
+  AssertIsEqual(tfo2/2, ticksFromOpen);
+  AssertIsEqual(1, ticksReverse);
+  // Try at half-way mark with a big-enough block of reverse ticks to be significant.
+  ticksFromOpen = tfo2 / 2;
+  ticksReverse = cp.getTfctoSmall();
+  AssertIsEqual(51, cp.computePosition(ticksFromOpen, ticksReverse));
+  AssertIsEqual(tfo2/2 - cp.getTfotcSmall(), ticksFromOpen);
+  AssertIsEqual(0, ticksReverse);
+// DHD20151025: one set of actual measurements during calibration.
+//    ticksFromOpenToClosed: 1529
+//    ticksFromClosedToOpen: 1295
+  }
 
 // Test that direct abstract motor drive logic is sane.
 static void testCurrentSenseValveMotorDirect()
@@ -189,14 +244,14 @@ static void testOnOffBoilerDriverLogic()
   // Verify that power-up state is boiler off.
   AssertIsTrue(!oobdl1.isCallingForHeat());
   // Calling tick one or more times makes no difference by itself...
-  for(uint8_t i = 2 + (randRNG8() & 0x1fu); --i > 0; ) { oobdl1.tick2s(); }
+  for(uint8_t i = 2 + (OTV0P2BASE::randRNG8() & 0x1fu); --i > 0; ) { oobdl1.tick2s(); }
   AssertIsTrue(!oobdl1.isCallingForHeat());
   // Ensure bogus update/signal is rejected.
-  AssertIsTrue(!oobdl1.receiveSignal(0xffffu, randRNG8()));
+  AssertIsTrue(!oobdl1.receiveSignal(0xffffu, OTV0P2BASE::randRNG8()));
   AssertIsTrue(!oobdl1.isCallingForHeat());
   // Ensure no 'live' or other records created.
   OnOffBoilerDriverLogic::PerIDStatus valves1[1];
-  AssertIsEqual(0, oobdl1.valvesStatus(valves1, 1, randRNG8NextBoolean()));
+  AssertIsEqual(0, oobdl1.valvesStatus(valves1, 1, OTV0P2BASE::randRNG8NextBoolean()));
   }
 #endif
 
@@ -812,7 +867,7 @@ static void testJSONStats()
   char buf[MSG_JSON_MAX_LENGTH + 2]; // Allow for trailing '\0' and spare byte.
   // Create minimal JSON message with no data content. just the (supplied) ID.
   const uint8_t l1 = ss1.writeJSON((uint8_t*)buf, sizeof(buf), OTV0P2BASE::randRNG8(), OTV0P2BASE::randRNG8NextBoolean());
-//serialPrintAndFlush(buf); serialPrintlnAndFlush();
+//OTV0P2BASE::serialPrintAndFlush(buf); OTV0P2BASE::serialPrintlnAndFlush();
   AssertIsEqual(12, l1);
   const char PROGMEM *t1 = (const char PROGMEM *)F("{\"@\":\"1234\"}");
   AssertIsTrue(0 == strcmp_P(buf, t1));
@@ -823,7 +878,7 @@ static void testJSONStats()
   ss1.enableCount(true);
   AssertIsEqual(0, ss1.size());
   AssertIsEqual(18, ss1.writeJSON((uint8_t*)buf, sizeof(buf), OTV0P2BASE::randRNG8(), OTV0P2BASE::randRNG8NextBoolean()));
-//serialPrintAndFlush(buf); serialPrintlnAndFlush();
+//OTV0P2BASE::serialPrintAndFlush(buf); OTV0P2BASE::serialPrintlnAndFlush();
   AssertIsTrue(0 == strcmp_P(buf, (const char PROGMEM *)F("{\"@\":\"1234\",\"+\":2}")));
   // Turn count off for rest of tests.
   ss1.enableCount(false);
@@ -836,7 +891,7 @@ static void testJSONStats()
   AssertIsEqual(1, ss1.size());
   AssertIsEqual(20, ss1.writeJSON((uint8_t*)buf, sizeof(buf), 0, OTV0P2BASE::randRNG8NextBoolean()));
 #if 0 // Short of Flash space!
-//serialPrintAndFlush(buf); serialPrintlnAndFlush();
+//OTV0P2BASE::serialPrintAndFlush(buf); OTV0P2BASE::serialPrintlnAndFlush();
   AssertIsTrue(0 == strcmp_P(buf, (const char PROGMEM *)F("{\"@\":\"1234\",\"f1\":42}")));
 #endif
   ss1.put("f1", -111);
@@ -960,6 +1015,7 @@ static void testJSONForTX()
 // Test of FHT8V bitstream encoding and decoding.
 static void testFHTEncoding()
   {
+#ifdef USE_MODULE_FHT8VSIMPLE_RX
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("FHTEncoding");
   
   uint8_t buf[FHT8V_200US_BIT_STREAM_FRAME_BUF_SIZE];
@@ -1032,11 +1088,13 @@ static void testFHTEncoding()
 #endif
   AssertIsTrueWithErr(0xff == commandDecoded.command, commandDecoded.command);
   AssertIsTrueWithErr(0xff == commandDecoded.extension, commandDecoded.extension);
+#endif
   }
 
 // Test of heat and tail of FHT8V bitstream encoding and decoding.
 static void testFHTEncodingHeadAndTail()
   {
+#ifdef USE_MODULE_FHT8VSIMPLE_RX
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("FHTEncodingHeadAndTail");
 
 //// Create FHT8V TRV outgoing valve-setting command frame (terminated with 0xff) at bptr with optional headers and trailers.
@@ -1135,13 +1193,13 @@ static void testFHTEncodingHeadAndTail()
   AssertIsTrueWithErr(0x26 == commandDecoded.command, commandDecoded.command);
   AssertIsTrueWithErr(0 == commandDecoded.extension, commandDecoded.extension);
 #if 0 && defined(ALLOW_MINIMAL_STATS_TXRX)
-  serialPrintAndFlush(F("  Minimal trailer bytes: "));
-  serialPrintAndFlush(afterBody[0], HEX);
-  serialPrintAndFlush(' ');
-  serialPrintAndFlush(afterBody[1], HEX);
-  serialPrintAndFlush(' ');
-  serialPrintAndFlush(afterBody[2], HEX);
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintAndFlush(F("  Minimal trailer bytes: "));
+  OTV0P2BASE::serialPrintAndFlush(afterBody[0], HEX);
+  OTV0P2BASE::serialPrintAndFlush(' ');
+  OTV0P2BASE::serialPrintAndFlush(afterBody[1], HEX);
+  OTV0P2BASE::serialPrintAndFlush(' ');
+  OTV0P2BASE::serialPrintAndFlush(afterBody[2], HEX);
+  OTV0P2BASE::serialPrintlnAndFlush();
 #endif
   // Verify (start of) trailer is OK.
   for(uint8_t i = 0; i < 3; ++i)
@@ -1174,7 +1232,7 @@ static void testFHTEncodingHeadAndTail()
 #endif
   memset(buf, 0xff, sizeof(buf));
   result1 = FHT8VCreateValveSetCmdFrameHT_r(buf, true, &command, 0, &fullStats);
-//serialPrintAndFlush(result1 - buf); serialPrintlnAndFlush();
+//OTV0P2BASE::serialPrintAndFlush(result1 - buf); OTV0P2BASE::serialPrintlnAndFlush();
   AssertIsTrueWithErr((result1 - buf) < sizeof(buf), (result1 - buf) - sizeof(buf)); // result1 points to the terminating 0xff, not just after it.
   AssertIsTrueWithErr(((uint8_t)~0U) == *result1, *result1); // Check that result points at terminator value 0xff/~0.
   //AssertIsTrue((result1 - buf < MIN_FHT8V_200US_BIT_STREAM_BUF_SIZE), result1-buf); // Check not overflowing the buffer.
@@ -1188,7 +1246,7 @@ static void testFHTEncodingHeadAndTail()
   // Attempt to decode.
   afterBody = FHT8VDecodeBitStream(buf + RFM22_PREAMBLE_BYTES, buf + MIN_FHT8V_200US_BIT_STREAM_BUF_SIZE - 1, &commandDecoded);
   AssertIsTrue(0 != afterBody);
-//serialPrintAndFlush(afterBody - buf); serialPrintlnAndFlush();
+//OTV0P2BASE::serialPrintAndFlush(afterBody - buf); OTV0P2BASE::serialPrintlnAndFlush();
   AssertIsEqual(5, (result1 - buf) - (afterBody - buf));
   AssertIsTrueWithErr(65 == commandDecoded.hc1, commandDecoded.hc1);
   AssertIsTrueWithErr(74 == commandDecoded.hc2, commandDecoded.hc2);
@@ -1214,8 +1272,8 @@ static void testFHTEncodingHeadAndTail()
   AssertIsEqual(powerLow, statsDecoded.tempAndPower.powerLow);
   AssertIsEqual(tempC16, statsDecoded.tempAndPower.tempC16);
 #endif
+#endif
   }
-
 
 // Test elements of encoding and decoding FullStatsMessageCore_t.
 // These are the routines primarily under test:
@@ -1541,11 +1599,11 @@ static void testTempSensor()
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("TempSensor");
   const int temp = TemperatureC16.read();
 #if 0
-  serialPrintAndFlush("  temp: ");
-  serialPrintAndFlush(temp >> 4, DEC);
-  serialPrintAndFlush('C');
-  serialPrintAndFlush(temp & 0xf, HEX);
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintAndFlush("  temp: ");
+  OTV0P2BASE::serialPrintAndFlush(temp >> 4, DEC);
+  OTV0P2BASE::serialPrintAndFlush('C');
+  OTV0P2BASE::serialPrintAndFlush(temp & 0xf, HEX);
+  OTV0P2BASE::serialPrintlnAndFlush();
 #endif
   // During testing temp should be above 0C (0C might indicate a missing/broken sensor) and below 50C.
   AssertIsTrueWithErr((temp > 0) && (temp < (50 << 4)), temp);
@@ -1560,11 +1618,11 @@ static void testInternalTempSensor()
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("InternalTempSensor");
   const int temp = readInternalTemperatureC16();
 #if 0
-  serialPrintAndFlush("  int temp: ");
-  serialPrintAndFlush(temp >> 4, DEC);
-  serialPrintAndFlush('C');
-  serialPrintAndFlush(temp & 0xf, HEX);
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintAndFlush("  int temp: ");
+  OTV0P2BASE::serialPrintAndFlush(temp >> 4, DEC);
+  OTV0P2BASE::serialPrintAndFlush('C');
+  OTV0P2BASE::serialPrintAndFlush(temp & 0xf, HEX);
+  OTV0P2BASE::serialPrintlnAndFlush();
 #endif
   // During testing temp should be above 0C (0C might indicate a missing/broken sensor) and below 50C.
   // Internal sensor may be +/- 10C out.
@@ -1579,9 +1637,9 @@ static void testSupplyVoltageMonitor()
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("SupplyVoltageMonitor");
   const int mv = Supply_mV.read();
 #if 0
-  serialPrintAndFlush("  Battery mv: ");
-  serialPrintAndFlush(mv, DEC);
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintAndFlush("  Battery mv: ");
+  OTV0P2BASE::serialPrintAndFlush(mv, DEC);
+  OTV0P2BASE::serialPrintlnAndFlush();
 #endif
   // During testing power supply voltage should be above ~1.7V BOD limit,
   // and no higher than 3.6V for V0p2 boards which is RFM22 Vss limit.
@@ -1602,16 +1660,17 @@ void loopUnitTest()
   // Allow the terminal console to be brought up.
   for(int i = 3; i > 0; --i)
     {
-    serialPrintAndFlush(F("Tests starting... "));
-    serialPrintAndFlush(i);
-    serialPrintlnAndFlush();
+    OTV0P2BASE::serialPrintAndFlush(F("Tests starting... "));
+    OTV0P2BASE::serialPrintAndFlush(i);
+    OTV0P2BASE::serialPrintlnAndFlush();
     OTV0P2BASE::sleepLowPowerMs(1000);
     }
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintlnAndFlush();
 
 
   // Run the tests, fastest / newest / most-fragile / most-interesting first...
   testLibVersions();
+  testCSVMDC();
   testCurrentSenseValveMotorDirect();
   testComputeRequiredTRVPercentOpen();
   testFastDigitalIOCalcs();
@@ -1648,12 +1707,12 @@ void loopUnitTest()
 
   // Announce successful loop completion and count.
   ++loopCount;
-  serialPrintlnAndFlush();
-  serialPrintAndFlush(F("%%% All tests completed OK, round "));
-  serialPrintAndFlush(loopCount);
-  serialPrintlnAndFlush();
-  serialPrintlnAndFlush();
-  serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintAndFlush(F("%%% All tests completed OK, round "));
+  OTV0P2BASE::serialPrintAndFlush(loopCount);
+  OTV0P2BASE::serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintlnAndFlush();
+  OTV0P2BASE::serialPrintlnAndFlush();
   // Briefly flash the LED once to indicate successful completion of the tests.
   // (Panic/failure causes repeated rapid flash by contrast, and a hang may result in no flashes.)
   LED_HEATCALL_ON();
