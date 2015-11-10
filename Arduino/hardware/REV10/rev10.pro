@@ -1,25 +1,25 @@
 EAGLE AutoRouter Statistics:
 
-Job           : C:/Users/Bo/Documents/GitHub/opentrv/OpenTRV/Arduino/hardware/REV10/rev10.brd
+Job           : C:/Users/Bo/Documents/GitHub/OpenTRV/Arduino/hardware/REV10/rev10.brd
 
-Start at      : 11:54:26 (10-11-2015)
-End at        : 11:55:42 (10-11-2015)
-Elapsed time  : 00:01:14
+Start at      : 12:40:22 (10-11-2015)
+End at        : 12:40:43 (10-11-2015)
+Elapsed time  : 00:00:19
 
-Signals       :    84   RoutingGrid: 4 mil  Layers: 2
-Connections   :   123   predefined:  32 ( 23 Vias )
+Signals       :    83   RoutingGrid: 4.92126 mil  Layers: 2
+Connections   :   123   predefined:  10 ( 22 Vias )
 
-Router memory :   2343840
+Router memory :   1413600
 
-Passname          : TopRouter     Route Optimize1 Optimize2 Optimize3 Optimize4 Optimize5 Optimize6 Optimize7 Optimize8 Optimize9Optimize10Optimize11Optimize12
+Passname          :     Route Optimize1 Optimize2 Optimize3 Optimize4
 
-Time per pass     :  00:00:22  00:00:07  00:00:04  00:00:04  00:00:04  00:00:03  00:00:04  00:00:03  00:00:04  00:00:04  00:00:04  00:00:04  00:00:03  00:00:04
-Number of Ripups  :         0         8         0         0         0         0         0         0         0         0         0         0         0         0
-max. Level        :         0         1         0         0         0         0         0         0         0         0         0         0         0         0
-max. Total        :         0        20         0         0         0         0         0         0         0         0         0         0         0         0
+Time per pass     :  00:00:05  00:00:03  00:00:04  00:00:03  00:00:04
+Number of Ripups  :         3         0         0         0         0
+max. Level        :         1         0         0         0         0
+max. Total        :        30         0         0         0         0
 
-Routed            :        32        91        89        90        90        90        90        90        90        90        90        90        90        90
-Vias              :         0        61        64        59        57        55        47        47        45        45        45        45        45        45
-Resolution        :    52.0 %   100.0 %    98.4 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %    99.2 %
+Routed            :       113       113       113       113       113
+Vias              :       116        87        79        72        71
+Resolution        :   100.0 %   100.0 %   100.0 %   100.0 %   100.0 %
 
-Final             : 87.8% finished. Polygons may have fallen apart.
+Final             : 97.6% finished. Polygons may have fallen apart.
