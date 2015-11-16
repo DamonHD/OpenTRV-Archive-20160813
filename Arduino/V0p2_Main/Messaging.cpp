@@ -32,13 +32,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
 #include "Control.h"
 #include "Power_Management.h"
 #include "RFM22_Radio.h"
-#include "Security.h"
 #include "Serial_IO.h"
 #include "UI_Minimal.h"
 
-#ifdef USE_MODULE_FHT8VSIMPLE
-#include "FHT8V_Wireless_Rad_Valve.h"
-#endif
+#include "V0p2_Sensors.h"
+#include "V0p2_Actuators.h"
+
 
 //// Update 'C2' 8-bit CRC with next byte.
 //// Usually initialised with 0xff.
@@ -207,7 +206,7 @@ void outputMinimalStats(Print *p, bool secure, uint8_t id0, uint8_t id1, const t
 // True if the TX_ENABLE value is no higher than stTXmostUnsec.
 // Some filtering may be required even if this is true.
 // TODO: allow cacheing in RAM for speed.
-bool enableTrailingStatsPayload() { return(eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_STATS_TX_ENABLE) <= stTXmostUnsec); }
+bool enableTrailingStatsPayload() { return(eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_STATS_TX_ENABLE) <= OTV0P2BASE::stTXmostUnsec); }
 #endif
 #endif
 
@@ -265,7 +264,7 @@ bool ensureIDCreated(const bool force)
 // If successful, returns pointer to terminating 0xff at end of message.
 // Returns null if failed (eg because of bad inputs or insufficient buffer space);
 // part of the message may have have been written in this case and in particular the previous terminating 0xff may have been overwritten.
-uint8_t *encodeFullStatsMessageCore(uint8_t * const buf, const uint8_t buflen, const stats_TX_level secLevel, const bool secureChannel,
+uint8_t *encodeFullStatsMessageCore(uint8_t * const buf, const uint8_t buflen, const OTV0P2BASE::stats_TX_level secLevel, const bool secureChannel,
     const FullStatsMessageCore_t * const content)
   {
   if(NULL == buf) { return(NULL); } // Could be an assert/panic instead at a pinch.
@@ -341,7 +340,7 @@ uint8_t *encodeFullStatsMessageCore(uint8_t * const buf, const uint8_t buflen, c
   // Omit occupancy data unless encoding for a secure channel or at a very permissive stats TX security level.
   const uint8_t flagsHeader = MESSAGING_FULL_STATS_FLAGS_HEADER_MSBS |
     (content->containsAmbL ? MESSAGING_FULL_STATS_FLAGS_HEADER_AMBL : 0) |
-    ((secureChannel || (secLevel <= stTXalwaysAll)) ? (content->occ & 3) : 0);
+    ((secureChannel || (secLevel <= OTV0P2BASE::stTXalwaysAll)) ? (content->occ & 3) : 0);
   *b++ = flagsHeader;
   // Now insert extra fields as flagged.
   if(content->containsAmbL)
@@ -365,7 +364,7 @@ uint8_t *encodeFullStatsMessageCore(uint8_t * const buf, const uint8_t buflen, c
 // Returns null if failed (eg because of corrupt/insufficient message data) and state of 'content' result is undefined.
 // This will avoid copying into the result data (possibly tainted) that has arrived at an inappropriate security level.
 //   * content will contain data decoded from the message; must be non-null
-const uint8_t *decodeFullStatsMessageCore(const uint8_t * const buf, const uint8_t buflen, const stats_TX_level secLevel, const bool secureChannel,
+const uint8_t *decodeFullStatsMessageCore(const uint8_t * const buf, const uint8_t buflen, const OTV0P2BASE::stats_TX_level secLevel, const bool secureChannel,
     FullStatsMessageCore_t * const content)
   {
 //DEBUG_SERIAL_PRINTLN_FLASHSTRING("dFSMC");
