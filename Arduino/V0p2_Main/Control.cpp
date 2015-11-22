@@ -932,7 +932,7 @@ bool pollIO(const bool force)
 #ifdef ALLOW_STATS_TX
 #if defined(ALLOW_JSON_OUTPUT)
 // Managed JSON stats.
-static SimpleStatsRotation<9> ss1; // Configured for maximum different stats.
+static SimpleStatsRotation<10> ss1; // Configured for maximum different stats.	// FIXME increased for voice
 #endif // ALLOW_STATS_TX
 // Do bare stats transmission.
 // Output should be filtered for items appropriate
@@ -1022,6 +1022,9 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     ss1.put("b", (int) isBoilerOn());
 #endif
     ss1.put(AmbLight); // Always send ambient light level (assuming sensor is present).
+#ifdef ENABLE_VOICE_STATS
+    ss1.put(Voice);	// FIXME voice stats
+#endif
 #if !defined(LOCAL_TRV) // Deploying as sensor unit, not TRV controller, so show all sensors and no TRV stuff.
 //    // Only show raw ambient light levels for non-TRV pure-sensor units.
 //    ss1.put(AmbLight);
@@ -1584,6 +1587,8 @@ void loopOpenTRV()
 //    // Turn boiler output on or off in response to calls for heat.
 //    hubModeBoilerOn = isBoilerOn();
 
+    // In hub/listen/RX mode of some sort...
+    //
     // If in stats hub mode then always listen; don't attempt to save power.
     if(inStatsHubMode())
       { needsToEavesdrop = true; }
@@ -1598,7 +1603,7 @@ void loopOpenTRV()
     //    Longish period without any RX listening may allow hub unit to cool and get better sample of local temperature if marginal.
     // Aim to listen in one stretch for greater than full FHT8V TX cycle of ~2m to avoid missing a call for heat.
     // MUST listen for all of final 2 mins of boiler-on to avoid missing TX (without forcing boiler over-run).
-    else if((boilerCountdownTicks <= ((FHT8VRadValveBase::MAX_FHT8V_TX_CYCLE_HS+1)/(2 * OTV0P2BASE::MAIN_TICK_S))) && // Don't miss a final TX that would keep the boiler on...
+    else if((boilerCountdownTicks <= ((OTRadValve::FHT8VRadValveBase::MAX_FHT8V_TX_CYCLE_HS+1)/(2 * OTV0P2BASE::MAIN_TICK_S))) && // Don't miss a final TX that would keep the boiler on...
        (boilerCountdownTicks != 0)) // But don't force unit to listen/RX all the time if no recent call for heat.
       { needsToEavesdrop = true; }
     else if((!heardIt) &&
