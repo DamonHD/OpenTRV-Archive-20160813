@@ -42,7 +42,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#define CONFIG_Trial2013Winter_Round1_BOILERHUB // REV1 as plain boiler node.
 //#define CONFIG_Trial2013Winter_Round2 // REV2 cut4 default config.
 //#define CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
-//#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
+#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
@@ -69,7 +69,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#define CONFIG_REV9_STATS // REV9 as stats node, cut 2 of the board.
 //#define CONFIG_REV9_cut1 // REV9 as CC1 relay, cut1 of board.
 //#define CONFIG_DE_TESTLAB // Deniz's test environment.
-#define CONFIG_REV10_BUSSHELTER // REV10-based stripboard precursor for bus shelters
+//#define CONFIG_REV10_STRIPBOARD // REV10-based stripboard precursor for bus shelters
+//#define CONFIG_REV11_RFM23BTEST // Basic test to see if stats send
 //#define CONFIG_BAREBONES // No peripherals / on breadboard.
 
 
@@ -143,6 +144,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #if 1 || defined(OTV0P2BASE_IDLE_NOT_RECOMMENDED)
 #undef ENABLE_USE_OF_AVR_IDLE_MODE
 #endif
+
 
 
 
@@ -749,7 +751,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 
 // REV8 + GSM Arduino shield + I2CEXT, see TODO-551
 
-#ifdef CONFIG_REV10_BUSSHELTER // REV10-based stripboard precursor for bus shelters
+#ifdef CONFIG_REV10_STRIPBOARD // REV10-based stripboard precursor for bus shelters
 // use alternative loop
 #define ALT_MAIN_LOOP
 #define V0p2_REV 10
@@ -815,6 +817,26 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 // ------------------------- REV11
 
 // REV4 (ie SHT21 sensor and phototransistor) + PCB antenna + PCB battery back (probably AAA), see TODO-566
+#ifdef CONFIG_REV11_RFM23BTEST
+// Revision of V0.2 board.
+#define V0p2_REV 11 // REV11 covers first sensor only board.
+// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
+#define SENSOR_SHT21_ENABLE
+// Using RoHS-compliant phototransistor in place of LDR.
+#define AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
+// Anticipation logic not yet ready for prime-time.
+//#define ENABLE_ANTICIPATION
+// IF UNDEFINED: this unit cannot act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+//#undef ENABLE_BOILER_HUB
+// Use common settings.
+#define COMMON_SETTINGS
+
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#undef ENABLE_BOILER_HUB
+// IF DEFINED: allow RX of stats frames.
+#undef ALLOW_STATS_RX
+
+#endif // CONFIG_REV11_RFM23BTEST
 
 // -------------------------
 
