@@ -52,12 +52,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #include <OTRadValve.h>
 
 #include "V0p2_Sensors.h"
-#include "V0p2_Actuators.h"
-#include "Control.h"
+//#include "V0p2_Actuators.h"
+//#include "Control.h"
 #include "Power_Management.h"
-#include "Radio.h"
+#include "RFM22_Radio.h"
 #include "Serial_IO.h"
-#include "UI_Minimal.h"
+//#include "UI_Minimal.h"
 
 
 // Indicate that the system is broken in an obvious way (distress flashing the main LED).
@@ -80,9 +80,9 @@ void panic()
   for( ; ; )
     {
     LED_HEATCALL_ON();
-    tinyPause();
+    OTV0P2BASE::nap(WDTO_15MS); // tinyPause();
     LED_HEATCALL_OFF();
-    bigPause();
+    OTV0P2BASE::nap(WDTO_120MS); // bigPause();
     }
   }
 
@@ -570,7 +570,7 @@ void setup()
 #endif
 #endif
 
-
+#ifndef ALT_MAIN_LOOP
   // Ensure that the unique node ID is set up (mainly on first use).
   // Have one attempt (don't want to stress an already failing EEPROM) to force-reset if not good, then panic.
   // Needs to have had entropy gathered, etc.
@@ -579,6 +579,7 @@ void setup()
     if(!ensureIDCreated(true)) // Force reset.
       { panic(F("!Bad ID: can't fix")); }
     }
+#endif // ALT_MAIN_LOOP
 
 
   // Initialised: turn heatcall UI LED off.
