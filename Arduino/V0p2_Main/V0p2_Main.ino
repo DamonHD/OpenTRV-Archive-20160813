@@ -68,7 +68,7 @@ void panic()
   {
 #ifdef USE_MODULE_RFM22RADIOSIMPLE
   // Reset radio and go into low-power mode.
-  RFM23B.panicShutdown();
+  PrimaryRadio.panicShutdown();
 #endif
   // Power down almost everything else...
   minimisePowerWithoutSleep();
@@ -185,7 +185,10 @@ void serialPrintlnBuildVersion()
   OTV0P2BASE::serialPrintlnAndFlush();
   }
 
+// FIXME deal with this
 static const OTRadioLink::OTRadioChannelConfig RFMConfig(OTRadValve::FHT8VRadValveBase::FHT8V_RFM23_Reg_Values, true, true, true);
+//static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true, true, true);
+static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true, true, true);
 
 #if defined(ALLOW_CC1_SUPPORT_RELAY)
 // For a CC1 relay, ignore everything except FTp2_CC1PollAndCmd messages.
@@ -262,6 +265,7 @@ void optionalPOST()
 
 //  posPOST(1, F("about to test radio module"));
 
+// FIXME  This section needs refactoring
 #ifdef USE_MODULE_RFM22RADIOSIMPLE
 // TODO-547: why does nested SPI enable break things?
 //  const bool neededToWakeSPI = OTV0P2BASE::powerUpSPIIfDisabled();
@@ -269,15 +273,31 @@ void optionalPOST()
 //  DEBUG_SERIAL_PRINTLN();
 #if !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(Using RFM22.)");
-#endif
+#endif // !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
+
+#ifdef ENABLE_RADIO_SIM900
+fastDigitalWrite(A3, 0);
+pinMode(A3, OUTPUT);
+#endif // ENABLE_RADIO_SIM900
+
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
-  RFM23B.preinit(NULL);
+  PrimaryRadio.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
-  if(!RFM23B.configure(1, &RFMConfig) || !RFM23B.begin()) { panic(); }
+  if(!PrimaryRadio.configure(1, &RFMConfig) || !PrimaryRadio.begin()) { panic(); }
   // Apply filtering, if any, while we're having fun...
-  RFM23B.setFilterRXISR(FilterRXISR);
+  PrimaryRadio.setFilterRXISR(FilterRXISR);
 //  if(neededToWakeSPI) { OTV0P2BASE::powerDownSPI(); }
-#endif
+#endif // USE_MODULE_RFM22RADIOSIMPLE
+
+#ifdef ENABLE_RADIO_SECONDARY_MODULE
+  // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
+  SecondaryRadio.preinit(NULL);
+  // Check that the radio is correctly connected; panic if not...
+  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
+  // Apply filtering, if any, while we're having fun...
+  SecondaryRadio.setFilterRXISR(FilterRXISR);
+#endif // ENABLE_RADIO_SECONDARY_MODULE
+
 
 //  posPOST(1, F("Radio OK, checking buttons/sensors and xtal"));
 
