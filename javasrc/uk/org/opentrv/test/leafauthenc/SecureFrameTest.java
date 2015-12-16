@@ -51,7 +51,7 @@ public class SecureFrameTest
 
     /**Playpen for understanding jUnit. */
     @Test
-    public void testBasics()
+    public void testPlaypen()
         {
 //        assertTrue(false);
         }
@@ -68,6 +68,29 @@ public class SecureFrameTest
         crcBBB = CRC7_5B.bbb_update(crcBBB, getStdTestASCIITextAsByteArray(), STD_TEST_ASCII_TEXT.length());
         crcBBB = CRC7_5B.bbb_finalize(crcBBB);
         assertEquals("CRC should match for standard text string", 4, crcBBB);
+        }
+
+    /**Simple minimal test of non-secure 'O' format frame.
+     * Do a valve frame at 0% open, no stats.
+     * Do a non-valve frame with minimal ("{}") stats.
+     */
+    @Test
+    public void testNonSecure()
+        {
+//Example insecure frame, from valve unit 0% open, no call for heat/flags/stats.
+//
+//08 4f 02 80 81 02 | 00 01 | CC
+//
+//08 length of header after length byte 5 + body 2 + trailer 1
+//4f 'O' insecure OpenTRV basic frame
+//02 0 sequence number, ID length 2
+//80 ID byte 1
+//81 ID byte 2
+//02 body length 2
+//00 valve 0%, no call for heat
+//01 no flags or stats, unreported occupancy
+//CC CRC value
+
         }
 
     }
