@@ -78,9 +78,15 @@ public class SecureFrameTest
      * @param len  length of frame data to have the CRC computed over;
      *     strictly positive and pos+len must be within the buffer
      */
-    public static byte computeInsecureFrameCRC(byte buf, int pos, int len)
+    public static byte computeInsecureFrameCRC(byte buf[], int pos, int len)
         {
-        return(0); // FIXME
+        byte crc = (byte)0xff; // Initialise CRC with 0xff (protects against extra leading 0x00s).
+        for(int i = 0; i < len; ++i)
+            {
+            crc = CRC7_5B.crc7_5B_update(crc, buf[pos + i]);
+            }
+        if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s values, ie self-whitened. 
+        return(crc);
         }
 
     /**Simple minimal test of non-secure 'O' format frame.
@@ -92,7 +98,7 @@ public class SecureFrameTest
         {
 //Example insecure frame, from valve unit 0% open, no call for heat/flags/stats.
 //
-//08 4f 02 80 81 02 | 00 01 | CC
+//08 4f 02 80 81 02 | 00 01 | 1c
 //
 //08 length of header after length byte 5 + body 2 + trailer 1
 //4f 'O' insecure OpenTRV basic frame
@@ -102,7 +108,9 @@ public class SecureFrameTest
 //02 body length 2
 //00 valve 0%, no call for heat
 //01 no flags or stats, unreported occupancy
-//CC CRC value
+//1c CRC value
+        // Check the CRC computation for the simple "valve 0%" frame.
+        assertEquals((byte)0x1c, computeInsecureFrameCRC(new byte[]{(byte)0x80, 'O', 2, (byte)0x80, (byte)0x81, 2, 0, 1}, 0, 8));
 
         }
 

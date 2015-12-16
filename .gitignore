@@ -4,3 +4,4 @@
 /Arduino/hardware/**/*.s#*
 /Arduino/hardware/**/*.pro
 /Arduino/hardware/**/*.job
+/.DS_Store
