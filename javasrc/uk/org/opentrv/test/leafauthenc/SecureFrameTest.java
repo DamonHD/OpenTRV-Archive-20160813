@@ -73,8 +73,10 @@ public class SecureFrameTest
     /**Compute (non-secure) CRC over securable frame content.
      * @param buf  buffer that included the frame data to have the CRC applied (all of header and body);
      *     never null
-     * @param pos  starting position of the frame data in the buffer
-     * @param len  length of frame data to have the CRC computed over; strictly positive
+     * @param pos  starting position of the frame data in the buffer;
+     *     must be valid offset within the buffer
+     * @param len  length of frame data to have the CRC computed over;
+     *     strictly positive and pos+len must be within the buffer
      */
     public static byte computeInsecureFrameCRC(byte buf, int pos, int len)
         {
