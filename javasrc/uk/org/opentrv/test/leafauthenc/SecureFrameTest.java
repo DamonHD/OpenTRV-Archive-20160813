@@ -70,7 +70,7 @@ public class SecureFrameTest
         assertEquals("CRC should match for standard text string", 4, crcBBB);
         }
 
-    /**Compute (non-secure) CRC over securable frame content.
+    /**Compute (non-secure) CRC over secureable frame content.
      * @param buf  buffer that included the frame data to have the CRC applied (all of header and body);
      *     never null
      * @param pos  starting position of the frame data in the buffer;
@@ -85,13 +85,13 @@ public class SecureFrameTest
             {
             crc = CRC7_5B.crc7_5B_update(crc, buf[pos + i]);
             }
-        if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s values, ie self-whitened. 
+        if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s result values, ie self-whitened. 
         return(crc);
         }
 
     /**Simple minimal test of non-secure 'O' format frame.
      * Do a valve frame at 0% open, no stats.
-     * Do a non-valve frame with minimal ("{}") stats.
+     * Do a non-valve frame with minimal representative {"b":1} stats.
      */
     @Test
     public void testNonSecure()
