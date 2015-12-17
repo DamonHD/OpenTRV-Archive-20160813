@@ -125,7 +125,7 @@ public class SecureFrameTest
 //08 body length 8
 //7f no valve, no call for heat
 //11 no flags, unreported occupancy, stats present
-//7b 22 62 22 3a 31 {"b":1   Stats: note that implicit trailing '}' is not sent.
+//7b 22 62 22 3a 31  {"b":1  Stats: note that implicit trailing '}' is not sent.
 //61 CRC value
         // Check the CRC computation for the simple stats frame.
         assertEquals((byte)0x61, computeInsecureFrameCRC(new byte[]{14, 'O', 2, (byte)0x80, (byte)0x81, 8, 0x7f, 0x11, '{', '"', 'b', '"', ':', '1'}, 0, 14));
