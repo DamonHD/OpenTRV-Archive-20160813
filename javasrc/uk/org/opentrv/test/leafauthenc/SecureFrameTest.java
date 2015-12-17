@@ -108,10 +108,27 @@ public class SecureFrameTest
 //02 body length 2
 //00 valve 0%, no call for heat
 //01 no flags or stats, unreported occupancy
-//1c CRC value
+//23 CRC value
         // Check the CRC computation for the simple "valve 0%" frame.
-        assertEquals((byte)0x1c, computeInsecureFrameCRC(new byte[]{(byte)0x80, 'O', 2, (byte)0x80, (byte)0x81, 2, 0, 1}, 0, 8));
+        assertEquals((byte)0x23, computeInsecureFrameCRC(new byte[]{8, 'O', 2, (byte)0x80, (byte)0x81, 2, 0, 1}, 0, 8));
 
+//Example insecure frame, no valve, representative minimum stats {"b":1}
+//In this case the frame sequence number is zero, and ID is 0x80 0x81.
+//
+//0e 4f 02 80 81 08 | 7f 11 7b 22 62 22 3a 31 | 61
+//
+//0e length of header (14) after length byte 5 + body 8 + trailer 1
+//4f 'O' insecure OpenTRV basic frame
+//02 0 sequence number, ID length 2
+//80 ID byte 1
+//81 ID byte 2
+//08 body length 8
+//7f no valve, no call for heat
+//11 no flags, unreported occupancy, stats present
+//7b 22 62 22 3a 31 {"b":1   Stats: note that implicit trailing '}' is not sent.
+//61 CRC value
+        // Check the CRC computation for the simple stats frame.
+        assertEquals((byte)0x61, computeInsecureFrameCRC(new byte[]{14, 'O', 2, (byte)0x80, (byte)0x81, 8, 0x7f, 0x11, '{', '"', 'b', '"', ':', '1'}, 0, 14));
         }
 
     }
