@@ -935,8 +935,7 @@ uint8_t SimpleStatsRotationBase::writeJSON(uint8_t *const buf, const uint8_t buf
 #endif
 
 
-#if defined(ENABLE_RADIO_RX) && (defined(ENABLE_BOILER_HUB) || defined(ALLOW_STATS_RX)) && defined(USE_MODULE_FHT8VSIMPLE) // Listen for calls for heat from remote valves...
-#define LISTEN_FOR_FTp2_FS20_native
+#if defined(ENABLE_RADIO_RX) && (defined(ENABLE_BOILER_HUB) || defined(ALLOW_STATS_RX)) && defined(ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX) // Listen for calls for heat from remote valves...
 static void decodeAndHandleFTp2_FS20_native(Print *p, const bool secure, const uint8_t * const msg, const uint8_t msglen)
 {
 #if 0 && defined(DEBUG)
@@ -1209,7 +1208,7 @@ OTRadioLink::printRXMsg(p, txbuf, buflen);
       }
 #endif
 
-#if defined(ALLOW_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+#if defined(ALLOW_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT) && defined(ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX)
     // Stand-alone stats message.
     case OTRadioLink::FTp2_FullStatsIDL: case OTRadioLink::FTp2_FullStatsIDH:
       {
@@ -1239,7 +1238,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Stats IDx");
       }
 #endif
 
-#if defined(LISTEN_FOR_FTp2_FS20_native) && defined(ENABLE_FS20_ENCODING_SUPPORT) // Listen for calls for heat from remote valves...
+#if defined(ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT) // Listen for calls for heat from remote valves...
     case OTRadioLink::FTp2_FS20_native:
       {
       decodeAndHandleFTp2_FS20_native(p, secure, msg, msglen);
@@ -1252,10 +1251,26 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Stats IDx");
       {
       if(-1 != checkJSONMsgRXCRC(msg, msglen))
         {
+#ifdef ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
+        // Initial pass for Brent.
+        // Strip trailing high bit and CRC.  Not very nice, but it'll have to do.
+        uint8_t buf[MSG_JSON_ABS_MAX_LENGTH + 1];
+        uint8_t buflen = 0;
+        while(buflen < sizeof(buf))
+          {
+          const uint8_t b = msg[buflen];
+          if(('}' | 0x80) == b) { buf[buflen++] = '}'; break; } // End of JSON found.
+          buf[buflen++] = b;
+          }
+        // FIXME should only relay authenticated (and encrypted) traffic.
+        // Relay stats frame over secondary radio.
+        SecondaryRadio.queueToSend(buf, buflen); 
+#else // Don't write to console/Serial also if relayed.
         // Write out the JSON message.
         outputJSONStats(&Serial, secure, msg, msglen);
         // Attempt to ensure that trailing characters are pushed out fully.
         OTV0P2BASE::flushSerialProductive();
+#endif // ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
         }
       return;
       }
@@ -1295,10 +1310,6 @@ bool handleQueuedMessages(Print *p, bool wakeSerialIfNeeded, OTRadioLink::OTRadi
   if(NULL != (pb = rl->peekRXMsg(msglen)))
     {
     if(!neededWaking && wakeSerialIfNeeded && OTV0P2BASE::powerUpSerialIfDisabled<V0P2_UART_BAUD>()) { neededWaking = true; } // FIXME
-    // FIXME Rush job for Brent
-#ifdef ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
-    SecondaryRadio.queueToSend((const uint8_t *) pb, msglen); // Take raw rx frame and send to UDP server without thinking too much
-#endif // ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
     // Don't currently regard anything arriving over the air as 'secure'.
     // FIXME: cast away volatile to process the message content.
     decodeAndHandleRawRXedMessage(p, false, (const uint8_t *)pb, msglen);

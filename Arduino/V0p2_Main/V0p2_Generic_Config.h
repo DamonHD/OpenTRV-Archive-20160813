@@ -44,15 +44,11 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#define CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
 //#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
-<<<<<<< HEAD
-//#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
-//#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
-=======
->>>>>>> refs/heads/DHD-master
 //#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_NOHUB // REV2 cut4 as TX-only leaf node.
 //#define CONFIG_DORM1 // REV7 / DORM1 Winter 2014/2015 all-in-one valve unit.
 //#define CONFIG_DORM1_BOILER // REV8 / DORM1 Winter 2014/2015 boiler-control unit.
+#define CONFIG_REV11_RAW_JSON // REV11 as raw JSON-only stats/sensor leaf.
 
 
 // One-offs and special cases.
@@ -60,7 +56,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#define CONFIG_DHD_TESTLAB_REV1 // REV1.
 //#define CONFIG_Trial2013Winter_Round1_STATSHUB // REV1 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_CC1HUB // REV2 cut4 as CC1 hub.
-#define CONFIG_Trial2013Winter_Round2_BHR // REV2 cut4: boiler hub and stats relay.
+//#define CONFIG_Trial2013Winter_Round2_BHR // REV2 cut4: boiler hub and stats relay.
 //#define CONFIG_Trial2013Winter_Round2_SECURE_NOHUB // REV2 cut4 leaf (valve/sensor) 2015/12 secure protocol.
 //#define CONFIG_Trial2013Winter_Round2_SECURE_HUB // REV2 cut4 hub (boiler/stats) 2015/12 secure protocol.
 //#define CONFIG_DHD_TESTLAB_REV4 // REV4 cut2.
@@ -70,18 +66,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#define CONFIG_DORM1_SANS32K // REV7 / DORM1 without working 32768Hz clock.
 //#define CONFIG_DORM1_MUT // REV7 / DORM1 Winter 2014/2015 minimal for unit testing.
 //#define CONFIG_REV7N // REV7 with external "Model N" valve.
-//#define CONFIG_REV7_STATSLH // REV7 as stats leaf and/or hub.
+//#define CONFIG_REV7_AS_SENSOR // REV7 as JSON-only stats/sensor leaf.
 //#define CONFIG_REV9 // REV9 as CC1 relay, cut 2 of the board.
 //#define CONFIG_REV9_STATS // REV9 as stats node, cut 2 of the board.
 //#define CONFIG_REV9_cut1 // REV9 as CC1 relay, cut1 of board.
 //#define CONFIG_DE_TESTLAB // Deniz's test environment.
 //#define CONFIG_REV10_STRIPBOARD // REV10-based stripboard precursor for bus shelters
-<<<<<<< HEAD
-#define CONFIG_REV10 // Generic REV10 config
-=======
 //#define CONFIG_REV10 // Generic REV10 config
 // TODO //#define CONFIG_REV10_SECURE_BOILERHUB_GSM_SECURE // REV10 PCB boiler hub, relay to GSM, 2015/12 secure protocol.
->>>>>>> refs/heads/DHD-master
 //#define CONFIG_REV11_RFM23BTEST // Basic test to see if stats send
 //#define CONFIG_BAREBONES // No peripherals / on breadboard.
 
@@ -163,14 +155,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define RADIO_PRIMARY_RFM23B  // Assign RFM23B to primary radio
 // IF DEFINED: enable a secondary (typically WAN-relay) radio module.
 #undef ENABLE_RADIO_SECONDARY_MODULE
-// IF DEFINED: enable a WAN-relay radio module.
+// IF DEFINED: enable a WAN-relay radio module, primarily to relay stats outbound.
 #undef ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
 // IF DEFINED: enable support for FS20 carrier for RX or TX.
 #define ENABLE_FS20_CARRIER_SUPPORT
-// IF DEFINED: use FHT8V wireless radio module/valve.
+// IF DEFINED: use FHT8V wireless radio module/valve, eg to control FHT8V local valve.
 #define USE_MODULE_FHT8VSIMPLE
-//// IF DEFINED: enable support for FS20 carrier for TX specifically (to allow RX-only).
-//#define ENABLE_FS20_CARRIER_SUPPORT_TX
+// IF DEFINED: enable support for FS20 carrier for RX of raw FS20 and piggybacked binary (non-JSON) stats.
+#define ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX
 // IF DEFINED: enable support for FS20 encoding/decoding, eg to send to FHT8V.
 #define ENABLE_FS20_ENCODING_SUPPORT
 // IF DEFINED: enable OpenTRV secure frame encoding/decoding (as of 2015/12).
@@ -365,6 +357,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define ENABLE_BOILER_HUB
 // IF DEFINED: allow binary stats to be TXed.
 #undef ALLOW_BINARY_STATS_TX
+// IF DEFINED: enable support for FS20 carrier for RX of raw FS20 and piggybacked binary (non-JSON) stats.
+#undef ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX
 // IF DEFINED: allow RX of stats frames.
 #define ALLOW_STATS_RX
 // IF DEFINED: allow TX of stats frames.
@@ -375,6 +369,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define SUPPORT_CLI
 // IF DEFINED: support for general timed and multi-input occupancy detection / use.
 #undef OCCUPANCY_SUPPORT
+// IF DEFINED: enable a secondary (typically WAN-relay) radio module.
+#define ENABLE_RADIO_SECONDARY_MODULE
+// IF DEFINED: enable a WAN-relay radio module, primarily to relay stats outbound.
+#define ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
+// Chose NullRadio as secondary.
+#define RADIO_SECONDARY_NULL
 #endif
 
 #ifdef CONFIG_Trial2013Winter_Round2_SECURE_NOHUB
@@ -684,9 +684,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 
 // ------------------------- REV7
 
-#ifdef CONFIG_REV7_STATSLH // REV7 as stats leaf and/or hub.
+#ifdef CONFIG_REV7_AS_SENSOR // REV7 as JSON-only stats/sensor leaf.
 // Revision REV7 of V0.2 board, all-in-one valve unit with local motor drive.
-// In this off-label mode being used as stats gatherers or relays.
+// In this off-label mode being used as stats gatherers or simple hubs.
 #define V0p2_REV 7
 // IF DEFINED: initial direct motor drive design.  Doesn't imply it gets used, but I/O can be set up safely.
 #define DIRECT_MOTOR_DRIVE_V1
@@ -694,14 +694,24 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #define SENSOR_SHT21_ENABLE
 // Using RoHS-compliant phototransistor in place of LDR.
 #define AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
+// IF DEFINED: basic FROST/WARM temperatures are settable.
+#undef SETTABLE_TARGET_TEMPERATURES
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#undef LOCAL_TRV
+// IF DEFINED: this unit controls a valve, but provides slave valve control only.
+#undef SLAVE_TRV
 // IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
 #undef ENABLE_BOILER_HUB // NO BOILER CODE
 // IF DEFINED: allow RX of stats frames.
-#define ALLOW_STATS_RX
+#undef ALLOW_STATS_RX
 // IF DEFINED: allow TX of stats frames.
 #define ALLOW_STATS_TX
 // IF DEFINED: allow JSON stats frames.
 #define ALLOW_JSON_OUTPUT
+// IF DEFINED: allow binary stats to be TXed.
+#undef ALLOW_BINARY_STATS_TX
+// IF DEFINED: enable support for FS20 carrier for RX of raw FS20 and piggybacked binary (non-JSON) stats.
+#undef ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
@@ -977,14 +987,41 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 //#undef ENABLE_BOILER_HUB
 // Use common settings.
 #define COMMON_SETTINGS
-
 // IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
 #undef ENABLE_BOILER_HUB
 // IF DEFINED: allow RX of stats frames.
 #undef ALLOW_STATS_RX
 #undef LOCAL_TRV
-
 #endif // CONFIG_REV11_RFM23BTEST
+
+#ifdef CONFIG_REV11_RAW_JSON // REV11 as raw JSON-only stats/sensor leaf.
+// Revision of V0.2 board.
+#define V0p2_REV 11 // REV11 covers first sensor only board.
+// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
+#define SENSOR_SHT21_ENABLE
+// Using RoHS-compliant phototransistor in place of LDR.
+#define AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
+// IF DEFINED: basic FROST/WARM temperatures are settable.
+#undef SETTABLE_TARGET_TEMPERATURES
+// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
+#undef LOCAL_TRV
+// IF DEFINED: this unit controls a valve, but provides slave valve control only.
+#undef SLAVE_TRV
+// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
+#undef ENABLE_BOILER_HUB // NO BOILER CODE
+// IF DEFINED: allow RX of stats frames.
+#undef ALLOW_STATS_RX
+// IF DEFINED: allow TX of stats frames.
+#define ALLOW_STATS_TX
+// IF DEFINED: allow JSON stats frames.
+#define ALLOW_JSON_OUTPUT
+// IF DEFINED: allow binary stats to be TXed.
+#undef ALLOW_BINARY_STATS_TX
+// IF DEFINED: enable support for FS20 carrier for RX of raw FS20 and piggybacked binary (non-JSON) stats.
+#undef ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX
+// Use common settings.
+#define COMMON_SETTINGS
+#endif
 
 // -------------------------
 
