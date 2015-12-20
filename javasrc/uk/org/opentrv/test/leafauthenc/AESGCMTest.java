@@ -127,6 +127,8 @@ public class AESGCMTest
 
     /**Basic test that the AES-GCM suite is available and works.
      * Based on https://bugs.openjdk.java.net/browse/JDK-8062828 commentary/example.
+     * <p>
+     * Note: AES/GCM/NoPadding impl appends auth tag to cyphertext, I believe: DHD20151220.
      */
     @Test
     public void testAESGCMBasics() throws Exception
@@ -166,6 +168,8 @@ public class AESGCMTest
 
     /**Test on specific simple plaintext/ADATA.key value.
      * Can be used to test MCU-based implementations.
+     * <p>
+     * Note: AES/GCM/NoPadding impl appends auth tag to cyphertext, I believe: DHD20151220.
      */
     @Test
     public void testAESGCMAll0() throws Exception
