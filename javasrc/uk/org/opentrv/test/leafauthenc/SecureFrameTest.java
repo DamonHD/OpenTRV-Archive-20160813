@@ -6,11 +6,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.UnsupportedEncodingException;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -62,23 +64,69 @@ public class SecureFrameTest
     	byte[]		trailer;		// Trailer - either a 7bit CRC for insecure frame or variable length security 
     								// info in the encrypted case, with the length determined by encryption method used
     }
+   
+    /**Compute (non-secure) CRC over secureable frame content.
+     * @param buf  buffer that included the frame data to have the CRC applied (all of header and body);
+     *     never null
+     * @param pos  starting position of the frame data in the buffer;
+     *     must be valid offset within the buffer
+     * @param len  length of frame data to have the CRC computed over;
+     *     strictly positive and pos+len must be within the buffer
+     */
+    public static byte computeInsecureFrameCRC(byte buf[], int pos, int len)
+        {
+        byte crc = (byte)0xff; // Initialise CRC with 0xff (protects against extra leading 0x00s).
+        for(int i = 0; i < len; ++i)
+            {
+            crc = CRC7_5B.crc7_5B_update(crc, buf[pos + i]);
+            }
+        if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s result values, ie self-whitened.
+        return(crc);
+        }
     
+    
+   	public static int encryptFrame(byte[] msgBuff, int length) throws Exception {
+   		int i;
+   		
+   		final byte[] input = new byte[length]; 	//where pointer is pointing is final, what is pointed to can change. (cf const char *)
+   		for (i=0;i< length; i++) 				
+   			input[i]=msgBuff[i];				// copy bytes to encrypt into the input buffer. This may not be necessary, but I dont understand 
+   												// what side effects there will be if I give the encrypt class a 255 byte buffer with fewer bytes in it.
+   			
+
+   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+   		keyGen.init(AES_KEY_SIZE, srnd);
+   		final SecretKey key = keyGen.generateKey();
+
+   		// Encrypt
+   		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
+   		final byte[] nonce = new byte[GCM_NONCE_LENGTH];
+   		srnd.nextBytes(nonce);
+   		final GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
+   		cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+
+   		final byte[] aad = "819c".getBytes();
+   		cipher.updateAAD(aad);
+
+   		final byte[] cipherText = cipher.doFinal(input);
+//      System.out.println("Size plain="+input.length+" aad="+aad.length+" cipher="+cipherText.length);
+        
+// ToDo - add cipherText into the packet, update the length field and return packet size.
+   		return (1);	
+   	}
+   	
+   	public static int decryptFrame(byte[] msgBuff, int index, OFrameStruct decodePacket){
+   		
+   		return (1);
+   	}
+   	
+   	
+   	
     // Positions in the message byte array of TX buffer
    	public static final int LENGTH = 0;		// Overall frame length, excluding this byte, typically <=64
    	public static final int TYPE = 1;		// bit 7 is secure/insecure flag, bits 6-0 constitute the frame type.
    	public static final int SEQ_LEN = 2;	// Frame Sequence number bits 4-7, id length bits 0-3
    	public static final int ID = 3;			// Start Position of ID
-
-    
-   	public static int encryptFrame(byte[] msgBuff, int index){
-   		
-   	return (1);	
-   	}
-   	
-   	public static int decryptFrame(byte[] msgBuff, int index, OFrameStruct decodePacket){
-   		
-   		return (1)
-   	}
    	
     /*
      * Takes a 255 byte message buffer and builds the O'Frame in it by serialising the OFrame data structure for passing to the physical layer.
@@ -93,7 +141,7 @@ public class SecureFrameTest
     	// build the fixed parts of the frame 
     	msgBuff[LENGTH] =  (byte)(packetLen -1);		//the frame length byte contains length -1
     	
-    	msgBuff[TYPE] = msg.frameType;					// bits 0-6 make mup the messafe type field
+    	msgBuff[TYPE] = msg.frameType;					
     	if (msg.secFlag == true){						
     		
     		System.out.println("secure flag set");
@@ -129,13 +177,11 @@ public class SecureFrameTest
     	if (msg.secFlag == true){
     		System.out.println ("starting AESGCM encryption");
     		
-    		index+=encryptFrame (msgBuff,index);
+    		//index+=encryptFrame (msgBuff,index);
     	}
     	else{	
 	    	// compute the crc
-	    	crc = CRC7_5B.bbb_init();
-	    	crc = CRC7_5B.bbb_update(crc, msgBuff, packetLen);
-	        crc = CRC7_5B.bbb_finalize(crc);
+	    	crc = computeInsecureFrameCRC(msgBuff,0,(index));
 	   
 	    	// add crc to end of packet
 	        msgBuff[index++]= crc;	
@@ -150,17 +196,21 @@ public class SecureFrameTest
     public static OFrameStruct decodeOFrame (byte[] msgBuff){
     			
     	int i=0,j=0;			
+    	
+    	//allocate memory to build packet in
     	OFrameStruct decodedPacket = new OFrameStruct();
+    	BodyStruct body = new BodyStruct();
+    	decodedPacket.body = body;
     	
+    	decodedPacket.length = msgBuff[i++];				// packet length byte
     	
-    	decodedPacket.length = msgBuff[i++];				//  packet length byte
-    	
-    	if ((msgBuff[i] & (byte)0x80) == (byte)0x80)		// Message type byte
+    	if ((msgBuff[i] & (byte)0x80) == (byte)0x80)		// secure flag in bit 7 of frame type byte
     		decodedPacket.secFlag = true;	
-    	decodedPacket.frameType |= (byte)(msgBuff[i++] & (byte)0x7F);	
     	
-    	decodedPacket.idLen = (byte)(msgBuff[i] & (byte)0x0F);	// seq length byte
-    	decodedPacket.frameSeqNo = (byte)(msgBuff[i++] >>> 4);	
+    	decodedPacket.frameType |= (byte)(msgBuff[i++] & (byte)0x7F);	//set up frame type (after masking out bit 7)
+    	
+    	decodedPacket.idLen = (byte)(msgBuff[i] & (byte)0x0F);	//  id length is bottom nibble of seq length byte
+    	decodedPacket.frameSeqNo = (byte)(msgBuff[i++] >>> 4);	//   sequence number is top nibble of seq length byte
     	
     	byte[] id = new byte[decodedPacket.idLen];				// copy id fields
     	decodedPacket.id = id;  	
@@ -172,20 +222,26 @@ public class SecureFrameTest
     	
 	    if (decodedPacket.bodyLen > 0){							// if there is a message body extract it 
 	    	
-	    	if (decodedPacket.secFlag == true)					// its secure frame so decrypt it, then return the decoded packet.
+	    	if (decodedPacket.secFlag == true){					// its secure frame so decrypt it, then return the decoded packet.
 	    		
-	    		// when this function returns, the next statement is return ()
+	    		System.out.println("decoding secure frame");
+	    	
+	    		// when this function returns, the next statement is return ()   	
 	    		decryptFrame (msgBuff,i,decodedPacket);
+	    	}
 	    	else {												// insecure so extract it
 	    		if ((msgBuff[i] & (byte)0x80) == (byte)0x80)
 	    			decodedPacket.body.heat = true;				// set call for heat flag
 	    		
-	    		decodedPacket.body.valvePos = (byte)(msgBuff[i++] & (byte)0x7F);	// mask out the call for heat flag to get the valve position
+	    		decodedPacket.body.valvePos = (byte)(msgBuff[i++] & (byte)0x7F);		// mask out the call for heat flag to get the valve position
+	    			
 	    		
 	    		decodedPacket.body.flags = msgBuff[i++];		//flags byte
 	   
 	    		if (decodedPacket.bodyLen > 2)	{				// test to see if there is a JSON object in the field (first 2 bytes are mandatory)
-	    			String json ="";
+	    			String json = new String();
+	    			json ="";
+	    			
 	    			for (j=0;j<(decodedPacket.bodyLen-2);j++)
 	    				json += (char)msgBuff[i++];
 	    						
@@ -197,9 +253,7 @@ public class SecureFrameTest
 	    if (decodedPacket.secFlag == false) {		// There is probably a more elegant way to do this - bit I can't think of it right now
 	    	byte crc;
 	    
-	    	crc = CRC7_5B.bbb_init();				// calculate the crc
-	    	crc = CRC7_5B.bbb_update(crc, msgBuff,i);
-	        crc = CRC7_5B.bbb_finalize(crc);
+	    	crc = computeInsecureFrameCRC(msgBuff,0,i);
 	        
 	        if (crc != msgBuff[i])					//check the calculated crc with the received one
 	        	return (null);						
@@ -225,18 +279,19 @@ public class SecureFrameTest
     public void testBasics()
         {
 //        assertTrue(false);
-    	OFrameStruct packetToSendA = new OFrameStruct();
     	byte[] msgBuff = new byte[0xFF];
-    	byte[] idA = {(byte)0x80,(0x81};
+    	int msgLen,i;
+    	OFrameStruct decodedPacket;
     	
-    	BodyStruct bodyA.heat = new BodyStruct();
+    	// This is Example 1 in Damon's Spec
+    	OFrameStruct packetToSendA = new OFrameStruct();
+    	byte[] idA = {(byte)0x80,(byte)0x81};
     	
+    	BodyStruct bodyA = new BodyStruct();
+    	
+    	bodyA.heat = false;
     	bodyA.valvePos=0;
-    	bodyA.heat = 0;
     	bodyA.flags = 0x01;
-    	
-    	
-    	
     	
     	packetToSendA.secFlag = false;
     	packetToSendA.frameType = 0x4F; // Insecure O Frame
@@ -245,16 +300,53 @@ public class SecureFrameTest
     	packetToSendA.id = idA;
     	packetToSendA.bodyLen = 0x02;
     	packetToSendA.body = bodyA;
+   
+    	//Example 2 in Damons spec
+    	BodyStruct bodyB= new BodyStruct();
+    	bodyB.heat = false;
+    	bodyB.valvePos=0;
+    	bodyB.flags = 0x01;
+    	bodyB.stats = "{\"b\":1";
+    	
+    	OFrameStruct packetToSendB = new OFrameStruct();
+    	packetToSendB.secFlag = false;
+    	packetToSendB.frameType = 0x4F; // Insecure O Frame
+    	packetToSendB.frameSeqNo = 0;
+    	packetToSendB.idLen = 2;
+    	packetToSendB.id = idA;
+    	packetToSendB.bodyLen = 0x08;  
+    	packetToSendB.body = bodyB;
     	
     	
     	
-    	msgLen = buildOFrame (msgBuff,packetToSend);
-    	System.out.println("Raw TX data packet is: ");
+    	
+    	msgLen = buildOFrame (msgBuff,packetToSendA);
+    	System.out.format("Raw data packet is: %02x bytes long \r\n",msgLen);
     	
     	for (i=0;i<msgLen;i++)
-    		System.out.format("%x ", msgBuff[i]);
+    		System.out.format("%02x ", msgBuff[i]);
     	
-    	//System.out.println(DatatypeConverter.printHexBinary(msgBuff));
+    		
+    	decodedPacket = decodeOFrame (msgBuff);
+    	
+    	System.out.format("\r\n\r\nDecoded Packet:\r\n");
+    	
+    	System.out.format("frame length: %02x\r\n",decodedPacket.length);
+    	System.out.format("secure flag:  %b\r\n",  decodedPacket.secFlag);
+    	System.out.format("frame type:   %02x\r\n",decodedPacket.frameType);
+    	System.out.format("sequence no:  %02x\r\n",decodedPacket.frameSeqNo);
+    	System.out.format("idLen:        %02x\r\n",decodedPacket.idLen);
+    	System.out.format("id:           ");
+    	for(i=0;i<decodedPacket.idLen;i++)
+    		System.out.format("%02x",decodedPacket.id[i]);
+    	System.out.format("\r\n");
+    	System.out.format("body length   %02x\r\n",decodedPacket.bodyLen);
+    	
+    	System.out.format("\r\n\r\nMessage Body\r\n");
+    	System.out.format("call for heat  %b\r\n",decodedPacket.body.heat);
+    	System.out.format("valve position %02x\r\n",decodedPacket.body.valvePos);
+    	System.out.format("json string    %s\r\n",decodedPacket.body.stats);
+    						
     	
         }
 
