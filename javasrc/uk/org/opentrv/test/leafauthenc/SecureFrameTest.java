@@ -539,11 +539,13 @@ public class SecureFrameTest
 	    // Message Trailer
 	    
 	    if (decodedPacket.secFlag == false) {		
-	    	byte crc;
+	    	byte[] crc = new byte[1];
 	    
-	    	crc = computeInsecureFrameCRC(msgBuff,0,i);
+	    	crc[0] = computeInsecureFrameCRC(msgBuff,0,i);
+	    	
+	    	decodedPacket.trailer = crc;
 	        
-	        if (crc != msgBuff[i])					//check the calculated crc with the received one
+	        if (crc[0] != msgBuff[i])					//check the calculated crc with the received one
 	        	return (null);						
 	    }
 	    else { // Extract the 23 byte trailer from the secure message
@@ -683,7 +685,7 @@ public class SecureFrameTest
     	else{
     		
     		System.out.println("Trailer Bytes");
-    		for(i=0i<23;i++)
+    		for(i=0;i<23;i++)
     			System.out.format("02x ", decodedPacket.trailer[i]);
     	}
     		
