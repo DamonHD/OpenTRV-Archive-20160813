@@ -28,6 +28,7 @@ public class SecureFrameTest
     public static final int AES_KEY_SIZE = 128; // in bits
     public static final int GCM_NONCE_LENGTH = 12; // in bytes
     public static final int GCM_TAG_LENGTH = 16; // in bytes (default 16, 12 possible)
+    public static final byte AES_GCM_ID = (byte)0x80;	// used in the trailer to indicate the encryption type
 
     /**Standard text string to compute checksum of, eg as used by pycrc. */
     public static final String STD_TEST_ASCII_TEXT = "123456789";
@@ -41,8 +42,15 @@ public class SecureFrameTest
     /**Get STD_TEST_ASCII_TEXT as new private byte array. */
     public static byte[] getStdTestASCIITextAsByteArray() { return(_STD_TEST_ASCII_TEXT_B.clone()); }
 
-    // Message definitions
-    // To Do - separate out heat and valve pos.
+    
+    // Global counters on the TX side for nonce generation
+    public static int ResetCounter = 42;
+    public static int TxMsgCounter = 42;
+    // 6 Byte ID of the sensor 4 MSBs are included as the ID. 2 LSBs are pre-shared between rx and tx.
+    public static byte[] LeafID = {(byte)0xAA,(byte)0xAA,(byte)0xAA,(byte)0xAA,(byte)0x55,(byte)0x55};
+    
+    // Message definitions ToDO - OFrameStruct into header, body and trailer pointers and define a header struct.
+    
    static class BodyStruct {
 	   	boolean	heat;			// call for heat flag	
     	byte 	valvePos;		// Valve % open
@@ -50,8 +58,7 @@ public class SecureFrameTest
     	String 	stats;			// Compact JSON object with leading { final } omitted.
     }
     
-   // used on the RX side 
-   //ToDo separate out seq number and length..
+  
     static class OFrameStruct {
     	byte 		length;			// Overall frame length, excluding this byte, typically <=64 and filled in automatically
     	boolean		secFlag;		// secure flag
@@ -63,6 +70,7 @@ public class SecureFrameTest
     	BodyStruct	body;			// Body section
     	byte[]		trailer;		// Trailer - either a 7bit CRC for insecure frame or variable length security 
     								// info in the encrypted case, with the length determined by encryption method used
+    								
     }
    
     /**Compute (non-secure) CRC over secureable frame content.
@@ -82,42 +90,275 @@ public class SecureFrameTest
             }
         if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s result values, ie self-whitened.
         return(crc);
-        }
+        }  
     
     
-   	public static int encryptFrame(byte[] msgBuff, int length) throws Exception {
-   		int i;
+    // The aad is all the header bytes => 4 fixed plus however many are in the ID 
+    
+    public static byte[] generateAAD (byte[] msgBuff, int len){
+    	byte[] aad = new byte[len];
+    	
+    	System.arraycopy(msgBuff,0,aad,0,len);
+    	
+    	return(aad);
+    }
+    
+    public static byte[] retrieveAAD(byte[] msgBuff,OFrameStruct decodedPacket){
+    	
+    	byte [] aad = new byte [decodedPacket.idLen + 4];  //4 bytes plus the size of the leaf node ID field that was sent.
+    	
+    	System.arraycopy(msgBuff,0,aad, 0, decodedPacket.idLen + 4);
+    	
+    	return(aad);
+    }
+    
+    // Nonce Generation and Retrieval
+    
+    /*
+     * Construction and use of IV/nonce as:
+    	http://www.earth.org.uk/note-on-IoT-security.html#app4
+      * 6 most-significant bytes  of leaf ID
+      * 3 bytes transmitted of restart/reboot count 
+      * 3 bytes TXed of message counter since restart 
+     
+     */
+    public static byte[] generateNonce() {   	
+    
+    	final byte[] nonce = new byte[GCM_NONCE_LENGTH];
+    	
+    	System.arraycopy(LeafID,0,nonce,0,6);	// 6MSBs of leaf ID
+    	
+    	nonce[6] = (byte)(ResetCounter >> 16);	//3 LSB of Reset Counter
+    	nonce[7] = (byte)(ResetCounter >> 8);
+    	nonce[8] = (byte) ResetCounter;
+    	
+    	
+    	nonce[9]  = (byte)(TxMsgCounter >> 16);	// 3 LSBs of TXmessage counter
+    	nonce[10] = (byte)(TxMsgCounter >> 8);		
+    	nonce[11] = (byte)TxMsgCounter;
+    	
+    	return (nonce);
+    	
+    }
+    
+    static byte[] presharedIdBytes = {LeafID[4],LeafID[5]};
+    
+    
+    
+    
+    /* retrieve nonce from:
+     * 4 MSBs of ID
+     * 2 LSBs of ID, that are not sent OTA but magically shared
+     * 3 bytes of resatr counter - retrieved from the trailer
+     * 3 bytes od tx message counter - retrieved from the trailer
+     *
+     * @param msgBuff Raw message received from the aether
+     * @param pos index into msgBuff at the start of the message body
+     * @param decodedFrame the bits of the frame that have been decoded so far. i,e the header at this point
+     */
+    
+    public static byte[] retrieveNonce (byte[] msgBuff, int pos, OFrameStruct decodedFrame ){
+    
+    	byte[] nonce= new byte[GCM_NONCE_LENGTH];
+    	byte nonceIndx = 0;
+    	
+    	pos += decodedFrame.bodyLen;						// point pos at the trailer in the msgBuff
+    	
+    	if (msgBuff[pos++] != AES_GCM_ID){					// test trailer first byte to make sure we are dealing with the correct algo
+    		
+    		System.out.println("unrecognized encryption algorithm");
+    		System.exit(1);
+    	}
+    	
+    	if (decodedFrame.idLen < 4){						// check there are 4 bytes in the ID field in the header
+    		System.out.format("leaf node ID length %d in header too short. should be >=4bytes\r\n",decodedFrame.idLen);
+    		System.exit(1);	
+    	}
+    	
+    	System.arraycopy(decodedFrame.id, 0, nonce, 0, decodedFrame.idLen);		// copy the first 4 (MSBs) of the ID from the header
+    	nonceIndx+=decodedFrame.idLen;
+    	
+    	System.arraycopy(presharedIdBytes,0,nonce,nonceIndx,2);					// copy the preshared ID bytes
+    	nonceIndx+=2;
+    	
+    	System.arraycopy(msgBuff[pos], 0, nonce, nonceIndx, 3);					// copy the 3 restart counter bytes out of the trailer
+    	nonceIndx+=3;
+    	pos+=3;
+    	
+    	System.arraycopy(msgBuff[pos], 0, nonce, nonceIndx, 3);					// copy the 3 tx message counter bytes out of the trailer
+    	nonceIndx+=3;
+    	pos+=3;
+    	
+    	return (nonce);
+    	
+    }
+    
+    public static String removePadding (byte[] plainText){
+    	
+    	//look at the last byte of the array to see how much padding there is
+    	int size = plainText.length;
+    	int padding = plainText[size-1];
+    	size -= padding;
+    	byte[]unpadded = new byte[size];
+    	    	
+    	//remove padding 
+    	for (int i=0;i<size;i++)
+    		unpadded[i]=plainText[i];
+    	
+    	return (new String (unpadded));	
+    }
+    
+    /*
+    pads the message body out with 0s to 16 or 32 bits. Errors if length > 31
+    and sticks the number of bytes of padding in the last element of the array.
+    
+    @param body structure containing the message bod for encryption
+    @param len length (in bytes) of the structure   
+    returns byte array containing the padded message.
+    */
+    
+    public static byte[] addPadding (BodyStruct body, byte len){
+    	byte[] paddedMsg;
+    	
+    	if(len >=32) {
+    		System.out.format("Body length %d too big. 32 Max",len);
+    		System.exit(1);
+    	}  	
+    	paddedMsg = new byte[(len<16)? 16:32];
+    	paddedMsg[0]= (body.valvePos |= ((body.heat == true)? (byte)0x80 : (byte)0x00)); //OR in the call for heat bit
+    	paddedMsg[1]= body.flags;
+    	System.arraycopy(body.stats.getBytes(),0,paddedMsg,2,body.stats.length());
+    	
+    	paddedMsg[paddedMsg.length-1]= (byte)(paddedMsg.length - (len+1));	// add the number of bytes of padding to the last byte in the array.
    		
-   		final byte[] input = new byte[length]; 	//where pointer is pointing is final, what is pointed to can change. (cf const char *)
-   		for (i=0;i< length; i++) 				
-   			input[i]=msgBuff[i];				// copy bytes to encrypt into the input buffer. This may not be necessary, but I dont understand 
-   												// what side effects there will be if I give the encrypt class a 255 byte buffer with fewer bytes in it.
-   			
+    	return (paddedMsg);
+    }
+    
+    public static int addTrailer (byte[] msgBuff,int index, byte[] authTag)
+    {
+    	
+    	msgBuff[index] = AES_GCM_ID;					// indicated AESGCM encryption mode
+    	
+    	msgBuff[index++] = (byte)(ResetCounter >> 16);	//3 LSB of Reset Counter
+    	msgBuff[index++] = (byte)(ResetCounter >> 8);
+    	msgBuff[index++] = (byte) ResetCounter;
+    	
+    	msgBuff[index++] = (byte)(TxMsgCounter >> 16);	// 3 LSBs of TXmessage counter
+    	msgBuff[index++] = (byte)(TxMsgCounter >> 8);		
+    	msgBuff[index++] = (byte)TxMsgCounter;
+    	
+    	System.arraycopy(authTag,0, msgBuff, index, authTag.length); 	// copy the authentication tag into the message buffer
+    	
+    	return (index++);	// size of the completed TX packet
+    	
+    }
+    
+    
+    
+    /*
+     The algorithm has four inputs: a secret key, an initialization vector (IV),  plaintext, and an input for additional authenticated data (AAD).
+     It has two outputs, a ciphertext whose length is identical to the plaintext, and an authentication tag
 
-   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-   		keyGen.init(AES_KEY_SIZE, srnd);
-   		final SecretKey key = keyGen.generateKey();
+		where:
+		
+		inputs
+		* The secret key is the 128bit preshared key 
+		* The IV is as per this spec - http://www.earth.org.uk/OpenTRV/stds/network/20151203-DRAFT-SecureBasicFrame.txt
+		* The plain text is the message body, 0 padded to 15 +1 bytes (the 1 byte indicating the amount of padding)
+		* AAD is the 8 header bytes of the frame (length, type, seqlen, 4xID bytes, bodyLength)
+		
+		outputs
+		* The cipher text is the encrypted message body and is the same length as the plain text.
+		* The authentication tag is included in the trailer
+		
+		The transmitted frame then contains:
+		 The 8 byte header (unencrypted)
+		 The 16 byte padded body (encrypted)
+		 The 23 byte trailer (which includes the 16byte authentication tag) as detailed in the spec (unencrypted)
+			
+		On the decrypt side, the spec variable is reconstituted using the nonce (from the rx'd trailer) along with the pre-shared 128bit key and the preshared non transmitted bytes of the ID. 
+     
+     */
+    
 
-   		// Encrypt
-   		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
-   		final byte[] nonce = new byte[GCM_NONCE_LENGTH];
-   		srnd.nextBytes(nonce);
+    /* 
+     * @param msgBuff 	contains a pointer to a 255 byte buffer with partially build packet to send in it
+     * @param length  	contains the number of bytes currently in the buffer -i.e it points to next empty memory location 
+     * @param body 		contains the message body to encrypt
+     * 
+     * returns the number of bytes written to 
+     */
+    
+   	public static int encryptFrame(byte[] msgBuff, int length, OFrameStruct frame,byte[] authTag) throws Exception {
+   		
+   		//prepare plain text
+   		final byte[] input = addPadding(frame.body, frame.bodyLen); 	// pad body content out to 16 or 32 bytes. 
+   		
+   		
+   		// Generate IV (nonce)
+   		final byte[] nonce = generateNonce();
+   		
    		final GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
+   		
+   		// generate AAD
+   		final byte[] aad = generateAAD(msgBuff,(frame.idLen+4));		// aad = the header - 4 bytes + sizeof ID
+   		
+   		// Do the encrption - 
+   		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
    		cipher.init(Cipher.ENCRYPT_MODE, key, spec);
-
-   		final byte[] aad = "819c".getBytes();
    		cipher.updateAAD(aad);
-
-   		final byte[] cipherText = cipher.doFinal(input);
-//      System.out.println("Size plain="+input.length+" aad="+aad.length+" cipher="+cipherText.length);
+   		final byte[] cipherText = cipher.doFinal(input); // the authentication tag should end up appended to the cipher text
+   		
+   		System.out.println("Size plain="+input.length+" aad="+aad.length+" cipher="+cipherText.length);
+   		
+   		
+   		// copy the authentication tag appended to the end of cipherText into authTag
+   		System.arraycopy(cipherText,input.length,authTag,0,GCM_TAG_LENGTH);
         
-// ToDo - add cipherText into the packet, update the length field and return packet size.
-   		return (1);	
+   		return (input.length);
+
    	}
    	
-   	public static int decryptFrame(byte[] msgBuff, int index, OFrameStruct decodePacket){
+   	/*
+   	 * @param msgBuff 		The received message from the aether
+   	 * @param index 		Set to the start of the message body section
+   	 * @param decodedPacket The decoded header section of the message.
+   	 *   
+   	 */
+   	
+   	public static void decryptFrame(byte[] msgBuff, int index, OFrameStruct decodedPacket) throws Exception{
+   	   	
+   		// Retrieve Nonce
+   		byte[] nonce = retrieveNonce (msgBuff, index,decodedPacket);   	
    		
-   		return (1);
+   		final GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
+   		
+   		//retrieve AAD
+   		final byte[] aad = retrieveAAD(msgBuff,decodedPacket);		// decodedPacket needed to deduce the length of the header.
+   		
+   		// copy received cipher text to appropriately sized array
+   		byte[] cipherText = new byte[decodedPacket.bodyLen + GCM_TAG_LENGTH]; // cipher text has the auth tag appended to it
+   		System.arraycopy(msgBuff, index, cipherText, 0, decodedPacket.bodyLen);
+   		
+   		// append the authentication tag to the cipher text - this is a peculiarity of this Java implementation.
+   		// The algo authenticates before decrypting, which is more efficient and less likely to kill the decryption engine with random crap.
+   		
+   		// the magic 7 is the offset from the start of the trailer to the  auth tag.
+   		System.arraycopy(msgBuff,(index+decodedPacket.bodyLen+7) , cipherText,decodedPacket.bodyLen, GCM_TAG_LENGTH); 
+   		
+   	
+   		// Decrypt: 
+   		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
+        cipher.init(Cipher.DECRYPT_MODE, key, spec);
+        cipher.updateAAD(aad);
+        final byte[] plainText = cipher.doFinal(cipherText);
+        
+        byte[] plainTextMsg = new byte[plainText.length - GCM_TAG_LENGTH];
+        System.arraycopy(plainText, 0, plainTextMsg, 0, plainText.length - GCM_TAG_LENGTH); // separate the message body from the auth tag
+        
+        // copy unpadded plain text  into the decoded Packet Structure.
+        decodedPacket.body.stats = removePadding (plainTextMsg); 
+        
    	}
    	
    	
@@ -138,7 +379,11 @@ public class SecureFrameTest
     	int i;
     	int packetLen = 5 + msg.idLen + msg.bodyLen; 	// There are 5 fixed bytes in an insecure packet (including the crc)
     	
-    	// build the fixed parts of the frame 
+    	
+    	/*
+    	 * Header
+    	 */
+    	 	
     	msgBuff[LENGTH] =  (byte)(packetLen -1);		//the frame length byte contains length -1
     	
     	msgBuff[TYPE] = msg.frameType;					
@@ -148,7 +393,6 @@ public class SecureFrameTest
     		msgBuff[TYPE] |= 0x80;						// bit 7 of the type byte 
     		
     	}
-    	
     	msgBuff[SEQ_LEN] = msg.idLen;					// lower nibble message id length 
     	msgBuff[SEQ_LEN] |= (msg.frameSeqNo << 4);		// upper nibble frame sequence number 
     	
@@ -158,36 +402,64 @@ public class SecureFrameTest
     	
     	// add the message body fixed elements - if there are any
     	msgBuff[index++] = msg.bodyLen;					// index was initialised to point at the message body length position
-    	if (msg.bodyLen !=0){
-    		msgBuff[index] = msg.body.valvePos;
-    		if (msg.body.heat == true)
-    			msgBuff[index] |= 0x80; 				// set the call for heat bit.
-    		index++;							
+    	
+    	
+    	/*
+    	 * Insecure Body and CRC
+    	 */
+    	
+    	if (msg.secFlag == false){	
     		
-    		msgBuff[index++] = msg.body.flags;
+	    	if (msg.bodyLen !=0){
+	    		
+	    		msgBuff[index] = msg.body.valvePos;			// copy the valve position
+	    		if (msg.body.heat == true)
+	    			msgBuff[index] |= 0x80; 				// set the call for heat bit.
+	    		index++;							
+	    		
+	    		msgBuff[index++] = msg.body.flags;			// copy the flags byte
+	    	}
+	    	
+	    	// add the variable length body elements. if there are any
+	    	if (msg.bodyLen > 2){							// two is the minimum body length
+	    		byte[] statBody = msg.body.stats.getBytes();
+	    		
+	    		for (i=0;i<(msg.bodyLen-2);i++)
+	    			msgBuff[index++]=statBody[i];		
+	    	}
+	    	
+	    		
+		    // compute the crc
+		    crc = computeInsecureFrameCRC(msgBuff,0,(index));
+		   
+		    // add crc to end of packet
+		       msgBuff[index++]= crc;	
+	    
+		    return (index); //return the number of bytes written
     	}
     	
-    	// add the variable length body elements. if there are any
-    	if (msg.bodyLen > 2){							// two is the minimum body length
-    		byte[] statBody = msg.body.stats.getBytes();
+    	/*
+    	 * Secure Body and 23 byte Trailer
+    	 */
+    	else {
     		
-    		for (i=0;i<(msg.bodyLen-2);i++)
-    			msgBuff[index++]=statBody[i];		
-    	}
-    	if (msg.secFlag == true){
-    		System.out.println ("starting AESGCM encryption");
+    		byte[] authTag = new byte[GCM_TAG_LENGTH];
     		
-    		//index+=encryptFrame (msgBuff,index);
-    	}
-    	else{	
-	    	// compute the crc
-	    	crc = computeInsecureFrameCRC(msgBuff,0,(index));
-	   
-	    	// add crc to end of packet
-	        msgBuff[index++]= crc;	
-    	}
-    	
-    	return (index); //return the number of bytes written
+    		try {
+				index+= encryptFrame (msgBuff,index,msg,authTag);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				System.out.println("exceptiom thrown in decrypt frame");
+				System.exit(1);
+			}
+    		
+    		
+    		index = addTrailer (msgBuff,index,authTag);
+    		
+    		return(index);
+    	}	
+    		
     }
     
     /*
@@ -201,6 +473,8 @@ public class SecureFrameTest
     	OFrameStruct decodedPacket = new OFrameStruct();
     	BodyStruct body = new BodyStruct();
     	decodedPacket.body = body;
+    	
+    	//Message Header
     	
     	decodedPacket.length = msgBuff[i++];				// packet length byte
     	
@@ -220,14 +494,25 @@ public class SecureFrameTest
     	
     	decodedPacket.bodyLen = msgBuff[i++];					// message body length
     	
+    	// Message Body
+    	
 	    if (decodedPacket.bodyLen > 0){							// if there is a message body extract it 
 	    	
 	    	if (decodedPacket.secFlag == true){					// its secure frame so decrypt it, then return the decoded packet.
 	    		
 	    		System.out.println("decoding secure frame");
-	    	
-	    		// when this function returns, the next statement is return ()   	
-	    		decryptFrame (msgBuff,i,decodedPacket);
+	    	  	
+	    		try {
+					 decryptFrame (msgBuff,i,decodedPacket);		// decrypt the frame
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					System.out.println("exceptiom thrown in decrypt frame");
+					System.exit(1);
+				}
+	    		
+	    		
+	    		
 	    	}
 	    	else {												// insecure so extract it
 	    		if ((msgBuff[i] & (byte)0x80) == (byte)0x80)
@@ -250,13 +535,26 @@ public class SecureFrameTest
 	    	}
     	}
 	    
-	    if (decodedPacket.secFlag == false) {		// There is probably a more elegant way to do this - bit I can't think of it right now
+	    
+	    // Message Trailer
+	    
+	    if (decodedPacket.secFlag == false) {		
 	    	byte crc;
 	    
 	    	crc = computeInsecureFrameCRC(msgBuff,0,i);
 	        
 	        if (crc != msgBuff[i])					//check the calculated crc with the received one
 	        	return (null);						
+	    }
+	    else { // Extract the 23 byte trailer from the secure message
+	    	
+	    	byte[] trailer = new byte[23];
+	    	int trailerPtr = 4+decodedPacket.idLen; // 4 fixed header bytes plus the sizeof the ID
+	    	
+	    	for (i=0;i<23;i++)
+	    		trailer[i]=msgBuff[trailerPtr++];
+	    	
+	    	decodedPacket.trailer = trailer;  	
 	    }
 	    
     	return (decodedPacket);
@@ -265,15 +563,28 @@ public class SecureFrameTest
    
     
     /**Cryptographically-secure PRNG. */
-    private static SecureRandom srnd;
-
+    //private static SecureRandom srnd;
+    private static SecretKey key;
+    
     /**Do some expensive initialisation as lazily as possible... */
     @BeforeClass
     public static void beforeClass() throws NoSuchAlgorithmException
         {
+    	SecureRandom srnd;
+    	
         srnd = SecureRandom.getInstanceStrong(); // JDK 8.
+        
+     // Generate Key - needs to be available for the decrypt side too
+   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+   		keyGen.init(AES_KEY_SIZE, srnd);		
+   		key = keyGen.generateKey();
         }
 
+    
+    
+    
+    
+    
     /**Playpen for understanding jUnit. */
     @Test
     public void testBasics()
@@ -304,8 +615,8 @@ public class SecureFrameTest
     	//Example 2 in Damons spec
     	BodyStruct bodyB= new BodyStruct();
     	bodyB.heat = false;
-    	bodyB.valvePos=0;
-    	bodyB.flags = 0x01;
+    	bodyB.valvePos=0x7f;
+    	bodyB.flags = 0x11;
     	bodyB.stats = "{\"b\":1";
     	
     	OFrameStruct packetToSendB = new OFrameStruct();
@@ -320,7 +631,7 @@ public class SecureFrameTest
     	
     	
     	
-    	msgLen = buildOFrame (msgBuff,packetToSendA);
+    	msgLen = buildOFrame (msgBuff,packetToSendB);
     	System.out.format("Raw data packet is: %02x bytes long \r\n",msgLen);
     	
     	for (i=0;i<msgLen;i++)
@@ -328,9 +639,10 @@ public class SecureFrameTest
     	
     		
     	decodedPacket = decodeOFrame (msgBuff);
-    	
+    	// raw data
     	System.out.format("\r\n\r\nDecoded Packet:\r\n");
     	
+    	//header
     	System.out.format("frame length: %02x\r\n",decodedPacket.length);
     	System.out.format("secure flag:  %b\r\n",  decodedPacket.secFlag);
     	System.out.format("frame type:   %02x\r\n",decodedPacket.frameType);
@@ -342,12 +654,41 @@ public class SecureFrameTest
     	System.out.format("\r\n");
     	System.out.format("body length   %02x\r\n",decodedPacket.bodyLen);
     	
+    	//message
     	System.out.format("\r\n\r\nMessage Body\r\n");
     	System.out.format("call for heat  %b\r\n",decodedPacket.body.heat);
-    	System.out.format("valve position %02x\r\n",decodedPacket.body.valvePos);
-    	System.out.format("json string    %s\r\n",decodedPacket.body.stats);
-    						
     	
+    	if ( decodedPacket.body.valvePos == 0x7F)
+    		System.out.println("no valve present");
+    	else 
+    		System.out.format("valve position %02x\r\n",decodedPacket.body.valvePos);
+    	
+    	System.out.format("\r\nflags           %02x\r\n",decodedPacket.body.flags);
+    	System.out.println(("fault flag:     " + (((decodedPacket.body.flags & 0x80)== (byte)0x80)? "set":"clear")));
+    	System.out.println(("low battery:    " + (((decodedPacket.body.flags & 0x40)== (byte)0x40)? "set":"clear")));
+    	System.out.println(("tamper flag:    " + (((decodedPacket.body.flags & 0x20)== (byte)0x20)? "set":"clear")));
+    	System.out.println(("stats present:  " + (((decodedPacket.body.flags & 0x10)== (byte)0x10)? "set":"clear")));
+    	
+    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x00)? "unreported":"")));
+    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x04)? "none":"")));
+    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x08)? "possible":"")));
+    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x0c)? "likely":"")));
+    	System.out.println("bottom 2 bits reserved value of b01");
+    	
+    	System.out.format("\r\njson string    %s\r\n",decodedPacket.body.stats);
+    	
+    	//Trailer
+    	if (decodedPacket.secFlag == false)
+    		System.out.format("CRC: %02x",decodedPacket.trailer[0]);
+    	else{
+    		
+    		System.out.println("Trailer Bytes");
+    		for(i=0i<23;i++)
+    			System.out.format("02x ", decodedPacket.trailer[i]);
+    	}
+    		
+    		
+    		
         }
 
     /**Check expected behaviour of 7-bit '0x5B' CRC. */
