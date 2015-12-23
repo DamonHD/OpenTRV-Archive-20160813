@@ -181,22 +181,24 @@ public class SecureFrameTest
     	System.arraycopy(presharedIdBytes,0,nonce,nonceIndx,2);					// copy the preshared ID bytes
     	nonceIndx+=2;
     	
-    	System.arraycopy(msgBuff[pos], 0, nonce, nonceIndx, 3);					// copy the 3 restart counter bytes out of the trailer
+    	System.arraycopy(msgBuff, pos, nonce, nonceIndx, 3);					// copy the 3 restart counter bytes out of the trailer
     	nonceIndx+=3;
     	pos+=3;
     	
-    	System.arraycopy(msgBuff[pos], 0, nonce, nonceIndx, 3);					// copy the 3 tx message counter bytes out of the trailer
-    	nonceIndx+=3;
-    	pos+=3;
+    	System.arraycopy(msgBuff, pos, nonce, nonceIndx, 3);					// copy the 3 tx message counter bytes out of the trailer
+    	
     	
     	return (nonce);
     	
     }
     
-    public static String removePadding (byte[] plainText){
+    public static byte[] removePadding (byte[] plainText){
     	
     	//look at the last byte of the array to see how much padding there is
     	int size = plainText.length;
+    	
+    	System.out.println("size ="+ size);
+    	
     	int padding = plainText[size-1];
     	size -= padding;
     	byte[]unpadded = new byte[size];
@@ -205,7 +207,7 @@ public class SecureFrameTest
     	for (int i=0;i<size;i++)
     		unpadded[i]=plainText[i];
     	
-    	return (new String (unpadded));	
+    	return (unpadded);	
     }
     
     /*
@@ -219,6 +221,8 @@ public class SecureFrameTest
     
     public static byte[] addPadding (BodyStruct body, byte len){
     	byte[] paddedMsg;
+    	 	
+    	System.out.println("\r\n Length = "+len);
     	
     	if(len >=32) {
     		System.out.format("Body length %d too big. 32 Max",len);
@@ -226,18 +230,19 @@ public class SecureFrameTest
     	}  	
     	paddedMsg = new byte[(len<16)? 16:32];
     	paddedMsg[0]= (body.valvePos |= ((body.heat == true)? (byte)0x80 : (byte)0x00)); //OR in the call for heat bit
-    	paddedMsg[1]= body.flags;
-    	System.arraycopy(body.stats.getBytes(),0,paddedMsg,2,body.stats.length());
+    	paddedMsg[1]= body.flags;  	
+    	System.arraycopy(body.stats.getBytes(),0,paddedMsg,2,body.stats.getBytes().length);
+    	int padding =(paddedMsg.length - (len+1));
+    	paddedMsg[paddedMsg.length-1]= (byte)padding;	// add the number of bytes of padding to the last byte in the array.
     	
-    	paddedMsg[paddedMsg.length-1]= (byte)(paddedMsg.length - (len+1));	// add the number of bytes of padding to the last byte in the array.
-   		
     	return (paddedMsg);
     }
     
     public static int addTrailer (byte[] msgBuff,int index, byte[] authTag)
     {
     	
-    	msgBuff[index] = AES_GCM_ID;					// indicated AESGCM encryption mode
+    	
+    	msgBuff[index++] = AES_GCM_ID;					// indicated AESGCM encryption mode
     	
     	msgBuff[index++] = (byte)(ResetCounter >> 16);	//3 LSB of Reset Counter
     	msgBuff[index++] = (byte)(ResetCounter >> 8);
@@ -249,7 +254,7 @@ public class SecureFrameTest
     	
     	System.arraycopy(authTag,0, msgBuff, index, authTag.length); 	// copy the authentication tag into the message buffer
     	
-    	return (index++);	// size of the completed TX packet
+    	return (index+authTag.length);	// size of the completed TX packet
     	
     }
     
@@ -283,17 +288,19 @@ public class SecureFrameTest
 
     /* 
      * @param msgBuff 	contains a pointer to a 255 byte buffer with partially build packet to send in it
-     * @param length  	contains the number of bytes currently in the buffer -i.e it points to next empty memory location 
+     * @param pos  		points to the start of the body section in msgBuff
      * @param body 		contains the message body to encrypt
      * 
      * returns the number of bytes written to 
      */
     
-   	public static int encryptFrame(byte[] msgBuff, int length, OFrameStruct frame,byte[] authTag) throws Exception {
+   	public static int encryptFrame(byte[] msgBuff, int pos, OFrameStruct frame,byte[] authTag) throws Exception {
    		
    		//prepare plain text
    		final byte[] input = addPadding(frame.body, frame.bodyLen); 	// pad body content out to 16 or 32 bytes. 
    		
+   		//TODO Update frame length Header = 4+idLen bytes. Body padded bodylength (input.length). Trailer is fixed 23 bytes
+   		msgBuff[0] = (byte)(4+frame.idLen+input.length + 23);
    		
    		// Generate IV (nonce)
    		final byte[] nonce = generateNonce();
@@ -309,12 +316,37 @@ public class SecureFrameTest
    		cipher.updateAAD(aad);
    		final byte[] cipherText = cipher.doFinal(input); // the authentication tag should end up appended to the cipher text
    		
-   		System.out.println("Size plain="+input.length+" aad="+aad.length+" cipher="+cipherText.length);
+   		// print input
+   		System.out.format("%d Byte padded input text\r\n",input.length);
+   		for (int i=0;i<input.length;i++)
+   			System.out.format("%02x ",input[i]);
+   		System.out.format("\r\n\r\n");
    		
+   		// print nonce
+   		System.out.format("%d Byte Nonce\r\n",nonce.length);
+   		for (int i=0;i<nonce.length;i++)
+   			System.out.format("%02x ",nonce[i]);
+   		System.out.format("\r\n\r\n");
+   		
+   		//print aad
+   		System.out.format("%d Byte aad\r\n",aad.length);
+   		for (int i=0;i<aad.length;i++)
+   			System.out.format("%02x ",aad[i]);
+   		System.out.format("\r\n\r\n");
+   		
+   		//print output
+   		System.out.format("%d Byte cipher text plus authentication tag output from algo\r\n",cipherText.length);
+   		for (int i=0;i<cipherText.length;i++)
+   			System.out.format("%02x ",cipherText[i]);
+   		System.out.format("\r\n\r\n");
+   		
+   		// copy cipher text minus authtag to the msgBuff
+        System.arraycopy(cipherText,0,msgBuff,pos, cipherText.length - GCM_TAG_LENGTH);
    		
    		// copy the authentication tag appended to the end of cipherText into authTag
    		System.arraycopy(cipherText,input.length,authTag,0,GCM_TAG_LENGTH);
         
+   	
    		return (input.length);
 
    	}
@@ -331,12 +363,21 @@ public class SecureFrameTest
    		// Retrieve Nonce
    		byte[] nonce = retrieveNonce (msgBuff, index,decodedPacket);   	
    		
+   		System.out.println("\r\nRetrieved nonce");
+   		for (int i=0; i< nonce.length;i++)
+   			System.out.format("%02x ",nonce[i]);
+   		
+   		
    		final GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
    		
    		//retrieve AAD
    		final byte[] aad = retrieveAAD(msgBuff,decodedPacket);		// decodedPacket needed to deduce the length of the header.
    		
-   		// copy received cipher text to appropriately sized array
+   		System.out.println("\r\nRetrieved aad");
+   		for (int i=0; i< aad.length;i++)
+   			System.out.format("%02x ",aad[i]);
+   		
+   		// copy received ecrypted body text to appropriately sized array
    		byte[] cipherText = new byte[decodedPacket.bodyLen + GCM_TAG_LENGTH]; // cipher text has the auth tag appended to it
    		System.arraycopy(msgBuff, index, cipherText, 0, decodedPacket.bodyLen);
    		
@@ -346,6 +387,10 @@ public class SecureFrameTest
    		// the magic 7 is the offset from the start of the trailer to the  auth tag.
    		System.arraycopy(msgBuff,(index+decodedPacket.bodyLen+7) , cipherText,decodedPacket.bodyLen, GCM_TAG_LENGTH); 
    		
+   		System.out.format("\r\nRetrieved  %d byte cipher text with auth tag appended\r\n", cipherText.length);
+   		for (int i=0; i< cipherText.length;i++)
+   			System.out.format("%02x ",cipherText[i]);
+   		
    	
    		// Decrypt: 
    		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
@@ -353,11 +398,31 @@ public class SecureFrameTest
         cipher.updateAAD(aad);
         final byte[] plainText = cipher.doFinal(cipherText);
         
-        byte[] plainTextMsg = new byte[plainText.length - GCM_TAG_LENGTH];
-        System.arraycopy(plainText, 0, plainTextMsg, 0, plainText.length - GCM_TAG_LENGTH); // separate the message body from the auth tag
+        //print out received plain text
+        System.out.println("\r\nDecrypted plain text");
+   		for (int i=0; i< plainText.length;i++)
+   			System.out.format("%02x ",plainText[i]); 
         
-        // copy unpadded plain text  into the decoded Packet Structure.
-        decodedPacket.body.stats = removePadding (plainTextMsg); 
+   		// copy unpadded plain text  into the decoded Packet Structure.
+        byte[] unpadded = removePadding (plainText); 
+        
+        System.out.println("unpadded length =" + unpadded.length);
+        
+        // copy stats string to the structure
+        byte[] stats = new byte[unpadded.length-2];
+        System.arraycopy (unpadded,2,stats,0,unpadded.length-2);
+        decodedPacket.body.stats = new String(stats);
+        
+        // set heat flag and valve position
+        if ((unpadded[0] & 0x80)== 0x80)
+        	decodedPacket.body.heat = true;
+        
+        // clear out the top bit and set the valve position
+        unpadded[0]&= 0x7F; 		
+        decodedPacket.body.valvePos = unpadded[0];
+        
+        //set up the flags
+        decodedPacket.body.flags = unpadded[1];
         
    	}
    	
@@ -375,16 +440,23 @@ public class SecureFrameTest
     public static  int buildOFrame (byte[] msgBuff, OFrameStruct msg){
     	
     	byte crc = 0;
-    	int index = ID + msg.idLen;						// set index to the position of body length
+    	int index = ID + msg.idLen;						// set index to the position of body length field
+    	int bodyPos = index+1;							// bodyPos points at the actual body section of the frame
     	int i;
     	int packetLen = 5 + msg.idLen + msg.bodyLen; 	// There are 5 fixed bytes in an insecure packet (including the crc)
+    													
     	
+    	
+    	System.out.println("body len = "+msg.bodyLen);
     	
     	/*
     	 * Header
     	 */
     	 	
-    	msgBuff[LENGTH] =  (byte)(packetLen -1);		//the frame length byte contains length -1
+    	if (msg.secFlag == false)
+    		msgBuff[LENGTH] =  (byte)(packetLen -1);		//the frame length byte contains length -1
+    	
+    	// The packet length for secure packets gets set in the buildOFrame() function
     	
     	msgBuff[TYPE] = msg.frameType;					
     	if (msg.secFlag == true){						
@@ -400,8 +472,7 @@ public class SecureFrameTest
     	for (i=0;i<msg.idLen;i++)
     		msgBuff[ID+i]=msg.id[i];					// copy the message id bytes into the message buffer
     	
-    	// add the message body fixed elements - if there are any
-    	msgBuff[index++] = msg.bodyLen;					// index was initialised to point at the message body length position
+    	
     	
     	
     	/*
@@ -409,7 +480,9 @@ public class SecureFrameTest
     	 */
     	
     	if (msg.secFlag == false){	
-    		
+    		// add the message body fixed elements. the assumption here is tha the body length field has been pre-filled in the struct
+        	msgBuff[index++] = msg.bodyLen;					// index was initialised to point at the message body length position
+        	
 	    	if (msg.bodyLen !=0){
 	    		
 	    		msgBuff[index] = msg.body.valvePos;			// copy the valve position
@@ -444,19 +517,28 @@ public class SecureFrameTest
     	else {
     		
     		byte[] authTag = new byte[GCM_TAG_LENGTH];
+    		byte length=0;
+    		
+    		if (msg.idLen < 4){
+    			System.out.println("Leaf node ID too short. Must be 4 or more bytes");
+    			System.exit(1);
+    		}
     		
     		try {
-				index+= encryptFrame (msgBuff,index,msg,authTag);
-			} catch (Exception e) {
+    			//msgBuff[index++] = (byte)((msg.body.stats.getBytes().length +2 > 16)? 32:16);			//need to set the length field before the decoder will work. ToDo fix that
+    			
+				length = (byte)encryptFrame (msgBuff,bodyPos,msg,authTag);	
+													// index was initialised to point at the body length field
+				index+=length;						// move index to point at the start of the trailer
+    		} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
-				System.out.println("exceptiom thrown in decrypt frame");
+				System.out.println("exceptiom thrown in encrypt frame");
 				System.exit(1);
 			}
     		
     		
-    		index = addTrailer (msgBuff,index,authTag);
-    		
+    		index+= addTrailer (msgBuff,(bodyPos+length),authTag);
     		return(index);
     	}	
     		
@@ -515,6 +597,9 @@ public class SecureFrameTest
 	    		
 	    	}
 	    	else {												// insecure so extract it
+	    		
+	    		System.out.println("decoding insecure frame");
+	    		
 	    		if ((msgBuff[i] & (byte)0x80) == (byte)0x80)
 	    			decodedPacket.body.heat = true;				// set call for heat flag
 	    		
@@ -534,6 +619,8 @@ public class SecureFrameTest
 	    		}
 	    	}
     	}
+	    else
+	    	System.out.println("No Message Content found");
 	    
 	    
 	    // Message Trailer
@@ -583,65 +670,9 @@ public class SecureFrameTest
         }
 
     
-    
-    
-    
-    
-    /**Playpen for understanding jUnit. */
-    @Test
-    public void testBasics()
-        {
-//        assertTrue(false);
-    	byte[] msgBuff = new byte[0xFF];
-    	int msgLen,i;
-    	OFrameStruct decodedPacket;
+    public static void printPacket (OFrameStruct decodedPacket){
+    	byte i=0;
     	
-    	// This is Example 1 in Damon's Spec
-    	OFrameStruct packetToSendA = new OFrameStruct();
-    	byte[] idA = {(byte)0x80,(byte)0x81};
-    	
-    	BodyStruct bodyA = new BodyStruct();
-    	
-    	bodyA.heat = false;
-    	bodyA.valvePos=0;
-    	bodyA.flags = 0x01;
-    	
-    	packetToSendA.secFlag = false;
-    	packetToSendA.frameType = 0x4F; // Insecure O Frame
-    	packetToSendA.frameSeqNo = 0;
-    	packetToSendA.idLen = 2;
-    	packetToSendA.id = idA;
-    	packetToSendA.bodyLen = 0x02;
-    	packetToSendA.body = bodyA;
-   
-    	//Example 2 in Damons spec
-    	BodyStruct bodyB= new BodyStruct();
-    	bodyB.heat = false;
-    	bodyB.valvePos=0x7f;
-    	bodyB.flags = 0x11;
-    	bodyB.stats = "{\"b\":1";
-    	
-    	OFrameStruct packetToSendB = new OFrameStruct();
-    	packetToSendB.secFlag = false;
-    	packetToSendB.frameType = 0x4F; // Insecure O Frame
-    	packetToSendB.frameSeqNo = 0;
-    	packetToSendB.idLen = 2;
-    	packetToSendB.id = idA;
-    	packetToSendB.bodyLen = 0x08;  
-    	packetToSendB.body = bodyB;
-    	
-    	
-    	
-    	
-    	msgLen = buildOFrame (msgBuff,packetToSendB);
-    	System.out.format("Raw data packet is: %02x bytes long \r\n",msgLen);
-    	
-    	for (i=0;i<msgLen;i++)
-    		System.out.format("%02x ", msgBuff[i]);
-    	
-    		
-    	decodedPacket = decodeOFrame (msgBuff);
-    	// raw data
     	System.out.format("\r\n\r\nDecoded Packet:\r\n");
     	
     	//header
@@ -686,10 +717,87 @@ public class SecureFrameTest
     		
     		System.out.println("Trailer Bytes");
     		for(i=0;i<23;i++)
-    			System.out.format("02x ", decodedPacket.trailer[i]);
+    			System.out.format("%02x ", decodedPacket.trailer[i]);
     	}
-    		
-    		
+    }
+    
+    
+    
+    /**Playpen for understanding jUnit. */
+    @Test
+    public void testBasics()
+        {
+
+    	byte[] msgBuff = new byte[0xFF];
+    	int msgLen,i;
+    	
+    	// This is Example 1 in Damon's Spec
+    	OFrameStruct packetToSendA = new OFrameStruct();
+    	byte[] idA = {(byte)0x80,(byte)0x81};
+    	byte[] idC = new byte[4]; 			
+    	System.arraycopy(LeafID, 0, idC, 0, 4); // 4MSBs of leaf node ID
+    	
+    	BodyStruct bodyA = new BodyStruct();
+    	
+    	bodyA.heat = false;
+    	bodyA.valvePos=0;
+    	bodyA.flags = 0x01;
+    	
+    	packetToSendA.secFlag = false;
+    	packetToSendA.frameType = 0x4F; // Insecure O Frame
+    	packetToSendA.frameSeqNo = 0;
+    	packetToSendA.idLen = 2;
+    	packetToSendA.id = idA;
+    	packetToSendA.bodyLen = 0x02;
+    	packetToSendA.body = bodyA;
+   
+    	//Example 2 in Damons spec
+    	BodyStruct bodyB= new BodyStruct();
+    	bodyB.heat = false;
+    	bodyB.valvePos=0x7f;
+    	bodyB.flags = 0x11;
+    	bodyB.stats = "{\"b\":1";
+    	
+    	OFrameStruct packetToSendB = new OFrameStruct();
+    	packetToSendB.secFlag = false;
+    	packetToSendB.frameType = 0x4F; // Insecure O Frame
+    	packetToSendB.frameSeqNo = 0;
+    	packetToSendB.idLen = 2;
+    	packetToSendB.id = idA;
+    	packetToSendB.body = bodyB;	
+    	packetToSendB.bodyLen = (byte)(bodyB.stats.getBytes().length+2);
+    	
+    	//Example 3 - secure version of example 2 above
+    	BodyStruct bodyC= new BodyStruct();
+    	bodyC.heat = false;
+    	bodyC.valvePos=0x7f;
+    	bodyC.flags = 0x11;
+    	bodyC.stats = "{\"b\":1";
+    	
+    	OFrameStruct packetToSendC = new OFrameStruct();
+    	packetToSendC.secFlag = true;
+    	packetToSendC.frameType = 0x4F; // secure O Frame
+    	packetToSendC.frameSeqNo = 0;
+    	packetToSendC.idLen = 4;		// needs to be 4 bytes or more. Behaviour undefined if more at the moment
+    	packetToSendC.id = idC;
+    	packetToSendC.body = bodyC;		// This must happen before the next line to avoid null pointer exception!!
+    	packetToSendC.bodyLen = (byte)(bodyC.stats.getBytes().length+2);  //Number of bytes in the stats string + 2 for the flags
+
+    	
+    	
+    	//TODO - set up an array of structure pointers and run the whole lot through the encode / decode functions
+    	
+    	msgLen = buildOFrame (msgBuff,packetToSendC);
+    	
+    	System.out.format("Raw data packet  from encoder is: %02x bytes long \r\n",msgLen);	
+    	for (i=0;i<msgLen;i++)
+    		System.out.format("%02x ", msgBuff[i]);
+    	
+    	System.out.println("");			// CR LF
+    	
+    	// Decode and print out the received packet.
+    	printPacket(decodeOFrame (msgBuff));
+    	
     		
         }
 
