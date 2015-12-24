@@ -274,7 +274,7 @@ public class SecureFrameTest
 		
 		outputs
 		* The cipher text is the encrypted message body and is the same length as the plain text.
-		* The authentication tag is included in the trailer
+		* The authentication tag appended to the decrypted message in the output of the Java algo.
 		
 		The transmitted frame then contains:
 		 The 8 byte header (unencrypted)
@@ -299,7 +299,9 @@ public class SecureFrameTest
    		//prepare plain text
    		final byte[] input = addPadding(frame.body, frame.bodyLen); 	// pad body content out to 16 or 32 bytes. 
    		
-   		//TODO Update frame length Header = 4+idLen bytes. Body padded bodylength (input.length). Trailer is fixed 23 bytes
+   		//Update frame length Header = 4+idLen bytes. Body padded bodylength (input.length). Trailer is fixed 23 bytes
+   		// A better place to do this might be after the trailer has been built. An even better design would be to have seperate
+   		// structures for header, body and trailer - this would make the design more extensible and do away with lots of magic numbers.
    		msgBuff[0] = (byte)(4+frame.idLen+input.length + 23);
    		
    		// Generate IV (nonce)
@@ -784,6 +786,8 @@ public class SecureFrameTest
     	packetToSendC.bodyLen = (byte)(bodyC.stats.getBytes().length+2);  //Number of bytes in the stats string + 2 for the flags
 
     	
+    	System.out.println("Start Test");	
+    	System.out.println("bodyLen ="+ packetToSendC.bodyLen);
     	
     	//TODO - set up an array of structure pointers and run the whole lot through the encode / decode functions
     	
