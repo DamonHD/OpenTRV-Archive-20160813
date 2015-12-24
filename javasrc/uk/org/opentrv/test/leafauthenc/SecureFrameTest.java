@@ -235,6 +235,9 @@ public class SecureFrameTest
     	int padding =(paddedMsg.length - (len+1));
     	paddedMsg[paddedMsg.length-1]= (byte)padding;	// add the number of bytes of padding to the last byte in the array.
     	
+    	
+    	
+    	
     	return (paddedMsg);
     }
     
@@ -300,9 +303,15 @@ public class SecureFrameTest
    		final byte[] input = addPadding(frame.body, frame.bodyLen); 	// pad body content out to 16 or 32 bytes. 
    		
    		//Update frame length Header = 4+idLen bytes. Body padded bodylength (input.length). Trailer is fixed 23 bytes
-   		// A better place to do this might be after the trailer has been built. An even better design would be to have seperate
+   		// A better place to do this might be after the trailer has been built. An even better design would be to have separate
    		// structures for header, body and trailer - this would make the design more extensible and do away with lots of magic numbers.
+   		
    		msgBuff[0] = (byte)(4+frame.idLen+input.length + 23);
+   		
+   		// setup the bodylength now it has been padded
+   		frame.bodyLen = (byte)input.length;
+   		
+   		msgBuff[pos-1] = (byte)(frame.bodyLen);		//Pos -1 is a bit of a hack. This will be fixed with architectural change of body structure to contain the body length.
    		
    		// Generate IV (nonce)
    		final byte[] nonce = generateNonce();
@@ -527,10 +536,12 @@ public class SecureFrameTest
     		}
     		
     		try {
-    			//msgBuff[index++] = (byte)((msg.body.stats.getBytes().length +2 > 16)? 32:16);			//need to set the length field before the decoder will work. ToDo fix that
     			
 				length = (byte)encryptFrame (msgBuff,bodyPos,msg,authTag);	
-													// index was initialised to point at the body length field
+				
+				//msg.bodyLen is set up in the encryption function, after the padding has been added 
+				index++;							// index was initialised to point at the body length field at the top of the function.
+				
 				index+=length;						// move index to point at the start of the trailer
     		} catch (Exception e) {
 				// TODO Auto-generated catch block
@@ -704,10 +715,15 @@ public class SecureFrameTest
     	System.out.println(("tamper flag:    " + (((decodedPacket.body.flags & 0x20)== (byte)0x20)? "set":"clear")));
     	System.out.println(("stats present:  " + (((decodedPacket.body.flags & 0x10)== (byte)0x10)? "set":"clear")));
     	
-    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x00)? "unreported":"")));
-    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x04)? "none":"")));
-    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x08)? "possible":"")));
-    	System.out.println(("occupancy:      " + (((decodedPacket.body.flags & 0x0C)== (byte)0x0c)? "likely":"")));
+    	
+    	if ((decodedPacket.body.flags & 0x0C) == (byte)0x00)
+    		System.out.println("occupancy: unreported");	
+    	if ((decodedPacket.body.flags & 0x0C) == (byte)0x40)
+    		System.out.println("occupancy: none");
+    	if ((decodedPacket.body.flags & 0x0C) == (byte)0x08)
+    		System.out.println("occupancy: possible");
+    	if ((decodedPacket.body.flags & 0x0C) == (byte)0x0C)
+    		System.out.println("occupancy: likely");
     	System.out.println("bottom 2 bits reserved value of b01");
     	
     	System.out.format("\r\njson string    %s\r\n",decodedPacket.body.stats);
