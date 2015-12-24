@@ -91,25 +91,6 @@ public class SecureFrameTest
     								// info in the encrypted case, with the length determined by encryption method used
     								
     }
-   
-    /**Compute (non-secure) CRC over secureable frame content.
-     * @param buf  buffer that included the frame data to have the CRC applied (all of header and body);
-     *     never null
-     * @param pos  starting position of the frame data in the buffer;
-     *     must be valid offset within the buffer
-     * @param len  length of frame data to have the CRC computed over;
-     *     strictly positive and pos+len must be within the buffer
-     */
-    public static byte computeInsecureFrameCRC(byte buf[], int pos, int len)
-        {
-        byte crc = (byte)0xff; // Initialise CRC with 0xff (protects against extra leading 0x00s).
-        for(int i = 0; i < len; ++i)
-            {
-            crc = CRC7_5B.crc7_5B_update(crc, buf[pos + i]);
-            }
-        if(0 == crc) { return((byte)0x80); } // Avoid all-0s and all-1s result values, ie self-whitened.
-        return(crc);
-        }  
     
     
     // The aad is all the header bytes => 4 fixed plus however many are in the ID 
@@ -696,9 +677,10 @@ public class SecureFrameTest
         srnd = SecureRandom.getInstanceStrong(); // JDK 8.
         
      // Generate Key - needs to be available for the decrypt side too
-   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-   		keyGen.init(AES_KEY_SIZE, srnd);		
-   		key = keyGen.generateKey();
+//   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+//   		keyGen.init(AES_KEY_SIZE, srnd);		
+//   		key = keyGen.generateKey();
+        key = new SecretKeySpec(new byte[AES_KEY_SIZE/8], 0, AES_KEY_SIZE/8, "AES");
         }
 
     
