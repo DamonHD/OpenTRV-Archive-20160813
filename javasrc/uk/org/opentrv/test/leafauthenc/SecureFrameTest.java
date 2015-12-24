@@ -62,9 +62,9 @@ public class SecureFrameTest
     public static byte[] getStdTestASCIITextAsByteArray() { return(_STD_TEST_ASCII_TEXT_B.clone()); }
 
     
-    // Global counters on the TX side for nonce generation
-    public static int ResetCounter = 42;
-    public static int TxMsgCounter = 42;
+    // Nominal global counters on the TX side for nonce generation
+    public static final int ResetCounter = 42;
+    public static final int TxMsgCounter = 793;
     // 6 Byte ID of the sensor 4 MSBs are included as the ID. 2 LSBs are pre-shared between rx and tx.
     public static byte[] LeafID = {(byte)0xAA,(byte)0xAA,(byte)0xAA,(byte)0xAA,(byte)0x55,(byte)0x55};
     
@@ -89,9 +89,7 @@ public class SecureFrameTest
     	BodyStruct	body;			// Body section
     	byte[]		trailer;		// Trailer - either a 7bit CRC for insecure frame or variable length security 
     								// info in the encrypted case, with the length determined by encryption method used
-    								
     }
-    
     
     // The aad is all the header bytes => 4 fixed plus however many are in the ID 
     
@@ -674,7 +672,7 @@ public class SecureFrameTest
         {
     	SecureRandom srnd;
     	
-        srnd = SecureRandom.getInstanceStrong(); // JDK 8.
+//        srnd = SecureRandom.getInstanceStrong(); // JDK 8.
         
      // Generate Key - needs to be available for the decrypt side too
 //   		final KeyGenerator keyGen = KeyGenerator.getInstance("AES");
