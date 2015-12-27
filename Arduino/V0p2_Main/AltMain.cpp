@@ -136,15 +136,18 @@ void POSTalt()
                                                     SIM900_UDP_ADDR,
                                                     SIM900_UDP_PORT };
   static const OTRadioLink::OTRadioChannelConfig RFMConfig(&SIM900Config, true, true, true);
+  fastDigitalWrite(A3, LOW);  // This turns power to the shield on
+  pinMode(A3, OUTPUT);
+  
 #elif defined(USE_MODULE_RFM22RADIOSIMPLE)
   static const OTRadioLink::OTRadioChannelConfig RFMConfig(NULL, true, true, true);
 #endif // USE_MODULE_SIM900
 
 #if defined(USE_MODULE_RFM22RADIOSIMPLE) 
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
-  RFM23B.preinit(NULL);
+  PrimaryRadio.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
-  if(!RFM23B.configure(1, &RFMConfig) || !RFM23B.begin()) { panic(F("PANIC!")); }
+  if(!PrimaryRadio.configure(1, &RFMConfig) || !PrimaryRadio.begin()) { panic(F("PANIC!")); }
 #endif
 
 
@@ -226,7 +229,7 @@ ISR(PCINT0_vect)
   // Handler routine not required/expected to 'clear' this interrupt.
   // TODO: try to ensure that OTRFM23BLink.handleInterruptSimple() is inlineable to minimise ISR prologue/epilogue time and space.
   if((changes & RFM23B_INT_MASK) && !(pins & RFM23B_INT_MASK))
-    { RFM23B.handleInterruptSimple(); }
+    { PrimaryRadio.handleInterruptSimple(); }
 #endif
 
   }
@@ -308,7 +311,7 @@ void loopAlt()
     // eg work was accrued during the previous major slow/outer loop
     // or the in a previous orbit of this loop sleep or nap was terminated by an I/O interrupt.
     // Come back and have another go if work was done, until the next tick at most.
-    if(handleQueuedMessages(&Serial, true, &RFM23B)) { continue; }
+    if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
 
 // If missing h/w interrupts for anything that needs rapid response
 // then AVOID the lowest-power long sleep.
@@ -371,7 +374,7 @@ void loopAlt()
     // Regular transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
     case 10:
       {
-      if((OTV0P2BASE::getMinutesLT() & 0x3) == 0) // Send once every 4 minutes.
+//      if((OTV0P2BASE::getMinutesLT() & 0x3) == 0) // Send once every 4 minutes.
           {
           // Send it!
           // Try for double TX for extra robustness unless:
@@ -408,7 +411,7 @@ void loopAlt()
   }
 
 
-RFM23B.poll();
+PrimaryRadio.poll();
 
 
 

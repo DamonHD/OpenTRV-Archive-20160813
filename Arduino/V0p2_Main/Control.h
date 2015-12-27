@@ -102,7 +102,7 @@ void loopOpenTRV();
 // Prolonged inactivity time deemed to indicate room(s) really unoccupied to trigger full setback (minutes, strictly positive).
 #define SETBACK_FULL_M 50
 
-#ifdef LEARN_BUTTON_AVAILABLE
+//#ifdef LEARN_BUTTON_AVAILABLE
 // Period in minutes for simple learned on-time; strictly positive (and less than 256).
 #ifndef LEARNED_ON_PERIOD_M
 #define LEARNED_ON_PERIOD_M 60
@@ -113,7 +113,7 @@ void loopOpenTRV();
 #ifndef LEARNED_ON_PERIOD_COMFORT_M
 #define LEARNED_ON_PERIOD_COMFORT_M (min(2*(LEARNED_ON_PERIOD_M),255))
 #endif
-#endif
+//#endif // LEARN_BUTTON_AVAILABLE
 
 
 
@@ -128,7 +128,7 @@ void setWarmModeDebounced(const bool warm);
 // This is a 'debounced' value to reduce accidental triggering.
 bool inWarmMode();
 
-#ifdef SUPPORT_BAKE // IF DEFINED: this unit supports BAKE mode.
+//#ifdef SUPPORT_BAKE // IF DEFINED: this unit supports BAKE mode.
 // Force to BAKE mode;
 // Should be only be called once 'debounced' if coming from a button press for example.
 // Is safe to call repeatedly from test routines, eg does not cause EEPROM wear.
@@ -141,13 +141,13 @@ bool inBakeMode();
 // Should be only be called once 'debounced' if coming from a button press for example.
 // Cancel 'bake' mode if active; does not force to FROST mode.
 void cancelBakeDebounced();
-#else
-#define startBakeDebounced() {}
-// NO-OP versions if BAKE mode not supported.
-//#define inBakeMode() (false)
-#define inBakeModeDebounced() (false)
-#define cancelBakeDebounced() {}
-#endif
+//#else
+//#define startBakeDebounced() {}
+//// NO-OP versions if BAKE mode not supported.
+////#define inBakeMode() (false)
+//#define inBakeModeDebounced() (false)
+//#define cancelBakeDebounced() {}
+//#endif
 
 
 
@@ -368,6 +368,8 @@ class ModelledRadValve : public OTRadValve::AbstractRadValve
     // even if the device is left in WARM mode all the time,
     // using occupancy/light/etc to determine when temperature can be set back
     // without annoying users.
+    //
+    // Will clear any BAKE mode if the newly-computed target temperature is already exceeded.
     void computeTargetTemperature();
 
     // Computes optimal valve position given supplied input state including current position; [0,100].
@@ -696,11 +698,12 @@ int expandTempC16(uint8_t cTemp);
 #define MAX_STATS_AMBLIGHT 254 // Maximum valid ambient light value in stats (very top of range is compressed).
 
 
-
+#ifdef ENABLE_FS20_ENCODING_SUPPORT
 // Clear and populate core stats structure with information from this node.
 // Exactly what gets filled in will depend on sensors on the node,
 // and may depend on stats TX security level (if collecting some sensitive items is also expensive).
 void populateCoreStats(FullStatsMessageCore_t *content);
+#endif // ENABLE_FS20_ENCODING_SUPPORT
 
 // Do bare stats transmission.
 // Output should be filtered for items appropriate

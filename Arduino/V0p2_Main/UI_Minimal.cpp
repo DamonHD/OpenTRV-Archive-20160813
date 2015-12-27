@@ -104,7 +104,7 @@ static void handleLEARN(const uint8_t which)
   // Clear simple schedule.
   else { clearSimpleSchedule(which); }
   }
-#endif
+#endif // LEARN_BUTTON_AVAILABLE
 
 
 // Pause between flashes to allow them to be distinguished (>100ms); was mediumPause() for PICAXE V0.09 impl.
@@ -117,12 +117,14 @@ static void inline offPause()
 // Counts calls to tickUI.
 static uint8_t tickCount;
 
+
 // Call this on even numbered seconds (with current time in seconds) to allow the UI to operate.
 // Should never be skipped, so as to allow the UI to remain responsive.
 // Runs in 350ms or less; usually takes only a few milliseconds or microseconds.
 // Returns true iff the user interacted with the system, and maybe caused a status change.
 // NOTE: since this is on the minimum idle-loop code path, minimise CPU cycles, esp in frost mode.
 // Also re-activates CLI on main button push.
+#ifndef NO_UI_SUPPORT
 bool tickUI(const uint_fast8_t sec)
   {
   // Perform any once-per-minute operations.
@@ -166,9 +168,7 @@ bool tickUI(const uint_fast8_t sec)
   // Should be only be set when 'debounced'.
   // Defaults to (starts as) false/FROST.
   static bool isWarmModePutative;
-#ifdef SUPPORT_BAKE
   static bool isBakeModePutative;
-#endif
 
   static bool modeButtonWasPressed;
   if(fastDigitalRead(BUTTON_MODE_L) == LOW)
@@ -177,9 +177,7 @@ bool tickUI(const uint_fast8_t sec)
       {
       // Capture real mode variable as button is pressed.
       isWarmModePutative = inWarmMode();
-#ifdef SUPPORT_BAKE
       isBakeModePutative = inBakeMode();
-#endif      
       modeButtonWasPressed = true;
       }
 
@@ -192,16 +190,13 @@ bool tickUI(const uint_fast8_t sec)
     if(!isWarmModePutative) // Was in FROST mode; moving to WARM mode.
       {
       isWarmModePutative = true;
-#ifdef SUPPORT_BAKE
       isBakeModePutative = false;
-#endif
       // 2 x flash 'heat call' to indicate now in WARM mode.
       LED_HEATCALL_OFF();
       offPause();
       LED_HEATCALL_ON();
       tinyPause();
       }
-#ifdef SUPPORT_BAKE
     else if(!isBakeModePutative) // Was in WARM mode, move to BAKE (with full timeout to run).
       {
       isBakeModePutative = true;
@@ -215,13 +210,10 @@ bool tickUI(const uint_fast8_t sec)
       LED_HEATCALL_ON();
       mediumPause();
       }
-#endif
     else // Was in BAKE (if supported, else was in WARM), move to FROST.
       {
       isWarmModePutative = false;
-#ifdef SUPPORT_BAKE
       isBakeModePutative = false;
-#endif
       // 1 x flash 'heat call' to indicate now in FROST mode.
       }
     }
@@ -234,9 +226,7 @@ bool tickUI(const uint_fast8_t sec)
       // Will also capture programmatic changes to isWarmMode, eg from schedules.
       const bool isWarmModeDebounced = isWarmModePutative;
       setWarmModeDebounced(isWarmModeDebounced);
-#ifdef SUPPORT_BAKE
       if(isBakeModePutative) { startBakeDebounced(); } else { cancelBakeDebounced(); }
-#endif
 
       markUIControlUsed(); // Note activity on release of MODE button...
       modeButtonWasPressed = false;
@@ -278,7 +268,7 @@ bool tickUI(const uint_fast8_t sec)
 
 #if defined(ENABLE_NOMINAL_RAD_VALVE) && defined(LOCAL_TRV)
         // Second flash to indicate actually calling for heat.
-        if(NominalRadValve.isCallingForHeat())
+        if(NominalRadValve.isCallingForHeat() || inBakeMode())
           {
           LED_HEATCALL_OFF();
           offPause(); // V0.09 was mediumPause().
@@ -287,7 +277,6 @@ bool tickUI(const uint_fast8_t sec)
           else if(!isComfortTemperature(wt)) { OTV0P2BASE::sleepLowPowerMs((VERYTINY_PAUSE_MS + TINY_PAUSE_MS) / 2); }
           else { tinyPause(); }
 
-#ifdef SUPPORT_BAKE
           if(inBakeMode())
             {
             // Third (lengthened) flash to indicate BAKE mode.
@@ -299,7 +288,6 @@ bool tickUI(const uint_fast8_t sec)
             else if(!isComfortTemperature(wt)) { smallPause(); }
             else { mediumPause(); }
             }
-#endif
           }
 #endif
         }
@@ -367,6 +355,7 @@ bool tickUI(const uint_fast8_t sec)
   statusChange = false; // Potential race.
   return(statusChanged);
   }
+#endif // tickUI
 
 
 // Check/apply the user's schedule, at least once each minute, and act on any timed events.
@@ -473,7 +462,7 @@ static bool extCLIHandler(Print *const p, char *const buf, const uint8_t n)
     OTRadioLink::printRXMsg(p, txbuf, buflen);
 #endif
           // TX at normal volume since ACKed and can be repeated if necessary.
-          if(RFM23B.sendRaw(txbuf, buflen))
+          if(PrimaryRadio.sendRaw(txbuf, buflen))
             { return(true); } // Done it!
           }
         }
@@ -487,13 +476,10 @@ static bool extCLIHandler(Print *const p, char *const buf, const uint8_t n)
 #endif 
 
 
-
-
-
-
 // Prints a single space to Serial (which must be up and running).
 static void Serial_print_space() { Serial.print(' '); }
 
+#if defined(ENABLE_SERIAL_STATUS_REPORT) && !defined(serialStatusReport)
 // Sends a short 1-line CRLF-terminated status report on the serial connection (at 'standard' baud).
 // Ideally should be similar to PICAXE V0.1 output to allow the same parser to handle either.
 // Will turn on UART just for the duration of this call if powered off.
@@ -547,11 +533,11 @@ void serialStatusReport()
   // Stats line starts with distingushed marker character.
   // Initial '=' section with common essentials.
   Serial.print(LINE_START_CHAR_STATS);
-#ifdef SUPPORT_BAKE
+//#ifdef SUPPORT_BAKE
   Serial.print(inWarmMode() ? (inBakeMode() ? 'B' : 'W') : 'F');
-#else
-  Serial.print(inWarmMode() ? 'W' : 'F');
-#endif
+//#else
+//  Serial.print(inWarmMode() ? 'W' : 'F');
+//#endif
 #if defined(ENABLE_NOMINAL_RAD_VALVE)
   Serial.print(NominalRadValve.get()); Serial.print('%'); // Target valve position.
 #endif
@@ -663,7 +649,7 @@ void serialStatusReport()
   ss1.put(RelHumidity);
 #endif
   ss1.put(AmbLight);
-  ss1.put(Supply_mV);
+  ss1.put(Supply_cV);
 #if defined(OCCUPANCY_SUPPORT)
   ss1.put(Occupancy);
 //  ss1.put(Occupancy.vacHTag(), Occupancy.getVacancyH()); // EXPERIMENTAL
@@ -683,6 +669,7 @@ void serialStatusReport()
 
   if(neededWaking) { OTV0P2BASE::powerDownSerial(); }
   }
+#endif // defined(ENABLE_SERIAL_STATUS_REPORT) && !defined(serialStatusReport)
 
 #ifdef ENABLE_CLI_HELP
 #define SYNTAX_COL_WIDTH 10 // Width of 'syntax' column; strictly positive.
@@ -747,16 +734,16 @@ static void dumpCLIUsage(const uint8_t stopBy)
 #endif
 
   //printCLILine(deadline, 'L', F("Learn to warm every 24h from now, clear if in frost mode, schedule 0"));
+#ifdef LEARN_BUTTON_AVAILABLE
   printCLILine(deadline, F("L S"), F("Learn daily warm now, clear if in frost mode, schedule S"));
   //printCLILine(deadline, F("P HH MM"), F("Program: warm daily starting at HH MM schedule 0"));
   printCLILine(deadline, F("P HH MM S"), F("Program: warm daily starting at HH MM schedule S"));
+#endif
   printCLILine(deadline, F("O PP"), F("min % for valve to be Open"));
 #if defined(ENABLE_NOMINAL_RAD_VALVE)
   printCLILine(deadline, 'O', F("reset Open %"));
 #endif
-#ifdef SUPPORT_BAKE
   printCLILine(deadline, 'Q', F("Quick Heat"));
-#endif
 //  printCLILine(deadline, F("R N"), F("dump Raw stats set N"));
 
   printCLILine(deadline, F("T HH MM"), F("set 24h Time"));
@@ -1171,6 +1158,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         break;
         }
 
+#ifdef LEARN_BUTTON_AVAILABLE
       // Learn current settings, just as if primary/specified LEARN button had been pressed.
       case 'L':
         {
@@ -1187,6 +1175,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         handleLEARN((uint8_t) s); break;
         break;
         }
+#endif // LEARN_BUTTON_AVAILABLE
 
 #if defined(ENABLE_NOMINAL_RAD_VALVE)
       // Set/clear min-valve-open-% threshold override.
@@ -1202,6 +1191,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         }
 #endif
 
+#ifdef LEARN_BUTTON_AVAILABLE
       // Program simple schedule HH MM [N].
       case 'P':
         {
@@ -1229,11 +1219,10 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
           }
         break;
         }
+#endif // LEARN_BUTTON_AVAILABLE
 
-#ifdef SUPPORT_BAKE
       // Switch to (or restart) BAKE (Quick Heat) mode: Q
       case 'Q': { startBakeDebounced(); break; }
-#endif
 
       // Time set T HH MM.
       case 'T':
@@ -1269,9 +1258,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
         else
 #endif
           {
-#ifdef SUPPORT_BAKE
           cancelBakeDebounced(); // Ensure BAKE mode not entered.
-#endif
           setWarmModeDebounced(true); // No parameter supplied; switch to WARM mode.
           }
         break;

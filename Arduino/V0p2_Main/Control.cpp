@@ -58,13 +58,11 @@ void setWarmModeDebounced(const bool warm)
   DEBUG_SERIAL_PRINTLN();
 #endif
   isWarmMode = warm;
-#ifdef SUPPORT_BAKE
   if(!warm) { cancelBakeDebounced(); }
-#endif
   }
 
 
-#ifdef SUPPORT_BAKE // IF DEFINED: this unit supports BAKE mode.
+//#ifdef SUPPORT_BAKE // IF DEFINED: this unit supports BAKE mode.
 // Only relevant if isWarmMode is true,
 static uint_least8_t bakeCountdownM;
 // If true then the unit is in 'BAKE' mode, a subset of 'WARM' mode which boosts the temperature target temporarily.
@@ -75,7 +73,7 @@ void cancelBakeDebounced() { bakeCountdownM = 0; }
 // Start/restart 'BAKE' mode and timeout.
 // Should be only be called once 'debounced' if coming from a button press for example.
 void startBakeDebounced() { isWarmMode = true; bakeCountdownM = BAKE_MAX_M; }
-#endif
+//#endif
 
 
 
@@ -477,12 +475,10 @@ uint8_t ModelledRadValve::computeTargetTemp()
     return(frostC);
     }
 
-#ifdef SUPPORT_BAKE
   else if(inBakeMode()) // If in BAKE mode then use elevated target.
     {
     return(fnmin((uint8_t)(getWARMTargetC() + BAKE_UPLIFT), (uint8_t)MAX_TARGET_C)); // No setbacks apply in BAKE mode.
     }
-#endif
 
   else // In 'WARM' mode with possible setback.
     {
@@ -536,9 +532,11 @@ uint8_t ModelledRadValve::computeTargetTemp()
 
 
 // Compute/update target temperature and set up state for tick()/computeRequiredTRVPercentOpen().
+//
+// Will clear any BAKE mode if the newly-computed target temperature is already exceeded.
 void ModelledRadValve::computeTargetTemperature()
   {
-  // Compute basic target temperature.
+  // Compute basic target temperature statelessly.
   const uint8_t newTarget = computeTargetTemp();
 
   // Set up state for computeRequiredTRVPercentOpen().
@@ -562,9 +560,13 @@ void ModelledRadValve::computeTargetTemperature()
   // Capture adjusted reference/room temperatures
   // and set callingForHeat flag also using same outline logic as computeRequiredTRVPercentOpen() will use.
   inputState.setReferenceTemperatures(TemperatureC16.get());
+  // True if the target temperature has not been met.
+  const bool targetNotReached = (newTarget >= (inputState.refTempC16 >> 4));
+  // If the target temperature is already reached then cancel any BAKE mode in progress (TODO-648).
+  if(!targetNotReached) { cancelBakeDebounced(); }
   // Only report as calling for heat when actively doing so.
   // (Eg opening the valve a little in case the boiler is already running does not count.)
-  callingForHeat = (newTarget >= (inputState.refTempC16 >> 4)) &&
+  callingForHeat = targetNotReached &&
     (value >= OTRadValve::DEFAULT_VALVE_PC_SAFER_OPEN) &&
     isControlledValveReallyOpen();
   }
@@ -581,12 +583,8 @@ void ModelledRadValve::computeCallForHeat()
   {
   ATOMIC_BLOCK (ATOMIC_RESTORESTATE)
     {
-#ifdef SUPPORT_BAKE
-    // Cancel any BAKE mode once temperature target has been hit.
-    if(!callingForHeat) { bakeCountdownM = 0; }
     // Run down BAKE mode timer if need be, one tick per minute.
-    else if(bakeCountdownM > 0) { --bakeCountdownM; }
-#endif
+    if(bakeCountdownM > 0) { --bakeCountdownM; }
     }
 
   // Compute target and ensure that required input state is set for computeRequiredTRVPercentOpen().
@@ -870,6 +868,7 @@ int expandTempC16(uint8_t cTemp)
   }
 
 
+#ifdef ENABLE_FS20_ENCODING_SUPPORT
 // Clear and populate core stats structure with information from this node.
 // Exactly what gets filled in will depend on sensors on the node,
 // and may depend on stats TX security level (eg if collecting some sensitive items is also expensive).
@@ -890,7 +889,7 @@ void populateCoreStats(FullStatsMessageCore_t *const content)
     }
   content->containsID = true;
   content->tempAndPower.tempC16 = TemperatureC16.get();
-  content->tempAndPower.powerLow = Supply_mV.isSupplyVoltageLow();
+  content->tempAndPower.powerLow = Supply_cV.isSupplyVoltageLow();
   content->containsTempAndPower = true;
   content->ambL = fnmax((uint8_t)1, fnmin((uint8_t)254, AmbLight.get())); // Coerce to allowed value in range [1,254]. Bug-fix (twice! TODO-510) c/o Gary Gladman!
   content->containsAmbL = true;
@@ -902,7 +901,7 @@ void populateCoreStats(FullStatsMessageCore_t *const content)
   content->occ = 0; // Not supported.
 #endif
   }
-
+#endif // ENABLE_FS20_ENCODING_SUPPORT
 
 
 
@@ -930,7 +929,8 @@ bool pollIO(const bool force)
       _pO_lastPoll = sct;
       // Poll for inbound frames.
       // The will generally be little time to do this before getting an overrun or dropped frame.
-      RFM23B.poll();
+      PrimaryRadio.poll();
+      SecondaryRadio.poll();
       }
 //    }
   return(false);
@@ -963,14 +963,21 @@ void bareStatsTX(const bool allowDoubleTX, const bool doBinary, const bool RFM23
   //   * buffer offset/preamble
   //   * max binary length, or max JSON length + 1 for CRC + 1 to allow detection of oversize message
   //   * terminating 0xff
-  uint8_t buf[STATS_MSG_START_OFFSET + max(FullStatsMessageCore_MAX_BYTES_ON_WIRE,  MSG_JSON_MAX_LENGTH+1) + 1];
+//  uint8_t buf[STATS_MSG_START_OFFSET + max(FullStatsMessageCore_MAX_BYTES_ON_WIRE,  MSG_JSON_MAX_LENGTH+1) + 1];
+  // Buffer need be no larger than typical 64-byte radio module TX buffer limit + optional terminator.
+  const uint8_t MSG_BUF_SIZE = 64 + 1;
+  uint8_t buf[MSG_BUF_SIZE];
+#if 0
+  // Make sure buffer is cleared for debug purposes
+  memset(buf, 0, sizeof(buf));
+#endif // 0
 
 #if defined(ALLOW_JSON_OUTPUT)
   if(doBinary)
 #endif // ALLOW_JSON_OUTPUT
     {
-#ifdef ALLOW_BINARY_STATS_TX
-    // Send binary message first.
+#if defined(ALLOW_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+    // Send binary message first (insecure, FS20-piggyback format).
     // Gather core stats.
     FullStatsMessageCore_t content;
     populateCoreStats(&content);
@@ -987,7 +994,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     // Record stats as if remote, and treat channel as secure.
 //    recordCoreStats(true, &content);
     outputCoreStats(&Serial, true, &content);
-    handleQueuedMessages(&Serial, false, &RFM23B); // Serial must already be running!
+    handleQueuedMessages(&Serial, false, &PrimaryRadio); // Serial must already be running!
 #endif // ALLOW_BINARY_STATS_TX
     }
 
@@ -1023,7 +1030,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
 #endif
     // OPTIONAL items
     // Only TX supply voltage for units apparently not mains powered.
-    if(!Supply_mV.isMains()) { ss1.put(Supply_mV); } else { ss1.remove(Supply_mV.tag()); }
+    if(!Supply_cV.isMains()) { ss1.put(Supply_cV); } else { ss1.remove(Supply_cV.tag()); }
 #ifdef ENABLE_BOILER_HUB
     // Show boiler state for boiler hubs.
     ss1.put("b", (int) isBoilerOn());
@@ -1055,8 +1062,16 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
       }
 
     outputJSONStats(&Serial, true, bptr, sizeof(buf) - (bptr-buf)); // Serial must already be running!
+
+#ifdef ENABLE_RADIO_SECONDARY_MODULE
+// FIXME secondary send assumes SIM900.
+// FIXME cannot use strlen for binary frames
+//    NullRadio.queueToSend(buf + STATS_MSG_START_OFFSET, strlen((const char*)buf+STATS_MSG_START_OFFSET));
+    SecondaryRadio.queueToSend(buf + STATS_MSG_START_OFFSET, strlen((const char*)buf+STATS_MSG_START_OFFSET));
+#endif // ENABLE_RADIO_SECONDARY_MODULE
+
 #ifdef ENABLE_RADIO_RX
-    handleQueuedMessages(&Serial, false, &RFM23B); // Serial must already be running!
+    handleQueuedMessages(&Serial, false, &PrimaryRadio); // Serial must already be running!
 #endif
     // Adjust JSON message for transmission.
     // (Set high-bit on final closing brace to make it unique, and compute (non-0xff) CRC.)
@@ -1107,7 +1122,7 @@ static void wireComponentsTogether()
   {
 #ifdef USE_MODULE_FHT8VSIMPLE
   // Set up radio.
-  FHT8V.setRadio(&RFM23B);
+  FHT8V.setRadio(&PrimaryRadio);
   // Load EEPROM house codes into primary FHT8V instance at start.
   FHT8VLoadHCFromEEPROM();
 #endif // USE_MODULE_FHT8VSIMPLE
@@ -1202,7 +1217,7 @@ void setupOpenTRV()
 
   // Radio not listening to start with.
   // Ignore any initial spurious RX interrupts for example.
-  RFM23B.listen(false);
+  PrimaryRadio.listen(false);
 
 #if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("RFM23B.listen(false);");
@@ -1317,7 +1332,7 @@ ISR(PCINT0_vect)
   // Handler routine not required/expected to 'clear' this interrupt.
   // TODO: try to ensure that OTRFM23BLink.handleInterruptSimple() is inlineable to minimise ISR prologue/epilogue time and space.
   if((changes & RFM23B_INT_MASK) && !(pins & RFM23B_INT_MASK))
-    { RFM23B.handleInterruptSimple(); }
+    { PrimaryRadio.handleInterruptSimple(); }
 #endif
   }
 #endif
@@ -1469,7 +1484,7 @@ void loopOpenTRV()
   const bool minute1From4AfterSensors = (1 == minuteFrom4);
 
   // Note last-measured battery status.
-  const bool batteryLow = Supply_mV.isSupplyVoltageLow();
+  const bool batteryLow = Supply_cV.isSupplyVoltageLow();
 
   // Run some tasks less often when not demanding heat (at the valve or boiler), so as to conserve battery/energy.
   // Spare the batteries if they are low, or the unit is in FROST mode, or if the room/area appears to be vacant.
@@ -1506,13 +1521,17 @@ void loopOpenTRV()
 //  bool hubModeBoilerOn = false; // If true then remote call for heat is in progress.
 //#if defined(USE_MODULE_FHT8VSIMPLE)
 #ifdef ENABLE_DEFAULT_ALWAYS_RX
-  bool needsToEavesdrop = true; // By default listen.
+  const bool needsToEavesdrop = true; // By default listen.
 #else
   bool needsToEavesdrop = false; // By default assume no need to eavesdrop.
 #endif
 //#endif
   if(hubMode)
     {
+#ifndef ENABLE_DEFAULT_ALWAYS_RX
+    needsToEavesdrop = true; // If not already set as const above...
+#endif
+
 #if defined(ENABLE_BOILER_HUB) // && defined(USE_MODULE_FHT8VSIMPLE)   // ***** FIXME *******
     // Final poll to to cover up to end of previous minor loop.
     // Keep time from here to following SetupToEavesdropOnFHT8V() as short as possible to avoid missing remote calls.
@@ -1595,70 +1614,80 @@ void loopOpenTRV()
 //    // Turn boiler output on or off in response to calls for heat.
 //    hubModeBoilerOn = isBoilerOn();
 
-    // In hub/listen/RX mode of some sort...
-    //
-    // If in stats hub mode then always listen; don't attempt to save power.
-    if(inStatsHubMode())
-      { needsToEavesdrop = true; }
-    // If not running a local TRV, and thus without local temperature measurement problems from self-heating,
-    // then just listen all the time for maximum simplicity and responsiveness at some cost in extra power consumption.
-    // (At least as long as power is not running low for some reason.)
-    else if(!localFHT8VTRVEnabled() && !batteryLow)
-      { needsToEavesdrop = true; }
-    // Try to avoid listening in the 'quiet' sensor minute in order to minimise noise and power consumption and self-heating.
-    // Optimisation: if just heard a call need not listen on this next cycle.
-    // Optimisation: if boiler timeout is a long time away (>> one FHT8V TX cycle, ~2 minutes excl quiet minute), then can avoid listening for now.
-    //    Longish period without any RX listening may allow hub unit to cool and get better sample of local temperature if marginal.
-    // Aim to listen in one stretch for greater than full FHT8V TX cycle of ~2m to avoid missing a call for heat.
-    // MUST listen for all of final 2 mins of boiler-on to avoid missing TX (without forcing boiler over-run).
-    else if((boilerCountdownTicks <= ((OTRadValve::FHT8VRadValveBase::MAX_FHT8V_TX_CYCLE_HS+1)/(2 * OTV0P2BASE::MAIN_TICK_S))) && // Don't miss a final TX that would keep the boiler on...
-       (boilerCountdownTicks != 0)) // But don't force unit to listen/RX all the time if no recent call for heat.
-      { needsToEavesdrop = true; }
-    else if((!heardIt) &&
-       (!minute0From4ForSensors) &&
-       (boilerCountdownTicks <= (RX_REDUCE_MIN_M*(60 / OTV0P2BASE::MAIN_TICK_S)))) // Listen eagerly for fresh calls for heat for last few minutes before turning boiler off.
-      {
-#if defined(RX_REDUCE_MAX_M) && defined(LOCAL_TRV)
-      // Skip the minute before the 'quiet' minute also in very quiet mode to improve local temp measurement.
-      // (Should still catch at least one TX per 4 minutes at worst.)
-      needsToEavesdrop =
-          ((boilerNoCallM <= RX_REDUCE_MAX_M) || (3 != (minuteCount & 3)));
-#else
-      needsToEavesdrop = true;
-#endif
-      }
+//    // In hub/listen/RX mode of some sort...
+//    //
+//    // If in stats hub mode then always listen; don't attempt to save power.
+//    if(inStatsHubMode())
+//      { needsToEavesdrop = true; }
+//    // If not running a local TRV, and thus without local temperature measurement problems from self-heating,
+//    // then just listen all the time for maximum simplicity and responsiveness at some cost in extra power consumption.
+//    // (At least as long as power is not running low for some reason.)
+//    else if(!localFHT8VTRVEnabled() && !batteryLow)
+//      { needsToEavesdrop = true; }
+//    // Try to avoid listening in the 'quiet' sensor minute in order to minimise noise and power consumption and self-heating.
+//    // Optimisation: if just heard a call need not listen on this next cycle.
+//    // Optimisation: if boiler timeout is a long time away (>> one FHT8V TX cycle, ~2 minutes excl quiet minute), then can avoid listening for now.
+//    //    Longish period without any RX listening may allow hub unit to cool and get better sample of local temperature if marginal.
+//    // Aim to listen in one stretch for greater than full FHT8V TX cycle of ~2m to avoid missing a call for heat.
+//    // MUST listen for all of final 2 mins of boiler-on to avoid missing TX (without forcing boiler over-run).
+//    else if((boilerCountdownTicks <= ((OTRadValve::FHT8VRadValveBase::MAX_FHT8V_TX_CYCLE_HS+1)/(2 * OTV0P2BASE::MAIN_TICK_S))) && // Don't miss a final TX that would keep the boiler on...
+//       (boilerCountdownTicks != 0)) // But don't force unit to listen/RX all the time if no recent call for heat.
+//      { needsToEavesdrop = true; }
+//    else if((!heardIt) &&
+//       (!minute0From4ForSensors) &&
+//       (boilerCountdownTicks <= (RX_REDUCE_MIN_M*(60 / OTV0P2BASE::MAIN_TICK_S)))) // Listen eagerly for fresh calls for heat for last few minutes before turning boiler off.
+//      {
+//#if defined(RX_REDUCE_MAX_M) && defined(LOCAL_TRV)
+//      // Skip the minute before the 'quiet' minute also in very quiet mode to improve local temp measurement.
+//      // (Should still catch at least one TX per 4 minutes at worst.)
+//      needsToEavesdrop =
+//          ((boilerNoCallM <= RX_REDUCE_MAX_M) || (3 != (minuteCount & 3)));
+//#else
+//      needsToEavesdrop = true;
+//#endif
+//      }
 
-#else
-      needsToEavesdrop = true; // Listen if in hub mode.
-#endif
+#endif // defined(ENABLE_BOILER_HUB)
     }
+
+
+#if 0 && defined(DEBUG) && defined(ENABLE_DEFAULT_ALWAYS_RX)
+  const int8_t listenChannel = PrimaryRadio.getListenChannel();
+  if(listenChannel < 0)
+    {
+    DEBUG_SERIAL_PRINT_FLASHSTRING("NOT LISTENING lc=");
+    DEBUG_SERIAL_PRINT(listenChannel);
+    DEBUG_SERIAL_PRINTLN();
+    }
+#if 0 && defined(ENABLE_RADIO_RFM23B) // ONLY IF PrimaryRadio really is RFM23B!
+    const uint8_t rmode = RFM23B.getMode();
+    DEBUG_SERIAL_PRINT_FLASHSTRING("RFM23B mode ");
+    DEBUG_SERIAL_PRINT(rmode);
+    DEBUG_SERIAL_PRINTLN();
+#endif
 #endif
 
+#if defined(CONFIG_FORCE_TO_RX_MODE_REGULARLY)
+  // Force radio off (to be forced on again)
+  // to try to get into a reasonable state.
+  // BODGE: should not be necessary.
+  // May cause incoming frames to be lost.
+  PrimaryRadio.listen(false);
+#endif
 
-
-
-
-
-
-
-
-
-
-
-#if CONFIG_IMPLIES_MAY_NEED_CONTINUOUS_RX
   // Act on eavesdropping need, setting up or clearing down hooks as required.
-  RFM23B.listen(needsToEavesdrop);
+  PrimaryRadio.listen(needsToEavesdrop);
 //#if defined(USE_MODULE_FHT8VSIMPLE)
   if(needsToEavesdrop)
     {
 #if 1 && defined(DEBUG)
-    for(uint8_t lastErr; 0 != (lastErr = RFM23B.getRXErr()); )
+    for(uint8_t lastErr; 0 != (lastErr = PrimaryRadio.getRXErr()); )
       {
       DEBUG_SERIAL_PRINT_FLASHSTRING("!RX err ");
       DEBUG_SERIAL_PRINT(lastErr);
       DEBUG_SERIAL_PRINTLN();
       }
-    const uint8_t dropped = RFM23B.getRXMsgsDroppedRecent();
+    const uint8_t dropped = PrimaryRadio.getRXMsgsDroppedRecent();
     static uint8_t oldDropped;
     if(dropped != oldDropped)
       {
@@ -1670,7 +1699,7 @@ void loopOpenTRV()
 #endif
 #if 0 && defined(DEBUG)
     // Filtered out messages are not any sort of error.
-    const uint8_t filtered = RFM23B.getRXMsgsFilteredRecent();
+    const uint8_t filtered = PrimaryRadio.getRXMsgsFilteredRecent();
     static uint8_t oldFiltered;
     if(filtered != oldFiltered)
       {
@@ -1731,7 +1760,7 @@ void loopOpenTRV()
     // or the in a previous orbit of this loop sleep or nap was terminated by an I/O interrupt.
     // May generate output to host on Serial.
     // Come back and have another go if work was done, until the next tick at most.
-    if(handleQueuedMessages(&Serial, true, &RFM23B)) { continue; }
+    if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
 #endif
 
 //#if defined(USE_MODULE_RFM22RADIOSIMPLE) // Force radio to power-saving standby state if appropriate.
@@ -1858,7 +1887,7 @@ void loopOpenTRV()
     }
 #ifdef ENABLE_RADIO_RX
   // Handling the UI may have taken a little while, so process I/O a little.
-  handleQueuedMessages(&Serial, true, &RFM23B); // Deal with any pending I/O.
+  handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
 #endif
 
 
@@ -1879,7 +1908,7 @@ void loopOpenTRV()
     useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8V.FHT8VPollSyncAndTX_Next(doubleTXForFTH8V);
 //    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@1"); }
     // Handling the FHT8V may have taken a little while, so process I/O a little.
-    handleQueuedMessages(&Serial, true, &RFM23B); // Deal with any pending I/O.
+    handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
     }
 #endif
 
@@ -1919,9 +1948,9 @@ void loopOpenTRV()
       }
 
     // Churn/reseed PRNG(s) a little to improve unpredictability in use: should be lightweight.
-    case 2: { if(runAll) { OTV0P2BASE::seedRNG8(minuteCount ^ OTV0P2BASE::getCPUCycleCount() ^ (uint8_t)Supply_mV.get(), OTV0P2BASE::_getSubCycleTime() ^ AmbLight.get(), (uint8_t)TemperatureC16.get()); } break; }
+    case 2: { if(runAll) { OTV0P2BASE::seedRNG8(minuteCount ^ OTV0P2BASE::getCPUCycleCount() ^ (uint8_t)Supply_cV.get(), OTV0P2BASE::_getSubCycleTime() ^ AmbLight.get(), (uint8_t)TemperatureC16.get()); } break; }
     // Force read of supply/battery voltage; measure and recompute status (etc) less often when already thought to be low, eg when conserving.
-    case 4: { if(runAll) { Supply_mV.read(); } break; }
+    case 4: { if(runAll) { Supply_cV.read(); } break; }
 
 #ifdef ALLOW_STATS_TX
     // Regular transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
@@ -1942,7 +1971,7 @@ void loopOpenTRV()
         // Sleep randomly up to 128ms to spread transmissions and thus help avoid collisions.
         OTV0P2BASE::sleepLowPowerLessThanMs(1 + (OTV0P2BASE::randRNG8() & 0x7f));
 //        nap(randRNG8NextBoolean() ? WDTO_60MS : WDTO_120MS); // FIXME: need a different random interval generator!
-        handleQueuedMessages(&Serial, true, &RFM23B); // Deal with any pending I/O.
+        handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
         // Send it!
         // Try for double TX for extra robustness unless:
         //   * this is a speculative 'extra' TX
@@ -1952,7 +1981,7 @@ void loopOpenTRV()
         // if this is controlling a local FHT8V on which the binary stats can be piggybacked.
         // Ie, if doesn't have a local TRV then it must send binary some of the time.
         // Any recently-changed stats value is a hint that a strong transmission might be a good idea.
-#ifdef ALLOW_BINARY_STATS_TX
+#if defined(ALLOW_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
         const bool doBinary = !localFHT8VTRVEnabled() && OTV0P2BASE::randRNG8NextBoolean();
 #else
         const bool doBinary = false;
@@ -2108,7 +2137,7 @@ void loopOpenTRV()
     useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8V.FHT8VPollSyncAndTX_Next(doubleTXForFTH8V);
 //    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@2"); }
     // Handling the FHT8V may have taken a little while, so process I/O a little.
-    handleQueuedMessages(&Serial, true, &RFM23B); // Deal with any pending I/O.
+    handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
     }
 #endif
 
@@ -2122,7 +2151,7 @@ void loopOpenTRV()
     useExtraFHT8VTXSlots = localFHT8VTRVEnabled() && FHT8V.FHT8VPollSyncAndTX_Next(doubleTXForFTH8V);
 //    if(useExtraFHT8VTXSlots) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("ES@3"); }
     // Handling the FHT8V may have taken a little while, so process I/O a little.
-    handleQueuedMessages(&Serial, true, &RFM23B); // Deal with any pending I/O.
+    handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
     }
 #endif
 

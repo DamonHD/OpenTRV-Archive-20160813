@@ -1,3 +1,22 @@
+/*
+The OpenTRV project licenses this file to you
+under the Apache Licence, Version 2.0 (the "Licence");
+you may not use this file except in compliance
+with the Licence. You may obtain a copy of the Licence at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the Licence is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the Licence for the
+specific language governing permissions and limitations
+under the Licence.
+
+Author(s) / Copyright (s): Damon Hart-Davis 2015
+                           Deniz Erbilgin 2015
+*/
+
 package uk.org.opentrv.test.leafauthenc;
 
 import static org.junit.Assert.assertEquals;
@@ -108,6 +127,8 @@ public class AESGCMTest
 
     /**Basic test that the AES-GCM suite is available and works.
      * Based on https://bugs.openjdk.java.net/browse/JDK-8062828 commentary/example.
+     * <p>
+     * Note: AES/GCM/NoPadding impl appends auth tag to cyphertext, I believe: DHD20151220.
      */
     @Test
     public void testAESGCMBasics() throws Exception
@@ -147,6 +168,8 @@ public class AESGCMTest
 
     /**Test on specific simple plaintext/ADATA.key value.
      * Can be used to test MCU-based implementations.
+     * <p>
+     * Note: AES/GCM/NoPadding impl appends auth tag to cyphertext, I believe: DHD20151220.
      */
     @Test
     public void testAESGCMAll0() throws Exception

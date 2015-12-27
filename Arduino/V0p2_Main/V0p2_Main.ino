@@ -68,7 +68,7 @@ void panic()
   {
 #ifdef USE_MODULE_RFM22RADIOSIMPLE
   // Reset radio and go into low-power mode.
-  RFM23B.panicShutdown();
+  PrimaryRadio.panicShutdown();
 #endif
   // Power down almost everything else...
   minimisePowerWithoutSleep();
@@ -94,28 +94,6 @@ void panic(const __FlashStringHelper *s)
   }
 
 
-// Compute a CRC of all of SRAM as a hash that should contain some entropy, especially after power-up.
-#if !defined(RAMSTART)
-#define RAMSTART (0x100)
-#endif
-static uint16_t sramCRC()
-  {
-  uint16_t result = ~0U;
-  for(uint8_t *p = (uint8_t *)RAMSTART; p <= (uint8_t *)RAMEND; ++p)
-    { result = _crc_ccitt_update(result, *p); }
-  return(result);
-  }
-// Compute a CRC of all of EEPROM as a hash that may contain some entropy, particularly across restarts.
-static uint16_t eeCRC()
-  {
-  uint16_t result = ~0U;
-  for(uint8_t *p = (uint8_t *)0; p <= (uint8_t *)E2END; ++p)
-    {
-    const uint8_t v = eeprom_read_byte(p);
-    result = _crc_ccitt_update(result, v);
-    }
-  return(result);
-  }
 
 // Signal position in basic POST sequence as a small positive integer, or zero for done/none.
 // Simple count of position in ON flashes.
@@ -185,7 +163,13 @@ void serialPrintlnBuildVersion()
   OTV0P2BASE::serialPrintlnAndFlush();
   }
 
+// FIXME Temporary fix
 static const OTRadioLink::OTRadioChannelConfig RFMConfig(OTRadValve::FHT8VRadValveBase::FHT8V_RFM23_Reg_Values, true, true, true);
+#ifdef RADIO_SECONDARY_SIM900
+static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true, true, true);
+#else
+static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true, true, true);
+#endif // RADIO_SECONDARY_SIM900
 
 #if defined(ALLOW_CC1_SUPPORT_RELAY)
 // For a CC1 relay, ignore everything except FTp2_CC1PollAndCmd messages.
@@ -206,7 +190,8 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
   buflen = 8; // Truncate message to correct size for efficiency.
   return(true); // Accept message.
   }
-#elif defined(ALLOW_STATS_RX)
+#elif defined(ALLOW_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+// If using FS20-based non-secured messaging...
 // If a stats hub then be prepared to accept a wide variety of binary and JSON message types.
 // It may yet be good to trim the smaller message types down to size in particular to help queueing.
 // It may also be kinder to some of the older FS20+trailer handling routines to not over-trim!
@@ -262,6 +247,7 @@ void optionalPOST()
 
 //  posPOST(1, F("about to test radio module"));
 
+// FIXME  This section needs refactoring
 #ifdef USE_MODULE_RFM22RADIOSIMPLE
 // TODO-547: why does nested SPI enable break things?
 //  const bool neededToWakeSPI = OTV0P2BASE::powerUpSPIIfDisabled();
@@ -269,35 +255,51 @@ void optionalPOST()
 //  DEBUG_SERIAL_PRINTLN();
 #if !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(Using RFM22.)");
-#endif
+#endif // !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
+
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
-  RFM23B.preinit(NULL);
+  PrimaryRadio.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
-  if(!RFM23B.configure(1, &RFMConfig) || !RFM23B.begin()) { panic(); }
+  if(!PrimaryRadio.configure(1, &RFMConfig) || !PrimaryRadio.begin()) { panic(); }
   // Apply filtering, if any, while we're having fun...
-  RFM23B.setFilterRXISR(FilterRXISR);
+  PrimaryRadio.setFilterRXISR(FilterRXISR);
 //  if(neededToWakeSPI) { OTV0P2BASE::powerDownSPI(); }
-#endif
+#endif // USE_MODULE_RFM22RADIOSIMPLE
+
+#ifdef ENABLE_RADIO_SECONDARY_MODULE
+#ifdef ENABLE_RADIO_SIM900
+// Turn power on for SIM900 with PFET for secondary power control.
+fastDigitalWrite(A3, 0);
+pinMode(A3, OUTPUT);
+#endif // ENABLE_RADIO_SIM900
+// Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
+  SecondaryRadio.preinit(NULL);
+  // Check that the radio is correctly connected; panic if not...
+  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
+  // Apply filtering, if any, while we're having fun...
+//  SecondaryRadio.setFilterRXISR(FilterRXISR); // Assume no RX on secondary radio.
+#endif // ENABLE_RADIO_SECONDARY_MODULE
+
 
 //  posPOST(1, F("Radio OK, checking buttons/sensors and xtal"));
 
 // Buttons should not be activated DURING boot; activated button implies fault.
-#if (9 != V0p2_REV) || !defined(CONFIG_REV9_cut1) // Usual tests for stuck control buttons.
-  // Check buttons not stuck in the activated position.
-  if((fastDigitalRead(BUTTON_MODE_L) == LOW)
-#if defined(BUTTON_LEARN_L)
-     || (fastDigitalRead(BUTTON_LEARN_L) == LOW)
-#endif
-#if defined(BUTTON_LEARN2_L) && (9 != V0p2_REV) // This input is not momentary with REV9.
-     || (fastDigitalRead(BUTTON_LEARN2_L) == LOW)
-#endif
-    )
-    { panic(F("button stuck")); }
-#else
-    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_MODE_L)); DEBUG_SERIAL_PRINTLN(); // Should be BOOSTSWITCH_L for REV9.
-    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN_L)); DEBUG_SERIAL_PRINTLN();
-    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN2_L)); DEBUG_SERIAL_PRINTLN(); // AKA WINDOW SWITCH
-#endif
+//#if (9 != V0p2_REV) || !defined(CONFIG_REV9_cut1) // Usual tests for stuck control buttons.
+//  // Check buttons not stuck in the activated position.
+//  if((fastDigitalRead(BUTTON_MODE_L) == LOW)
+//#if defined(BUTTON_LEARN_L)
+//     || (fastDigitalRead(BUTTON_LEARN_L) == LOW)
+//#endif
+//#if defined(BUTTON_LEARN2_L) && (9 != V0p2_REV) // This input is not momentary with REV9.
+//     || (fastDigitalRead(BUTTON_LEARN2_L) == LOW)
+//#endif
+//    )
+//    { panic(F("button stuck")); }
+//#else
+//    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_MODE_L)); DEBUG_SERIAL_PRINTLN(); // Should be BOOSTSWITCH_L for REV9.
+//    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN_L)); DEBUG_SERIAL_PRINTLN();
+//    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN2_L)); DEBUG_SERIAL_PRINTLN(); // AKA WINDOW SWITCH
+//#endif
 
 #if defined(WAKEUP_32768HZ_XTAL)
   // Check that the 32768Hz async clock is actually running having done significant CPU-intensive work.
@@ -467,11 +469,11 @@ void setup()
 
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
   // Get current power supply voltage (internal sensor).
-  const uint16_t Vcc = Supply_mV.read();
+  const uint16_t Vcc = Supply_cV.read();
 #if 1 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("Vcc: ");
   DEBUG_SERIAL_PRINT(Vcc);
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING("mV");
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("cV");
 #endif
   // Get internal temperature measurement (internal sensor).
   const int intTempC16 = readInternalTemperatureC16();
@@ -488,8 +490,8 @@ void setup()
   // Also sweeps over SRAM and EEPROM (see RAMEND and E2END), especially for non-volatile state and uninitialised areas of SRAM.
   // TODO: add better PRNG with entropy pool (eg for crypto).
   // TODO: add RFM22B WUT clock jitter, RSSI, temperature and battery voltage measures.
-  const uint16_t srseed = sramCRC();
-  const uint16_t eeseed = eeCRC();
+  const uint16_t srseed = OTV0P2BASE::sramCRC();
+  const uint16_t eeseed = OTV0P2BASE::eeCRC();
   // DHD20130430: maybe as much as 16 bits of entropy on each reset in seed1, concentrated in the least-significant bits.
   const uint16_t s16 = (__DATE__[5]) ^
                        Vcc ^
@@ -614,7 +616,6 @@ void loop()
 #if defined(EST_CPU_DUTYCYCLE)
   const unsigned long usStart = micros();
 #endif
-
 
 #if defined(UNIT_TESTS) // Run unit tests *instead* of normal loop() code.
   loopUnitTest();

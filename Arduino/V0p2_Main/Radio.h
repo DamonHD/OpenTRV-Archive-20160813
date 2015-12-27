@@ -32,33 +32,31 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2015
 #include <OTSIM900Link.h>
 
 
-#if 0
-
-#ifdef ENABLE_RADIO_PRIMARY_MODULE
-extern RADIO_PRIMARY_MODULE_TYPE PrimaryRadio;
-//  DO NOT USE // extern OTRadioLink::OTRadioLink &RFM23B = PrimaryRadio;
-#endif // ENABLE_RADIO_PRIMARY_MODULE
-
-#ifdef ENABLE_RADIO_SECONDARY_MODULE
-extern RADIO_SECONDARY_MODULE_TYPE SecondaryRadio;
-#ifdef ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
-extern OTRadioLink::OTRadioLink &RelayRadio = SecondaryRadio;
-#endif // ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
-#endif // RADIO_SECONDARY_MODULE_TYPE
-
-#endif // 0 
 
 
+//#ifdef ENABLE_RADIO_PRIMARY_MODULE
+extern OTRadioLink::OTRadioLink &PrimaryRadio;
+//#endif // ENABLE_RADIO_PRIMARY_MODULE
 
-#ifdef USE_NULLRADIO
-extern OTRadioLink::OTNullRadioLink RFM23B;
-#elif defined(USE_MODULE_SIM900)
-extern OTSIM900Link::OTSIM900Link RFM23B;
-#elif defined(PIN_RFM_NIRQ)
+//#ifdef ENABLE_RADIO_SECONDARY_MODULE
+extern OTRadioLink::OTRadioLink &SecondaryRadio;
+//#endif // RADIO_SECONDARY_MODULE_TYPE
+
+
+#if defined(ENABLE_RADIO_RFM23B) && defined(DEBUG) // Expose for debugging...
 extern OTRFM23BLink::OTRFM23BLink<PIN_SPI_nSS, PIN_RFM_NIRQ> RFM23B;
-#else
-extern OTRFM23BLink::OTRFM23BLink<PIN_SPI_nSS, -1> RFM23B;
 #endif
+
+#ifdef ENABLE_RADIO_SIM900
+//For EEPROM:
+//- Set the first field of SIM900LinkConfig to true.
+//- The configs are stored as \0 terminated strings starting at 0x300.
+//- You can program the eeprom using ./OTRadioLink/dev/utils/sim900eepromWrite.ino
+
+extern const OTSIM900Link::OTSIM900LinkConfig_t SIM900Config;
+#endif // ENABLE_RADIO_SIM900
+
+
 
 #define RFM22_PREAMBLE_BYTE 0xaa // Preamble byte for RFM22/23 reception.
 #define RFM22_PREAMBLE_MIN_BYTES 4 // Minimum number of preamble bytes for reception.

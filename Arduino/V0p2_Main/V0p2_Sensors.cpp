@@ -128,8 +128,8 @@ uint8_t AmbientLight::read()
   if(al0 >= ADAPTIVE_THRESHOLD)
     {
     const uint16_t al1 = OTV0P2BASE::analogueNoiseReducedRead(LDR_SENSOR_AIN, DEFAULT); // Vsupply reference.
-    Supply_mV.read();
-    const uint16_t vbg = Supply_mV.getRawInv(); // Vbandgap wrt Vsupply.
+    Supply_cV.read();
+    const uint16_t vbg = Supply_cV.getRawInv(); // Vbandgap wrt Vsupply.
     // Compute value in extended range up to ~1024 * Vsupply/Vbandgap.
     const uint16_t ale = ((al1 << 5) / ((vbg+16) >> 5)); // Faster int-only approximation to (int)((al1 * 1024L) / vbg)).
     // Assuming typical V supply of 2--3 times Vbandgap,
@@ -183,7 +183,7 @@ uint8_t AmbientLight::read()
     }
 
   // Store new value, raw and normalised.
-  // Unconditionbally store raw value.
+  // Unconditionally store raw value.
   rawValue = al;
   if(newValue != value)
     {
@@ -200,7 +200,7 @@ uint8_t AmbientLight::read()
       else if(isUp && ((absDiff >> 2) >= upDelta))
         {
         Occupancy.markAsPossiblyOccupied();
-#if 0 && defined(DEBUG)
+#if 1 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("Ambient light absDiff/dt/lt: ");
   DEBUG_SERIAL_PRINT(absDiff);
   DEBUG_SERIAL_PRINT(' ');
@@ -941,12 +941,10 @@ uint8_t TemperaturePot::read()
       {
       // Force FROST mode when right at bottom of dial.
       if(rn < RN_FRBO) { setWarmModeDebounced(false); }
-#ifdef SUPPORT_BAKE // IF DEFINED: this unit supports BAKE mode.
       // Start BAKE mode when dial turned up to top.
       else if(rn > (255-RN_FRBO)) { startBakeDebounced(); }
       // Cancel BAKE mode when dial/temperature turned down significantly.
       else if(rn < oldValue) { cancelBakeDebounced(); }
-#endif
       // Force WARM mode when dial/temperature turned up significantly.
       else if(rn > oldValue) { setWarmModeDebounced(true); }
 

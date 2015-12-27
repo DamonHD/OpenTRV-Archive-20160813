@@ -74,7 +74,18 @@ The OpenTRV project licenses this file to you
 // Returns true iff the user interacted with the system, and maybe caused a status change.
 // NOTE: since this is on the minimum idle-loop code path, minimise CPU cycles, esp in frost mode.
 // Also re-activates CLI on main button push.
+//
+#if !defined(BUTTON_MODE_L) || (!defined(LOCAL_TRV) && !defined(SLAVE_TRV))
+// If the appropriate button input is not available
+// or this is not driving a local TRV (eg because this is a sensor module)
+// then disable the usual interactive UI entirely
+// (except to ensure the main LED is turned off once per minor cycle).
+#define NO_UI_SUPPORT
+// Ensure LED forced off unconditionally at least once each cycle.
+inline bool tickUI(uint_fast8_t) { LED_HEATCALL_OFF(); return(false); } // Always false.
+#else
 bool tickUI(uint_fast8_t sec);
+#endif
 
 // Record local manual operation of a local physical UI control, eg not remote or via CLI.
 // Thread-safe.
@@ -97,7 +108,11 @@ void checkUserSchedule();
 
 // Sends a short 1-line CRLF-terminated status report on the serial connection (at 'standard' baud).
 // Should be similar to PICAXE V0.1 output to allow the same parser to handle either.
+#ifdef ENABLE_SERIAL_STATUS_REPORT
 void serialStatusReport();
+#else
+#define serialStatusReport() { }
+#endif
 
 // Character that should trigger any pending command from user to be sent.
 #define CLIPromptChar (LINE_START_CHAR_CLI) // Printable ASCII char that should be avoided in status output.

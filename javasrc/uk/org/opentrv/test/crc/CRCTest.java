@@ -274,11 +274,11 @@ public final class CRCTest
         }
 
     /**Test some basics of the CC1 (central control V1) protocol CRC1.
-     * These tests can then be ported to/from the Arduino C++ code. 
+     * These tests can then be ported to/from the Arduino C++ code.
      */
     @Test public void testCC1()
         {
-        byte buf[] = new byte[13]; // More than long enough.
+        final byte buf[] = new byte[13]; // More than long enough.
         // Test that a zero leading byte is rejected with a zero result.
         buf[0] = 0;
         assertEquals(0, CC1Impl.computeSimpleCRC(buf, 0, buf.length));
@@ -297,13 +297,13 @@ public final class CRCTest
         //     '!' hc2 hc2 1 1 1 1 crc
         // Note that most values are whitened to be neither 0x00 nor 0xff on the wire.
         // Minimal alert with zero house codes.
-        byte bufAlert0[] = new byte[] {'!', 0, 0, 1, 1, 1, 1};
+        final byte bufAlert0[] = new byte[] {'!', 0, 0, 1, 1, 1, 1};
         assertEquals(80, CC1Impl.computeSimpleCRC(bufAlert0, 0, bufAlert0.length));
         // Minimal alert with non-zero house codes.
-        byte bufAlert1[] = new byte[] {'!', 10, 21, 1, 1, 1, 1};
+        final byte bufAlert1[] = new byte[] {'!', 10, 21, 1, 1, 1, 1};
         assertEquals(55, CC1Impl.computeSimpleCRC(bufAlert1, 0, bufAlert1.length));
         // Minimal alert with non-zero house codes.
-        byte bufAlert2[] = new byte[] {'!', 99, 99, 1, 1, 1, 1};
+        final byte bufAlert2[] = new byte[] {'!', 99, 99, 1, 1, 1, 1};
         assertEquals(12, CC1Impl.computeSimpleCRC(bufAlert2, 0, bufAlert2.length));
         }
 
