@@ -136,17 +136,19 @@ public class SecureFrameTest
 
 
 
-    /* retrieve nonce from:
-     * 4 MSBs of ID
-     * 2 LSBs of ID, that are not sent OTA but magically shared
-     * 3 bytes of resatr counter - retrieved from the trailer
-     * 3 bytes od tx message counter - retrieved from the trailer
+    /**Retrieve IV/nonce from raw message and other information.
+     * <ul>
+     * <li>4 MSBs of ID</li>
+     * <li>2 LSBs of ID, that are not sent OTA but magically shared</li>
+     * <li>3 bytes of resatr counter - retrieved from the trailer</li>
+     * <li>3 bytes od tx message counter - retrieved from the trailer</li>
+     * </uL>
      *
      * @param msgBuff Raw message received from the aether
      * @param pos index into msgBuff at the start of the message body
      * @param decodedFrame the bits of the frame that have been decoded so far. i,e the header at this point
      */
-    public static byte[] retrieveNonce (final byte[] msgBuff, int pos, final OFrameStruct decodedFrame ){
+    public static byte[] retrieveNonce(final byte[] msgBuff, int pos, final OFrameStruct decodedFrame ){
 
         final byte[] nonce= new byte[GCM_NONCE_LENGTH];
         byte nonceIndx = 0;
