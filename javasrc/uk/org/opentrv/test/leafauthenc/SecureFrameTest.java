@@ -146,7 +146,6 @@ public class SecureFrameTest
      * @param pos index into msgBuff at the start of the message body
      * @param decodedFrame the bits of the frame that have been decoded so far. i,e the header at this point
      */
-
     public static byte[] retrieveNonce (final byte[] msgBuff, int pos, final OFrameStruct decodedFrame ){
 
         final byte[] nonce= new byte[GCM_NONCE_LENGTH];
