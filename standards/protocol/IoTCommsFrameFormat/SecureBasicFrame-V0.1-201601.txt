@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 REVISIONS
 
+V0,1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
 V0.0.20151231: freeze of initial draft and transfer to GitHub.
 V0.0.20151203: initial document creation at http://www.earth.org.uk/OpenTRV/stds/network/20151203-DRAFT-SecureBasicFrame.txt
@@ -102,7 +103,7 @@ HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
 	This is effectively 'envelope' in RFC822 email terms,
 	since though logically the first byte of the frame
 	may be handled separately from it, eg by radio module logic.
-        Note: fl = hl-1 + bl + tl
+        Note: fl = hl-1 + bl + tl = 3+il + bl + tl
 
  1      frame type (bits 0 to -6) and security flag (bit 7 true for secure)
         Never 0 nor 0xff, so the type is never 0 nor 0x7f.
@@ -179,6 +180,12 @@ at any receiver on any securable frame to drop severely mangled frames.
   * il <= fl - 4 (ID length; minimum of 4 bytes of other overhead)
   * bl <= fl - 4 - il (body length; minimum of 4 bytes of other overhead)
   * the final frame byte (the final trailer byte) is never 0x00 nor 0xff
+  * tl == 1 for non-secure, tl >= 1 for secure (tl = fl - 3 - il - bl)
+
+Note that all of these should be verified in a way that avoids overflow
+or other miscalculation in the face of bad data, eg in the order above,
+eg for the trailer length first verify that the trailer offset/start < fl,
+and that for non-secure frames that tl == fl - 1.
 
 (Note that radios may themselves reject potentially-mangled frames in
 noisy environments because of carrier dropout, preamble mismatches, etc.)
