@@ -19,7 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
-V0.1.20160102: typos and tidyup.
+V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
 V0.1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
 V0.0.20151231: freeze of initial draft and transfer to GitHub.
@@ -100,7 +100,7 @@ pr      preamble and sync if required, length pl
 HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
         The header section is always unencrypted.
 
- 1      (fl) frame length excluding this byte [4,255] but generally << 64.
+ 1      (fl) frame length excluding this byte [4,255] but typically <= 63 ('small' frame).
         This is effectively 'envelope' in RFC822 email terms,
         since though logically the first byte of the frame
         may be handled separately from it, eg by radio module logic.
@@ -112,7 +112,7 @@ HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
  1      frame sequence number mod 16 [0,15] (bits 4 to 7)
         and ID length [0,15] (bits 0-3)
 
-        Sequence number increments from 0, wraps at 15;
+        Sequence number (seqNum) increments from 0, wraps at 15;
         increment is skipped for multiple TX used for noise immunity.
         If a counter is used as part of (eg) security IV/nonce
         then these 4 bits may be its least significant bits.
@@ -146,7 +146,7 @@ TRAILER SECTION (length tl, never zero length)
         The trailer contains anything necessary to validate the frame,
         and to support authentication and encryption of the header and body
         as appropriate, but should not contain anything that might leak 
-        any of the plaintext of an encrypted body.
+        any of the plain-text of an encrypted body.
         The final byte of the trailer should neither be 0x0 nor 0xff.
 
 tr      1-byte 7-bit CRC in insecure mode, of polynominal 0x5B (Koopman),
@@ -170,14 +170,14 @@ may allow more up to maximum 255 byte frame (abs max 251 byte body, insecure).
 QUICK INTEGRITY CHECKS
 
 Before attempting to authenticate a secure frame (with expensive crypto),
-or even computing/testing the CRC in some enviroments,
+or even computing/testing the CRC in some environments,
 the following basic structural integrity checks can be be performed quickly
-at any receiver on any securable frame to drop severely mangled frames.
+at any receiver on any secureable frame to drop severely mangled frames.
 
-  * fl >= 4 (type, seq/il, bl, trailer bytes)
-  * fl may be further constrained by system limits, typically to <= 64
+  * fl >= 4 (type, seqNum/il, bl, trailer bytes)
+  * fl may be further constrained by system limits, typically to <= 63
   * type (the first frame byte) is never 0x00, 0x80, 0x7f, 0xff.
-  * il <= 8 for initial implementations (internal node ID is 8 bytes)
+  * il <= 8 for initial / small frame implementations (internal node ID is 8 bytes)
   * il <= fl - 4 (ID length; minimum of 4 bytes of other overhead)
   * bl <= fl - 4 - il (body length; minimum of 4 bytes of other overhead)
   * the final frame byte (the final trailer byte) is never 0x00 nor 0xff
@@ -189,9 +189,11 @@ eg for the trailer length first verify that the trailer offset/start < fl,
 and that for non-secure frames that tl == fl - 1.
 
 (Note that radios may themselves reject potentially-mangled frames in
-noisy environments because of carrier dropout, preamble mismatches, etc.)
+noisy environments because of carrier drop-out, preamble mismatches, etc.)
 
-All small systems by default may reject frames with fl > 64 bytes.
+All small systems by default may reject frames with fl >= 64 bytes
+(fl == 63 is the limit in size of a 'small' frame, excluding fl itself,
+to allow for typical radio packet buffers/FIFOs including fl of 64 bytes).
 
 Per-frame type structural validation can and should be performed further
 down the processing chain for those types that are understood.
@@ -348,7 +350,7 @@ the associated key, eg for a device driven by harvested energy and sending
 one authenticated frame per restart, then the those more significant bytes
 logically become part of the reset count, transparently to the recipient.
 At all times the aim is to ensure that no IV/nonce is ever reused with a
-new plaintext (other than an exact immediate retransmission of a frame to
+new plain-text (other than an exact immediate retransmission of a frame to
 overcome transmission losses where repeats may be and should be dropped).
 
 *Note2: where the key is used for sending a message *from* the specified ID
