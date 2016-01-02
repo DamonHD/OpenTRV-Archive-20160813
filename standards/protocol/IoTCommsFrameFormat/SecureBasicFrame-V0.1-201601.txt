@@ -101,9 +101,9 @@ HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
         The header section is always unencrypted.
 
  1      (fl) frame length excluding this byte [4,255] but generally << 64.
-	This is effectively 'envelope' in RFC822 email terms,
-	since though logically the first byte of the frame
-	may be handled separately from it, eg by radio module logic.
+        This is effectively 'envelope' in RFC822 email terms,
+        since though logically the first byte of the frame
+        may be handled separately from it, eg by radio module logic.
         Note: fl = hl-1 + bl + tl = 3+il + bl + tl
 
  1      frame type (bits 0 to -6) and security flag (bit 7 true for secure)
@@ -124,37 +124,37 @@ id      ID bytes (0 implies anonymous, 1 or 2 typical domestic, length il)
         but may under some circumstances (depending on message type)
         be the ID of the target/recipient.
 
-	NOTE: for initial implementations il <= 8.
+        NOTE: for initial implementations il <= 8.
 
 bl      body length including any padding [0,251] but generally << 60.
 
         For an unencrypted body this is the exact lengh of the body content,
-	else it is the size of the body after padding and encryption
-	(ie the decrypted form will indicate the true body content length).
-	In both cases bl is the number of bytes of data before the trailer.
+        else it is the size of the body after padding and encryption
+        (ie the decrypted form will indicate the true body content length).
+        In both cases bl is the number of bytes of data before the trailer.
 
 BODY SECTION (all encrypted if frame is secure, length bl)
 
 bd      type-specific payload bytes, possibly padded, of length bl.
         If padded for encryption the trailer may contain information about
-	removing it, or such removal may be implicit (as for our AES-GCM).
+        removing it, or such removal may be implicit (as for our AES-GCM).
         This allows processing of the basic frame without decryption,
         and slightly reduces leakage of information about the encrypted payload
         from its length.
         (Body is absent if bl == 0.)
 TRAILER SECTION (length tl, never zero length)
         The trailer contains anything necessary to validate the frame,
-	and to support authentication and encryption of the header and body
-	as appropriate, but should not contain anything that might leak 
-	any of the plaintext of an encrypted body.
-	The final byte of the trailer should neither be 0x0 nor 0xff.
+        and to support authentication and encryption of the header and body
+        as appropriate, but should not contain anything that might leak 
+        any of the plaintext of an encrypted body.
+        The final byte of the trailer should neither be 0x0 nor 0xff.
 
 tr      1-byte 7-bit CRC in insecure mode, of polynominal 0x5B (Koopman),
         initialised with 0xff.  If the CRC would be 0 then 0x80 is sent instead
-	to avoid 0 or 0xff final frame byte (ie self-whitening).
+        to avoid 0 or 0xff final frame byte (ie self-whitening).
         In secure mode this trailer is variable non-zero length security info
-	(such as authentication tag) and possibly padding,
-	and that length is determined by the encryption method used,
+        (such as authentication tag) and possibly padding,
+        and that length is determined by the encryption method used,
         which in turn nominally depends on the frame type, leaf and hub.
         See the AES-GCM section for the 'O' frame below as an example.
         Runs up the the end of the frame, so its length can be deduced
@@ -278,7 +278,7 @@ When secure:
     http://www.earth.org.uk/note-on-IoT-security.html#app4
       * 4 most-significant bytes (32 bits) of leaf ID,
         all transmitted in the ADATA (authenticated) section
-	(with two further bytes of ID pre-shared)
+        (with two further bytes of ID pre-shared)
       * 3 bytes transmitted of restart/reboot count + implicit further ID byte
         (allows 17 million restarts of 30 years at 1 per minute,
         which my be needed for energy-harvesting for example)
@@ -299,9 +299,9 @@ When secure:
         followed by 3 bytes of message counter since reset msb first.
         (The least significant 4 bytes of the least significant (last)
         message counter byte are the same header sequence counter.)
-	(The nonce/IV is all of that preceded by 
-	ID bytes 0 to 5 taken from the header or pre-shared;
-	for multiple matching ID prefixes all keys may have to be tried.)
+        (The nonce/IV is all of that preceded by 
+        ID bytes 0 to 5 taken from the header or pre-shared;
+        for multiple matching ID prefixes all keys may have to be tried.)
       * The 16-byte authentication tag.
   * The unencrypted body text is padded with trailing zero bytes
     to a multiple of 16 bytes - 1, eg to 15 or 31 bytes typically,
