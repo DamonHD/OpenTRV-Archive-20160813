@@ -17,8 +17,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 
 
-REVISIONS
+RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160102: typos and tidyup.
 V0.1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
 V0.0.20151231: freeze of initial draft and transfer to GitHub.
@@ -28,10 +29,10 @@ V0.0.20151203: initial document creation at http://www.earth.org.uk/OpenTRV/stds
 
 
 
-Generic Basic OpenTRV Securable Frame Format (DRAFT)
-====================================================
+Generic Basic OpenTRV Secureable Frame Format
+=============================================
 
-*** Also describes example specific rad/sensor frame type.
+*** Also describes a specific radiator valve / sensor frame type.
 
 Intended to be MCU- and small-radio-module- friendly and agnostic.
 
@@ -255,7 +256,7 @@ st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
         Permitted forms:
          1) Compact JSON object with leading '{' as stats type indicator,
-            veriable length, and final/trailing '}' omitted,
+            variable length, and final/trailing '}' omitted,
             ASCII 7-bit printable characters only.
             '@' (ID) and '+' (sequence) fields should be omitted to save space
             for secure encodings (to be optionally synthesised at concentrator).
@@ -271,7 +272,7 @@ or secured.
 
 When secure:
   * The algorithm used is AES-GCM used with a 128-bit pre-shared key
-    (though note the first trailer byte is 0x80 wuth AES-GCM 128-bit is used,
+    (though note the first trailer byte is 0x80 for AES-GCM 128-bit,
     allowing a different algorithm to be used in future.)
   * Construction and use of IV/nonce as:
     http://www.earth.org.uk/note-on-IoT-security.html#app4
@@ -293,7 +294,7 @@ When secure:
     AES-GCM authentication tag.
   * The last byte of the trailer is 0x80 to indicate V1 128-bit AES-GCM,
     and to avoid the final frame byte being 0 or 0xff,
-    preceeded by 22 further bytes as follows:
+    preceded by 22 further bytes as follows:
       * 3 bytes of restart/reboot counter msb first,
         followed by 3 bytes of message counter since reset msb first.
         (The least significant 4 bytes of the least significant (last)
@@ -345,7 +346,7 @@ can be persisted by the sender in non-volatile store, and the sender
 needs to be restarted frequently and to send more than 2^24 messages on
 the associated key, eg for a device driven by harvested energy and sending
 one authenticated frame per restart, then the those more significant bytes
-logicially become part of the reset count, transparently to the recipient.
+logically become part of the reset count, transparently to the recipient.
 At all times the aim is to ensure that no IV/nonce is ever reused with a
 new plaintext (other than an exact immediate retransmission of a frame to
 overcome transmission losses where repeats may be and should be dropped).
