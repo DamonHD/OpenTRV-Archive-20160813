@@ -19,7 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 REVISIONS
 
-V0,1.20160101: further structural integrity tests.
+V0.1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
 V0.0.20151231: freeze of initial draft and transfer to GitHub.
 V0.0.20151203: initial document creation at http://www.earth.org.uk/OpenTRV/stds/network/20151203-DRAFT-SecureBasicFrame.txt
