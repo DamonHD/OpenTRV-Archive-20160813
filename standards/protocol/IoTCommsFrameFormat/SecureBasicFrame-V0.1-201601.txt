@@ -19,7 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
-V0.1.20160103: indicating that examples can be used as implementation test vectors.
+V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
 V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
 V0.1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
@@ -369,7 +369,7 @@ EXAMPLE FRAMES
 
 These examples can also be used as test vectors for implementations.
 
-Example insecure frame, valve unit 0% open, no call for heat/flags/stats.
+Example 1: insecure frame, valve unit 0% open, no call for heat/flags/stats.
 In this case the frame sequence number is zero, and ID is 0x80 0x81.
 
 08 4f 02 80 81 02 | 00 01 | 23
@@ -384,7 +384,7 @@ In this case the frame sequence number is zero, and ID is 0x80 0x81.
 01 no flags or stats, unreported occupancy
 23 CRC value
 
-Example insecure frame, no valve, representative minimum stats {"b":1}
+Example 2: insecure frame, no valve, representative minimum stats {"b":1}
 In this case the frame sequence number is zero, and ID is 0x80 0x81.
 
 0e 4f 02 80 81 08 | 7f 11 7b 22 62 22 3a 31 | 61
