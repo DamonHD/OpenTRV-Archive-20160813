@@ -176,7 +176,7 @@ the following basic structural integrity checks can be be performed quickly
 at any receiver on any secureable frame to drop severely mangled frames.
 
   * fl >= 4 (type, seqNum/il, bl, trailer bytes)
-  * fl may be further constrained by system limits, typically to <= 63
+  * fl may be further constrained by system limits, eg to <= 63 for 'small' frame
   * type (the first frame byte) is never 0x00, 0x80, 0x7f, 0xff.
   * il <= 8 for initial / small frame implementations (internal node ID is 8 bytes)
   * il <= fl - 4 (ID length; minimum of 4 bytes of other overhead)
