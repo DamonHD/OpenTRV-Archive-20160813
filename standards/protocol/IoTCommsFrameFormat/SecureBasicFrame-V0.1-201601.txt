@@ -384,7 +384,7 @@ In this case the frame sequence number is zero, and ID is 0x80 0x81.
 01 no flags or stats, unreported occupancy
 23 CRC value
 
-Example 2: insecure frame, no valve, representative minimum stats {"b":1}
+Example 2: insecure frame, no valve, representative minimum stats {"b":1} .
 In this case the frame sequence number is zero, and ID is 0x80 0x81.
 
 0e 4f 02 80 81 08 | 7f 11 7b 22 62 22 3a 31 | 61
