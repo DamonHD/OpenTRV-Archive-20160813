@@ -19,7 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
-V0.1.20160103: indicating that examples can be used as implementation test vectors.
+V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
 V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
 V0.1.20160101: further structural integrity tests.
 V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
