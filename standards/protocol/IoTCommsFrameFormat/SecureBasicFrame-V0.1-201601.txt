@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
 V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
 V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
 V0.1.20160101: further structural integrity tests.
@@ -151,7 +152,7 @@ TRAILER SECTION (length tl, never zero length)
         The final byte of the trailer should neither be 0x0 nor 0xff.
 
 tr      1-byte 7-bit CRC in insecure mode, of polynominal 0x5B (Koopman),
-        initialised with 0xff.  If the CRC would be 0 then 0x80 is sent instead
+        initialised with 0x7f.  If the CRC would be 0 then 0x80 is sent instead
         to avoid 0 or 0xff final frame byte (ie self-whitening).
         In secure mode this trailer is variable non-zero length security info
         (such as authentication tag) and possibly padding,

@@ -894,7 +894,7 @@ public class SecureFrameTest
      */
     public static byte computeInsecureFrameCRC(final byte buf[], final int pos, final int len)
         {
-        byte crc = (byte)0xff; // Initialise CRC with 0xff (protects against extra leading 0x00s).
+        byte crc = (byte)0x7f; // Initialise CRC with 0x7f (protects against extra leading 0x00s).
         for(int i = 0; i < len; ++i)
             {
             crc = CRC7_5B.crc7_5B_update(crc, buf[pos + i]);
