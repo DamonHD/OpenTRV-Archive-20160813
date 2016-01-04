@@ -205,14 +205,14 @@ public class SecureFrameTest
 
     /*
     pads the message body out with 0s to 16 or 32 bits. Errors if length > 31
-    and sticks the number of bytes of padding in the last element of the array.
+    and sticks the number of bytes of padding in the last byte of the padded body.
 
-    @param body structure containing the message bod for encryption
+    @param body structure containing the message body for encryption
     @param len length (in bytes) of the structure
     returns byte array containing the padded message.
     */
 
-    public static byte[] addPadding (final BodyTypeOStruct body, final byte len){
+    public static byte[] addPaddingTo16BTrailing0sAndPadCount(final BodyTypeOStruct body, final byte len){
         byte[] paddedMsg;
 
         System.out.println("\r\n Length = "+len);
@@ -293,7 +293,7 @@ public class SecureFrameTest
        public static int encryptFrame(final byte[] msgBuff, final int pos, final OFrameStruct frame,final byte[] authTag) throws Exception {
 
            //prepare plain text
-           final byte[] input = addPadding(frame.body, frame.bl);     // pad body content out to 16 or 32 bytes.
+           final byte[] input = addPaddingTo16BTrailing0sAndPadCount(frame.body, frame.bl);     // pad body content out to 16 or 32 bytes.
 
            //Update frame length Header = 4+idLen bytes. Body padded bodylength (input.length). Trailer is fixed 23 bytes
            // A better place to do this might be after the trailer has been built. An even better design would be to have separate
@@ -314,7 +314,7 @@ public class SecureFrameTest
            // generate AAD
            final byte[] aad = generateAAD(msgBuff,(frame.il+4));        // aad = the header - 4 bytes + sizeof ID
 
-           // Do the encrption -
+           // Do the encryption -
            final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE"); // JDK 7 breaks here..
            cipher.init(Cipher.ENCRYPT_MODE, key, spec);
            cipher.updateAAD(aad);
@@ -565,7 +565,7 @@ public class SecureFrameTest
             } catch (final Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
-                System.out.println("exceptiom thrown in encrypt frame");
+                System.out.println("exception thrown in encrypt frame");
                 System.exit(1);
             }
 
