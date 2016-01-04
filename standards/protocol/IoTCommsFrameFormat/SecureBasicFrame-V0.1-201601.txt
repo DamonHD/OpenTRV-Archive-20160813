@@ -258,11 +258,6 @@ Bytes   Section Description
           * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
           * Bits 0&1: reserved with value 0x1
 
-       Note: nominally the 'stats present' bit is redundant
-       given that it can be deduced from the body length.
-       This bit may be redefined;
-       until then it can be used to further validate bl.
-
 st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
         Permitted forms:
