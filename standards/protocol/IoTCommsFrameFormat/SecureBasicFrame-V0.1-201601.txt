@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
 V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
 V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
 V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
@@ -252,9 +253,14 @@ Bytes   Section Description
           * Bit 7: fault (if 1)
           * Bit 6: battery/power low (if 1)
           * Bit 5: tamper (if 1)
-          * Bit 4: stats present (if 1)
+          * Bit 4: stats or further present (if 1)
           * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
           * Bits 0&1: reserved with value 0x1
+
+       Note: nominally the 'stats present' bit is redundant
+       given that it can be deduced from the body length.
+       This bit may be redefined;
+       until then it can be used to further validate bl.
 
 st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
