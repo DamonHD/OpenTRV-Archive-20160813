@@ -19,7 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
-V0.1.20160104: pending change to padding style to allow fixed-size (32 byte) crypto blocks for simplicity.
+V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
 V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
 V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
 V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
