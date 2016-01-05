@@ -5,3 +5,4 @@
 /Arduino/hardware/**/*.pro
 /Arduino/hardware/**/*.job
 /.DS_Store
+Arduino/hardware/REV14/RFM95W-RN2483.l#1
