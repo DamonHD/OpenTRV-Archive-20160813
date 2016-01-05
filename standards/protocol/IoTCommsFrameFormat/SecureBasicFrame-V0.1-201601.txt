@@ -320,7 +320,7 @@ When secure:
 
 Note on nonce/IV construction and counter use:
 
-The nonce is 6 (six) leading bytes of ID,
+The nonce is 6 (six) leading bytes of node ID,
 then 3 (three) bytes of restart counter,
 then 3 (three) bytes of message counter.
 
