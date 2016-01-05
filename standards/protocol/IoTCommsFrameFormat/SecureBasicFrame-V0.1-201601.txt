@@ -258,11 +258,6 @@ Bytes   Section Description
           * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
           * Bits 0&1: reserved with value 0x1
 
-       Note: nominally the 'stats present' bit is redundant
-       given that it can be deduced from the body length.
-       This bit may be redefined;
-       until then it can be used to further validate bl.
-
 st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
         Permitted forms:
@@ -321,11 +316,11 @@ When secure:
     final byte before encryption are reserved and currently zero.
     Thus the body section on an AES-GCM protected frame is always a multiple
     of 16 bytes.
-    *** CHANGE PENDING TO: last byte is bytes of padding including the final byte, with padding to a fixed 32-byte block allowed for simplicity, but allowed in 16-byte blocks as an extension.
+    *** CHANGE PENDING TO: last byte is bytes of padding excluding the final byte [0,31], with padding to a fixed 32-byte block allowed for simplicity, but allowed in 16-byte blocks as an extension.
 
 Note on nonce/IV construction and counter use:
 
-The nonce is 6 (six) leading bytes of ID,
+The nonce is 6 (six) leading bytes of node ID,
 then 3 (three) bytes of restart counter,
 then 3 (three) bytes of message counter.
 
