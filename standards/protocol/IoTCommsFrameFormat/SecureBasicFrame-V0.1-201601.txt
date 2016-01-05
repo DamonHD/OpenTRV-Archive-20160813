@@ -1,0 +1,572 @@
+The OpenTRV project licenses this file to you
+under the Apache Licence, Version 2.0 (the "Licence");
+you may not use this file except in compliance
+with the Licence. You may obtain a copy of the Licence at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the Licence is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the Licence for the
+specific language governing permissions and limitations
+under the Licence.
+
+Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
+
+
+
+
+RECENT/SIGNIFICANT REVISIONS
+
+V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
+V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
+V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
+V0.1.20160103: explicit that byte-by-byte examples can be used as implementation test vectors.
+V0.1.20160102: typos and tidy-up and clarification ('small' frame fl <= 63).
+V0.1.20160101: further structural integrity tests.
+V0.1.20160101: initial copy in GitHub at https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
+V0.0.20151231: freeze of initial draft and transfer to GitHub.
+V0.0.20151203: initial document creation at http://www.earth.org.uk/OpenTRV/stds/network/20151203-DRAFT-SecureBasicFrame.txt
+
+
+
+
+
+Generic Basic OpenTRV Secureable Frame Format
+=============================================
+
+*** Also describes a specific radiator valve / sensor frame type.
+
+Intended to be MCU- and small-radio-module- friendly and agnostic.
+
+Intended to allow basic frame processing (eg authentication and/or forwarding)
+without any knowledge of the internal format/content of individual frame types.
+
+Intended to allow fast filtering/rejection of uninteresting frame types,
+and grossly malformed frames, eg within an interrupt handler,
+thus making better use of limited queue/buffer space and CPU budgets.
+
+Intended to allow implementations to quickly and unambiguously discard
+elements that they don't understand that are not yet defined,
+so for example the body length is explicit and not type-dependent.
+
+Intended to be carrier agnostic,
+but specific carriers and preamble/sync and encodings/whitenings
+will be recommended for interoperability,
+of which one allowed example is:
+
+  * 868.35MHz 5kbps OOK "FS20" carrier, unwhitened, no hardware CRC/checksum,
+    with a preamble of aaaaaaaa and sync of cccccc.
+    In this case the payloads should avoid long runs of 0x00 or 0xff bytes,
+    and there should be no more than one trailing 0x00 (more may be stripped),
+    ie should be somewhat self-whitened.
+    Note however that the leading length byte may make for tricky interop
+    with existing FS20-carrier OpenTRV comms.
+
+Intended to be reasonably bandwidth efficient and fast to decode
+(core structural and message elements have a simple compact binary encoding),
+especially if generic stats don't need to be sent,
+with a basic payload from radiator to boiler hub <= 8 bytes unsecured.
+
+Can handle plain-text and authenticated/encrypted frames;
+the encryption details (algorithm and keys) are agreed in advance out-of-band
+by hub and leaf.
+
+(A hub (or leaf) should reject inbound non-secure communications
+if secure communication is expected.)
+
+Can make use of common radio module packet-handler features to reduce MCU load
+and improve reliability and bandwidth utilisation in some cases.
+Primarily this is the leading length byte,
+and does not include hardware CRC or crypto support.
+
+Can handle variable-length leaf node (sender) ID for domestic to large
+(campus/urban) scale; domestic scale ID is typically 1 or 2 bytes.
+
+The first supported authentication and encryption mechanism to be supported
+is expected to be AES-GCM with 128-bit pre-shared keys.
+For expected construction and use of IV/nonce see:
+http://www.earth.org.uk/note-on-IoT-security.html#app4
+
+
+Generic Frame Structure
+-----------------------
+
+Unless otherwise dictated by bearer/carrier/encoding the order of bytes is
+as specified below, and within each byte the most significant bit is sent first.
+(As for RFM23B TX/RX via the FIFOs.)
+
+Bytes   Section Description
+
+pr      preamble and sync if required, length pl
+
+HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
+        The header section is always unencrypted.
+
+ 1      (fl) frame length excluding this byte [4,255] but typically <= 63 ('small' frame).
+        This is effectively 'envelope' in RFC822 email terms,
+        since though logically the first byte of the frame
+        may be handled separately from it, eg by radio module logic.
+        Note: fl = hl-1 + bl + tl = 3+il + bl + tl
+
+ 1      frame type (bits 0 to -6) and security flag (bit 7 true for secure)
+        Never 0 nor 0xff, so the type is never 0 nor 0x7f.
+
+ 1      frame sequence number mod 16 [0,15] (bits 4 to 7)
+        and ID length [0,15] (bits 0-3)
+
+        Sequence number (seqNum) increments from 0, wraps at 15;
+        increment is skipped for multiple TX used for noise immunity.
+        If a counter is used as part of (eg) security IV/nonce
+        then these 4 bits may be its least significant bits.
+
+id      ID bytes (0 implies anonymous, 1 or 2 typical domestic, length il)
+
+        This is the first il bytes of the leaf's (typically 64-bit) full ID.
+        Thus this is typically the ID of the sending sensor/valve/etc,
+        but may under some circumstances (depending on message type)
+        be the ID of the target/recipient.
+
+        NOTE: for initial implementations il <= 8.
+
+bl      body length including any padding [0,251] but generally << 60.
+
+        For an unencrypted body this is the exact lengh of the body content,
+        else it is the size of the body after padding and encryption
+        (ie the decrypted form will indicate the true body content length).
+        In both cases bl is the number of bytes of data before the trailer.
+
+BODY SECTION (all encrypted if frame is secure, length bl)
+
+bd      type-specific payload bytes, possibly padded, of length bl.
+        If padded for encryption the trailer may contain information about
+        removing it, or such removal may be implicit (as for our AES-GCM).
+        This allows processing of the basic frame without decryption,
+        and slightly reduces leakage of information about the encrypted payload
+        from its length.
+        (Body is absent if bl == 0.)
+TRAILER SECTION (length tl, never zero length)
+        The trailer contains anything necessary to validate the frame,
+        and to support authentication and encryption of the header and body
+        as appropriate, but should not contain anything that might leak 
+        any of the plain-text of an encrypted body.
+        The final byte of the trailer should neither be 0x0 nor 0xff.
+
+tr      1-byte 7-bit CRC in insecure mode, of polynominal 0x5B (Koopman),
+        initialised with 0x7f.  If the CRC would be 0 then 0x80 is sent instead
+        to avoid 0 or 0xff final frame byte (ie self-whitening).
+        In secure mode this trailer is variable non-zero length security info
+        (such as authentication tag) and possibly padding,
+        and that length is determined by the encryption method used,
+        which in turn nominally depends on the frame type, leaf and hub.
+        See the AES-GCM section for the 'O' frame below as an example.
+        Runs up the the end of the frame, so its length can be deduced
+        from the frame, ID and body length values (tl = fl - 3 - bl).
+
+
+The total length pl + hl + bl + tl should generally be <= 64 at TX,
+though more capable radios, and/or hardware handling of preamble/sync,
+may allow more up to maximum 255 byte frame (abs max 251 byte body, insecure).
+(The preamble may not be seen at RX, having been stripped by the radio.)
+
+
+QUICK INTEGRITY CHECKS
+
+Before attempting to authenticate a secure frame (with expensive crypto),
+or even computing/testing the CRC in some environments,
+the following basic structural integrity checks can be be performed quickly
+at any receiver on any secureable frame to drop severely mangled frames.
+
+  * fl >= 4 (type, seqNum/il, bl, trailer bytes)
+  * fl may be further constrained by system limits, eg to <= 63 for 'small' frame
+  * type (the first frame byte) is never 0x00, 0x80, 0x7f, 0xff.
+  * il <= 8 for initial / small frame implementations (internal node ID is 8 bytes)
+  * il <= fl - 4 (ID length; minimum of 4 bytes of other overhead)
+  * bl <= fl - 4 - il (body length; minimum of 4 bytes of other overhead)
+  * the final frame byte (the final trailer byte) is never 0x00 nor 0xff
+  * tl == 1 for non-secure, tl >= 1 for secure (tl = fl - 3 - il - bl)
+
+Note that all of these should be verified in a way that avoids overflow
+or other miscalculation in the face of bad data, eg in the order above,
+eg for the trailer length first verify that the trailer offset/start < fl,
+and that for non-secure frames that tl == fl - 1.
+
+(Note that radios may themselves reject potentially-mangled frames in
+noisy environments because of carrier drop-out, preamble mismatches, etc.)
+
+All small systems by default may reject frames with fl >= 64 bytes
+(fl == 63 is the limit in size of a 'small' frame, excluding fl itself,
+to allow for typical radio packet buffers/FIFOs including fl of 64 bytes).
+
+Per-frame type structural validation can and should be performed further
+down the processing chain for those types that are understood.
+
+
+OpenTRV Basic Radiator Valve / Sensor Frame Details
+---------------------------------------------------
+
+Designed for transmission from OpenTRV valve and sensor leaf nodes
+back to a boiler hub and/or stats/network concentrator.
+
+For an all-in-one valve this is the frame emitted for the hub(s) to hear
+(boiler and/or stats hubs).
+
+For a split controller/valve unit this is the frame emitted by the controller
+for the valve and the hub(s) to hear.
+
+For a sensor unit this is the frame emitted for the stats hub to hear
+(the call-for-heat flag is always 0/off/false and the %-open value is invalid).
+
+The format avoids long runs of 0x00 or 0xff bytes where possible,
+so is suitable for non-whitened carriers/encodings.
+(Note that IDs and encrypted bytes and authentication tags may unavoidably
+contain such runs though all 0x00 and 0xff IDs should be avoided.)
+
+Full frame length (fl+1): [8,64] if not secure, else [47,63].
+  * May be further restricted if preamble not inserted by radio module.
+  * For the insecure form with an ID of 1 byte
+    the header (including leading length byte) is 5 bytes,
+    the body is 2 or more bytes,
+    and the trailer is 1 byte (the CRC),
+    for a lower bound of 8 bytes (fl=7).
+  * For the secure form (AES-GCM, 128-bit key)
+    the header (including leading length byte) is 8 bytes,
+    the encrypted body is 16 or 32 bytes (within a max-64-byte frame),
+    and the trailer is 23 bytes,
+    for a lower bound of 47 bytes (fl=46), at 63 (fl=62) with 32-byte body.
+
+Frame type: 0x4f ('O') non-secure, 0xcf secure.
+
+The ID can be translated to the JSON stats hex "@" field.
+
+The frame sequence number can be translated to the JSON stats "+" field.
+
+Body content:
+
+Bytes   Section Description
+
+ 1      Valve percent open (bits 0-6) [0,100] and call-for-heat (bit 7)
+        Valve percent value of 0x7f indicates 'invalid' / not present.
+        A sensor (ie not controlling a valve) should put 0x7f in this field.
+
+ 1      Flags
+          * Bit 7: fault (if 1)
+          * Bit 6: battery/power low (if 1)
+          * Bit 5: tamper (if 1)
+          * Bit 4: stats or further present (if 1)
+          * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
+          * Bits 0&1: reserved with value 0x1
+
+       Note: nominally the 'stats present' bit is redundant
+       given that it can be deduced from the body length.
+       This bit may be redefined;
+       until then it can be used to further validate bl.
+
+st      Stats or further info (optional, zero length if absent)
+        The length of this section is the body length (bl) - 2.
+        Permitted forms:
+         1) Compact JSON object with leading '{' as stats type indicator,
+            variable length, and final/trailing '}' omitted,
+            ASCII 7-bit printable characters only.
+            '@' (ID) and '+' (sequence) fields should be omitted to save space
+            for secure encodings (to be optionally synthesised at concentrator).
+        Other formats may be permitted, distinguished by the leading byte
+        as a sub-type indicator.
+        Unrecognised formats should be ignored, skipped over by length.
+
+
+SECURITY OF 'O' FRAME
+
+This frame can be insecure (the body is unpadded and the trailer the 7-bit CRC)
+or secured.
+
+When secure:
+  * The algorithm used is AES-GCM used with a 128-bit pre-shared key
+    (though note the first trailer byte is 0x80 for AES-GCM 128-bit,
+    allowing a different algorithm to be used in future.)
+  * Construction and use of IV/nonce as:
+    http://www.earth.org.uk/note-on-IoT-security.html#app4
+      * 4 most-significant bytes (32 bits) of leaf ID,
+        all transmitted in the ADATA (authenticated) section
+        (with two further bytes of ID pre-shared)
+      * 3 bytes transmitted of restart/reboot count + implicit further ID byte
+        (allows 17 million restarts of 30 years at 1 per minute,
+        which my be needed for energy-harvesting for example)
+      * 3 bytes TXed of message counter since restart + implicit further ID byte
+        (allows 30 years of transmissions at 1 per minute)
+  * The ID in the header is preferably at least 4 bytes,
+    and the leading/most-significant bytes of the ID participate in the IV
+    as above, but in any if less than 6 leading bytes of ID are in th header
+    then the rest must have been pre-shared, eg with the key.
+  * The least significant 4 bits of the IV message counter are the same as the
+    frame header sequence number.
+  * The entire frame header content (including length) is protected by the
+    AES-GCM authentication tag.
+  * The last byte of the trailer is 0x80 to indicate V1 128-bit AES-GCM,
+    and to avoid the final frame byte being 0 or 0xff,
+    preceded by 22 further bytes as follows:
+      * 3 bytes of restart/reboot counter msb first,
+        followed by 3 bytes of message counter since reset msb first.
+        (The least significant 4 bytes of the least significant (last)
+        message counter byte are the same header sequence counter.)
+        (The nonce/IV is all of that preceded by 
+        ID bytes 0 to 5 taken from the header or pre-shared;
+        for multiple matching ID prefixes all keys may have to be tried.)
+      * The 16-byte authentication tag.
+  * The unencrypted body text is padded with trailing zero bytes
+    to a multiple of 16 bytes - 1, eg to 15 or 31 bytes typically,
+    with a final byte being the number of bytes of body data in the final
+    block of 16, so a value in the range [0,15].  The upper 4 bits of the
+    final byte before encryption are reserved and currently zero.
+    Thus the body section on an AES-GCM protected frame is always a multiple
+    of 16 bytes.
+    *** CHANGE PENDING TO: last byte is bytes of padding including the final byte, with padding to a fixed 32-byte block allowed for simplicity, but allowed in 16-byte blocks as an extension.
+
+Note on nonce/IV construction and counter use:
+
+The nonce is 6 (six) leading bytes of ID,
+then 3 (three) bytes of restart counter,
+then 3 (three) bytes of message counter.
+
+The main complication in terms of what goes over the wire is:
+  * at least the first six (6) bytes of the ID are pre-shared
+    and forming the leading part of the IV/nonce,
+    with that part sent in the header a prefix into the remainder,
+    preferably unique else all candidates have to be tried,
+  * the rest of the nonce has to be assembled from (or dispersed to)
+    parts of the header and trailer.
+
+The restart/reboot count must be incremented by at least 1 on each restart
+of the system generating the frames*, and also whenever the message
+counter overflows/wraps.  The restart/reboot counter at least should
+be persisted in a non-volatile memory at sender and recipient and any
+intermediate authenticating stages such as a lightweight concentrator or
+relay.  All messages received with a number no higher than the last
+authenticated frame received should be rejected to prevent replay attacks.
+The least significant bytes of the restart/reboot and message counters
+may be initialised to a random seed (with real entropy) rather than zero,
+eg of the message counter on each restart, but the most significant byte
+of the restart count at least  must be initialised with zero to avoid
+sacrificing too much of the key lifetime.  Once the maximum value of the
+the concatenation of restart/reboot and message counters is reached no
+more messages can be authenticated/sent with the associated key and a
+new key must be created and shared if data needs to be sent.
+
+*Note1: if one or more of the most significant bytes of the message count
+can be persisted by the sender in non-volatile store, and the sender
+needs to be restarted frequently and to send more than 2^24 messages on
+the associated key, eg for a device driven by harvested energy and sending
+one authenticated frame per restart, then the those more significant bytes
+logically become part of the reset count, transparently to the recipient.
+At all times the aim is to ensure that no IV/nonce is ever reused with a
+new plain-text (other than an exact immediate retransmission of a frame to
+overcome transmission losses where repeats may be and should be dropped).
+
+*Note2: where the key is used for sending a message *from* the specified ID
+(ie the ID is a source address) the most-significant bit of the least
+significant byte (6) of the ID used in the nonce must be forced to one (1),
+which for OpenTRV ID will be its normal value, else if the the message
+is being sent *to* the specified ID, ie typically a back-channel, then
+the bit must be forced to zero (0).  This allows the same key to be used
+for the back-channel and the IV/nonces will be unique.  This changed bit
+is not transmitted, even if more bytes of ID are sent, ie the correct
+ID prefix is always transmitted but the nonce calculation is adjusted.
+
+
+EXAMPLE FRAMES
+
+These examples can also be used as test vectors for implementations.
+
+Example 1: insecure frame, valve unit 0% open, no call for heat/flags/stats.
+In this case the frame sequence number is zero, and ID is 0x80 0x81.
+
+08 4f 02 80 81 02 | 00 01 | 23
+
+08 length of header (8) after length byte 5 + body 2 + trailer 1
+4f 'O' insecure OpenTRV basic frame
+02 0 sequence number, ID length 2
+80 ID byte 1
+81 ID byte 2
+02 body length 2
+00 valve 0%, no call for heat
+01 no flags or stats, unreported occupancy
+23 CRC value
+
+Example 2: insecure frame, no valve, representative minimum stats {"b":1} .
+In this case the frame sequence number is zero, and ID is 0x80 0x81.
+
+0e 4f 02 80 81 08 | 7f 11 7b 22 62 22 3a 31 | 61
+
+0e length of header (14) after length byte 5 + body 8 + trailer 1
+4f 'O' insecure OpenTRV basic frame
+02 0 sequence number, ID length 2
+80 ID byte 1
+81 ID byte 2
+08 body length 8
+7f no valve, no call for heat
+11 stats present flag only, unreported occupancy
+7b 22 62 22 3a 31  {"b":1  Stats: note that implicit trailing '}' is not sent.
+61 CRC value
+
+
+Footnotes
+=========
+
+Note from IRC chat with Mike S 2015/12/03:
+
+ezradio (rfm23, etc.) has 0-4 byte address header then 1 byte length.  Semtech
+thingy (RFM69W) has 1 byte packet length then 0-1 byte address header. TI ones
+are similar to the semtech. EzRadio pro (Si4463, EZR32) can do pretty much
+anything
+so yes, 1 byte length is probably pretty portable as
+long as you don't try to use the address matching logic
+
+
+FAQ
+===
+
+Header
+
+1) Byte 2, frame type - is there a list of the currently agreed types (beyond
+4F and CF)?
+
+No, this is the first frame in this new format.  There will be others.
+
+2) Byte 3  seq_no and id_len - is ID length length in bytes?  What is the
+sequence number for? Is it part of an hdlc like layer 2?
+
+ID length is in bytes, yes.
+
+The sequence number is a simple way for a user of the data to notice frame
+loss.
+
+3) id_bytes - Does first MSBs or LSBs? Slight inconsistency (or misunderstanding
+on my part) the typical length is stated as 2 bytes, where as if using
+encryption there needs to be at least 4 bytes of ID?
+
+ID bytes are sent most significant byte first; different length (leading)
+portions of the ID may be used in different circumstances.
+
+4) What is the addressing scheme for the nodes IDs? - ie are there meanings for
+the various bits? Eg sensor, actuator, controller etc? how will these be
+allocated?
+
+IDs are generally randomly allocated to nodes (eg by themselves, at first boot).
+
+Usually all ID bytes have the top bit set but 0xff is not allowed.
+
+In the case of the device fitting into an FS20 network the leading two ID bytes
+are used and are in the range 0-99 each.
+
+5) bl_byte  - Why 0-249? ad opposed to 0 - 254?
+
+Because the header+trailer has already come out of the 255 maximum for the
+frame, which is header+body+trailer.
+
+Body
+
+6) What level of padding would be used? Bits or bytes? And to what end?
+
+Bytes: because encryption methods such as AES-GCM work in fixed-size blocks and
+data has to be padded to multiples of the block size before encryption.
+
+Trailer
+
+7) Is this encrypted in the secure version?
+
+In a secure frame the trailer consists of the data required by the
+authentication and encryption algorithm (such as authetication tag and
+nonce/IV) but none of the trailer itself is generally ‘encrypted’.
+
+8) Where is the length defined or is it always 1 byte? Trailer section says it
+is tl bytes long, but I couldn't find tl set anywhere (apart from the non
+secure 7bit CRC)
+
+For a non-secure frame the trailer is always length 1, and is the 7-bit CRC.
+
+The CRC is the 7-bit CRC of polynominal 0x5B (Koopman) initialised with 0xff.
+If the CRC would be 0 then 0x80 is sent instead to avoid 0 or 0xff values.
+
+23 bytes in encrypted mode (nominally for just the ‘O’ frame type),
+see the text starting: " The first byte of the trailer is 0x80..."
+
+General
+
+9) Is there an example of the compact JSON stats object that I can have a look
+at?
+
+Have a look at
+http://www.earth.org.uk/note-on-IoT-data-sets-and-processing.html at the
+"Real-time / Streamed" section.  The JSON objects arrive over the air like:
+
+{"@":"414a","+":2,"L":13,"T|C16":289,"O":1,"vac|h":6}
+
+and get timestamped and get logged as a line something like:
+
+[ "2015-12-13T15:28:54Z", "", {"@":"414a","+":2,"L":13,"T|C16":289,"O":1,"vac|h":6} ]
+
+And here's a lot of them in the YYYYMM.json.gz files:
+
+http://www.earth.org.uk/data/OpenTRV/pubarchive/remote/
+
+Essentially the JSON strings are short (<55 chars), 7-bit printable ASCII, no
+redundant whitespace (especially newlines), and with values string or integer
+only.  Leading "@" (ID) and "+" (sequence number) fields may be present.
+
+10) Is there a particular CRC implementation that you want to use? And do we
+have its C equivalent?
+
+The CRC is polynomial 0x5B (1011011, Koopman) = (x+1)(x^6 + x^5 + x^3 + x^2 +
+1) = 0x37 (0110111, Normal) and both C (Arduino, OTRadioLink::crc7_5B_update())
+and Java implementations are already provided, tested (and indeed in use).
+
+11) Is is a weakness, eg a crash risk, not to have the CRC on the secure
+version?
+
+In secure mode, there is no CRC, just the encrypted message body. That means
+there is no way to check if the unencrypted frame information bytes are
+uncorrupted. If, for example, the id length nibble or message length field were
+to become corrupted the message couldn't be decoded and, in the worst case, you
+might get a buffer overflow induced crash.
+
+Options to fix.
+
+Put a CRC byte on both encrypted and decrypted packets in a fixed location,
+maybe move to byte 2 after the length byte, so the layer 2 can do its stuff
+before the higher layers are let loose?
+
+Defend against that buffer overflow condition and accept that the odd
+detectable packet may be corrupted.
+
+Reasoning for dropping the CRC on the secure version, to save space/bandwidth:
+
+It is a possibility, though of course (a) the CRC will miss 1/128 corruptions
+on average and (b) the authentication step is effectively a very powerful CRC.
+
+So in either case one must write code to (1) never read beyond the buffer end
+(2) structurally check everything plausible (3) safely discard anything that is
+corrupt.
+
+This is one powerful argument against ever decrypting anything until/unless
+the auth step is nominally done first, else you are cranking all sorts of weird
+stuff through the decryption engine.
+
+
+To-Do
+=====
+
+Show some full examples:
+
+  * Full frames
+  * Security examples (eg secure and non-secure frames)
+  * Simple key management examples, eg one-per-household
+
+Show example bit patterns for 'O' frames:
+  * secure and non-secure
+  * leaf ID of 81 82 83 84 85 86 87
+  * all zeros AES key
+  * all zeros nonce sequence/restart counter bytes
+  * with percent-open byte at 0x00 and 0x11100100 (ie 100% + call for heat)
+  * with flags 0 (no stats) and 0x40 (with stats)
+  * with no stats and with {"v|%":42} JSON stats
