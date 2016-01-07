@@ -200,7 +200,7 @@ public class SecureFrameTest
     }
 
     /*
-    pads the message body out with 0s to 16 or 32 bits. Errors if length > 31
+    pads the message body out with 0s to  32 bits. Errors if length > 31
     and sticks the number of bytes of padding in the last byte of the padded body.
 
     @param body structure containing the message body for encryption
@@ -217,7 +217,7 @@ public class SecureFrameTest
             System.out.format("Body length %d too big. 32 Max",len);
             System.exit(1);
         }
-        paddedMsg = new byte[(len<16)? 16:32];
+        paddedMsg = new byte[32];
         paddedMsg[0]= (body.valvePos |= ((body.heat == true)? (byte)0x80 : (byte)0x00)); //OR in the call for heat bit
         paddedMsg[1]= body.flags;
         System.arraycopy(body.stats.getBytes(),0,paddedMsg,2,body.stats.getBytes().length);
