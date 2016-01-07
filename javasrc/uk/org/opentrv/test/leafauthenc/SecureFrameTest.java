@@ -35,6 +35,7 @@ import org.junit.Test;
 
 import uk.org.opentrv.comms.util.crc.CRC7_5B;
 
+
 public class SecureFrameTest
     {
     public static final int AES_KEY_SIZE = 128; // in bits
@@ -155,12 +156,7 @@ public class SecureFrameTest
 
         pos += decodedFrame.bl;                        // point pos at the trailer in the msgBuff
 
-        if (msgBuff[pos++] != AES_GCM_ID){                    // test trailer first byte to make sure we are dealing with the correct algo
-
-            System.out.println("unrecognized encryption algorithm");
-            System.exit(1);
-        }
-
+        
         if (decodedFrame.il < 4){                        // check there are 4 bytes in the ID field in the header
             System.out.format("leaf node ID length %d in header too short. should be >=4bytes\r\n",decodedFrame.il);
             System.exit(1);
@@ -204,7 +200,7 @@ public class SecureFrameTest
     }
 
     /*
-    pads the message body out with 0s to 16 or 32 bits. Errors if length > 31
+    pads the message body out with 0s to  32 bits. Errors if length > 31
     and sticks the number of bytes of padding in the last byte of the padded body.
 
     @param body structure containing the message body for encryption
@@ -221,7 +217,7 @@ public class SecureFrameTest
             System.out.format("Body length %d too big. 32 Max",len);
             System.exit(1);
         }
-        paddedMsg = new byte[(len<16)? 16:32];
+        paddedMsg = new byte[32];
         paddedMsg[0]= (body.valvePos |= ((body.heat == true)? (byte)0x80 : (byte)0x00)); //OR in the call for heat bit
         paddedMsg[1]= body.flags;
         System.arraycopy(body.stats.getBytes(),0,paddedMsg,2,body.stats.getBytes().length);
@@ -234,11 +230,18 @@ public class SecureFrameTest
         return (paddedMsg);
     }
 
+    /*
+     * 23 bytes made up as follows@
+     * 3 LS Bytess of reset counter
+     * 3 LS Bytes of message counter
+     * 16 byte authentication tag from the crypto algorithm
+     * a 0x80 marker to indicate that AESGCM is the encryption mode.
+     * 
+     */
+    
     public static int addTrailer (final byte[] msgBuff,int index, final byte[] authTag)
     {
-
-
-        msgBuff[index++] = AES_GCM_ID;                    // indicated AESGCM encryption mode
+ 
 
         msgBuff[index++] = (byte)(ResetCounter >> 16);    //3 LSB of Reset Counter
         msgBuff[index++] = (byte)(ResetCounter >> 8);
@@ -247,9 +250,12 @@ public class SecureFrameTest
         msgBuff[index++] = (byte)(TxMsgCounter >> 16);    // 3 LSBs of TXmessage counter
         msgBuff[index++] = (byte)(TxMsgCounter >> 8);
         msgBuff[index++] = (byte)TxMsgCounter;
-
+        
         System.arraycopy(authTag,0, msgBuff, index, authTag.length);     // copy the authentication tag into the message buffer
-
+        
+        msgBuff[index+authTag.length] = AES_GCM_ID;                    // indicates AESGCM encryption mode - moved to back (byte 23) of trailer.
+        index++;
+       
         return (index+authTag.length);    // size of the completed TX packet
 
     }
@@ -372,14 +378,23 @@ public class SecureFrameTest
 
        public static void decryptFrame(final byte[] msgBuff, final int index, final OFrameStruct decodedPacket) throws Exception{
 
-           // Retrieve Nonce
+    	  
+    	   // Check we are dealing with AESGCM by looking at the last byte of the packet
+    	   if (msgBuff[index + decodedPacket.bl+22] != AES_GCM_ID){            // test trailer last (23rd) byte to make sure we are dealing with the correct algo
+
+               System.out.println("unrecognized encryption algorithm");
+               System.exit(1);
+           }
+
+    	       	   
+    	   // Retrieve Nonce
            final byte[] nonce = retrieveNonce (msgBuff, index,decodedPacket);
 
            System.out.println("\r\nRetrieved nonce");
            for(final byte element : nonce)
             {
                 System.out.format("%02x ",element);
-                }
+            }
 
 
            final GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
@@ -400,14 +415,14 @@ public class SecureFrameTest
            // append the authentication tag to the cipher text - this is a peculiarity of this Java implementation.
            // The algo authenticates before decrypting, which is more efficient and less likely to kill the decryption engine with random crap.
 
-           // the magic 7 is the offset from the start of the trailer to the  auth tag.
-           System.arraycopy(msgBuff,(index+decodedPacket.bl+7) , cipherText,decodedPacket.bl, GCM_TAG_LENGTH);
+           // the magic 6 is the offset from the start of the trailer to the  auth tag.
+           System.arraycopy(msgBuff,(index+decodedPacket.bl+6) , cipherText,decodedPacket.bl, GCM_TAG_LENGTH);
 
            System.out.format("\r\nRetrieved  %d byte cipher text with auth tag appended\r\n", cipherText.length);
            for(final byte element : cipherText)
             {
                 System.out.format("%02x ",element);
-                }
+            }
 
 
            // Decrypt:
@@ -679,7 +694,9 @@ public class SecureFrameTest
         else { // Extract the 23 byte trailer from the secure message
 
             final byte[] trailer = new byte[23];
-            int trailerPtr = 4+decodedPacket.il; // 4 fixed header bytes plus the sizeof the ID
+            
+            // 3 fixed header bytes plus the length of the id plus body length byte plus the actual body length
+            int trailerPtr = 3+decodedPacket.il + 1 +decodedPacket.bl; 
 
             for (i=0;i<23;i++)
                 {
