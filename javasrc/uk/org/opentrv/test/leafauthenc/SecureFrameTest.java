@@ -13,8 +13,8 @@ KIND, either express or implied. See the Licence for the
 specific language governing permissions and limitations
 under the Licence.
 
-Author(s) / Copyright (s): Damon Hart-Davis 2015
-                           Matthew Waite 2015
+Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
+                           Matthew Waite 2015--2016
 */
 
 package uk.org.opentrv.test.leafauthenc;
