@@ -1,4 +1,6 @@
 /out_test/
+/out_D/
+/out_O/
 /bin/
 /Arduino/hardware/**/*.b#*
 /Arduino/hardware/**/*.s#*
@@ -6,3 +8,5 @@
 /Arduino/hardware/**/*.job
 /.DS_Store
 Arduino/hardware/REV14/RFM95W-RN2483.l#1
+/out_*/**
+
