@@ -35,7 +35,11 @@ import org.junit.Test;
 
 import uk.org.opentrv.comms.util.crc.CRC7_5B;
 
-
+/**Tests for secureable frame format.
+ * See:
+ * https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
+ * and successors.
+ */
 public class SecureFrameTest
     {
     public static final int AES_KEY_SIZE = 128; // in bits
@@ -806,9 +810,9 @@ public class SecureFrameTest
 
 
 
-    /**Playpen for understanding jUnit. */
+    /**Test frames. */
     @Test
-    public void testPlaypen()
+    public void testFrames()
         {
 
         final byte[] msgBuff = new byte[0xFF];
@@ -834,7 +838,7 @@ public class SecureFrameTest
         packetToSendA.bl = 0x02;
         packetToSendA.body = bodyA;
 
-        //Example 2 in Damons spec
+        //Example 2 in spec
         final BodyTypeOStruct bodyB= new BodyTypeOStruct();
         bodyB.heat = false;
         bodyB.valvePos=0x7f;
