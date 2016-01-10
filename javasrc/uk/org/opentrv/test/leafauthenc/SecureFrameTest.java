@@ -35,7 +35,11 @@ import org.junit.Test;
 
 import uk.org.opentrv.comms.util.crc.CRC7_5B;
 
-
+/**Tests for secureable frame format.
+ * See:
+ * https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
+ * and successors.
+ */
 public class SecureFrameTest
     {
     public static final int AES_KEY_SIZE = 128; // in bits
@@ -804,17 +808,12 @@ public class SecureFrameTest
         }
     }
 
-
-
-    /**Playpen for understanding jUnit. */
+    
+    /**Test non-secure frames. */
     @Test
-    public void testPlaypen()
+    public void testNonSecureFrames()
         {
-
-        final byte[] msgBuff = new byte[0xFF];
-        int msgLen,i;
-
-        // This is Example 1 in Damon's Spec
+        // This is example 1 in Spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final OFrameStruct packetToSendA = new OFrameStruct();
         final byte[] idA = {(byte)0x80,(byte)0x81};
         final byte[] idC = new byte[4];
@@ -834,7 +833,7 @@ public class SecureFrameTest
         packetToSendA.bl = 0x02;
         packetToSendA.body = bodyA;
 
-        //Example 2 in Damons spec
+        // Example 2 in spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final BodyTypeOStruct bodyB= new BodyTypeOStruct();
         bodyB.heat = false;
         bodyB.valvePos=0x7f;
@@ -849,8 +848,16 @@ public class SecureFrameTest
         packetToSendB.id = idA;
         packetToSendB.body = bodyB;
         packetToSendB.bl = (byte)(bodyB.stats.getBytes().length+2);
+        }
 
-        //Example 3 - secure version of example 2 above
+    /**Test secure frames. */
+    @Test
+    public void testSecureFrames()
+        {
+        final byte[] idC = new byte[4];
+        System.arraycopy(LeafID, 0, idC, 0, 4); // 4MSBs of leaf node ID
+
+        // Example 3 - secure version of example 2 from spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final BodyTypeOStruct bodyC= new BodyTypeOStruct();
         bodyC.heat = false;
         bodyC.valvePos=0x7f;
@@ -872,13 +879,11 @@ public class SecureFrameTest
 
         //TODO - set up an array of structure pointers and run the whole lot through the encode / decode functions
 
-        msgLen = buildOFrame (msgBuff,packetToSendC);
+        final byte[] msgBuff = new byte[0xFF];
+        int msgLen = buildOFrame (msgBuff,packetToSendC);
 
-        System.out.format("Raw data packet  from encoder is: %02x bytes long \r\n",msgLen);
-        for (i=0;i<msgLen;i++)
-            {
-                System.out.format("%02x ", msgBuff[i]);
-                }
+        System.out.format("Raw data packet from encoder is: %02x bytes long \r\n",msgLen);
+        for (int i=0;i<msgLen;i++) { System.out.format("%02x ", msgBuff[i]); }
 
         System.out.println("");            // CR LF
 
