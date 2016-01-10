@@ -719,8 +719,7 @@ public class SecureFrameTest
     @BeforeClass
     public static void beforeClass() throws NoSuchAlgorithmException
         {
-        final SecureRandom srnd;
-
+//        final SecureRandom srnd;
 //        srnd = SecureRandom.getInstanceStrong(); // JDK 8.
 
      // Generate Key - needs to be available for the decrypt side too
