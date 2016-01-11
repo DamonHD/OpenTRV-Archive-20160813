@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160111: pending change to padding accepted.
 V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
 V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
 V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
@@ -311,12 +312,12 @@ When secure:
       * The 16-byte authentication tag.
   * The unencrypted body text is padded with trailing zero bytes
     to a multiple of 16 bytes - 1, eg to 15 or 31 bytes typically,
-    with a final byte being the number of bytes of body data in the final
-    block of 16, so a value in the range [0,15].  The upper 4 bits of the
+    with a final byte being the number of bytes of padding excluding the final byte [0,31],
+    with padding to a fixed 32-byte block allowed for simplicity,
+    but allowed in 16-byte blocks as an extension.  The upper 3 bits of the
     final byte before encryption are reserved and currently zero.
     Thus the body section on an AES-GCM protected frame is always a multiple
     of 16 bytes.
-    *** CHANGE PENDING TO: last byte is bytes of padding excluding the final byte [0,31], with padding to a fixed 32-byte block allowed for simplicity, but allowed in 16-byte blocks as an extension.
 
 Note on nonce/IV construction and counter use:
 
