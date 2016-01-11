@@ -919,12 +919,12 @@ public class SecureFrameTest
         return(crc);
         }
 
-    /**Simple minimal test of non-secure 'O' format frame.
+    /**Simple minimal test of CRC computations for non-secure 'O' format frame.
      * Do a valve frame at 0% open, no stats.
      * Do a non-valve frame with minimal representative {"b":1} stats.
      */
     @Test
-    public void testNonSecure()
+    public void testNonSecureCRCs()
         {
 //Example insecure frame, from valve unit 0% open, no call for heat/flags/stats.
 //
