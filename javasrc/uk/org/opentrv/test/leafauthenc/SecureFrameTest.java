@@ -808,7 +808,7 @@ public class SecureFrameTest
         }
     }
 
-    
+
     /**Test non-secure frames. */
     @Test
     public void testNonSecureFrames()
