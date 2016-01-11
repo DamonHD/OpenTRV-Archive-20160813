@@ -304,7 +304,7 @@ public class SecureFrameTest
            // A better place to do this might be after the trailer has been built. An even better design would be to have separate
            // structures for header, body and trailer - this would make the design more extensible and do away with lots of magic numbers.
 
-           msgBuff[0] = (byte)(4+frame.il+input.length + 23);
+           msgBuff[0] = (byte)(3+frame.il+input.length + 23);
 
            // setup the bodylength now it has been padded
            frame.bl = (byte)input.length;
