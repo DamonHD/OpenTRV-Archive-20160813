@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160111: pending change to padding accepted; adding example 3 (secure).
 V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
 V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
 V0.1.20160103: CRC initialiser is 0x7f (as CRC is only 7 bits).
@@ -311,12 +312,12 @@ When secure:
       * The 16-byte authentication tag.
   * The unencrypted body text is padded with trailing zero bytes
     to a multiple of 16 bytes - 1, eg to 15 or 31 bytes typically,
-    with a final byte being the number of bytes of body data in the final
-    block of 16, so a value in the range [0,15].  The upper 4 bits of the
+    with a final byte being the number of bytes of padding excluding the final byte [0,31],
+    with padding to a fixed 32-byte block allowed for simplicity,
+    but allowed in 16-byte blocks as an extension.  The upper 3 bits of the
     final byte before encryption are reserved and currently zero.
     Thus the body section on an AES-GCM protected frame is always a multiple
     of 16 bytes.
-    *** CHANGE PENDING TO: last byte is bytes of padding excluding the final byte [0,31], with padding to a fixed 32-byte block allowed for simplicity, but allowed in 16-byte blocks as an extension.
 
 Note on nonce/IV construction and counter use:
 
@@ -378,31 +379,58 @@ In this case the frame sequence number is zero, and ID is 0x80 0x81.
 
 08 4f 02 80 81 02 | 00 01 | 23
 
-08 length of header (8) after length byte 5 + body 2 + trailer 1
-4f 'O' insecure OpenTRV basic frame
-02 0 sequence number, ID length 2
-80 ID byte 1
-81 ID byte 2
-02 body length 2
-00 valve 0%, no call for heat
-01 no flags or stats, unreported occupancy
-23 CRC value
+08  length of header (8) after length byte 5 + body 2 + trailer 1
+4f  'O' insecure OpenTRV basic frame
+02  0 sequence number, ID length 2
+80  ID byte 1
+81  ID byte 2
+02  body length 2
+00  valve 0%, no call for heat
+01  no flags or stats, unreported occupancy
+23  CRC value
 
-Example 2: insecure frame, no valve, representative minimum stats {"b":1} .
+Example 2: insecure frame, no valve, representative minimum stats {"b":1}.
 In this case the frame sequence number is zero, and ID is 0x80 0x81.
 
 0e 4f 02 80 81 08 | 7f 11 7b 22 62 22 3a 31 | 61
 
-0e length of header (14) after length byte 5 + body 8 + trailer 1
-4f 'O' insecure OpenTRV basic frame
-02 0 sequence number, ID length 2
-80 ID byte 1
-81 ID byte 2
-08 body length 8
-7f no valve, no call for heat
-11 stats present flag only, unreported occupancy
+0e  length of header (14) after length byte 5 + body 8 + trailer 1
+4f  'O' insecure OpenTRV basic frame
+02  0 sequence number, ID length 2
+80  ID byte 1
+81  ID byte 2
+08  body length 8
+7f  no valve, no call for heat
+11  stats present flag only, unreported occupancy
 7b 22 62 22 3a 31  {"b":1  Stats: note that implicit trailing '}' is not sent.
-61 CRC value
+61  CRC value
+
+Example 3: secure, no valve, representative minimum stats {"b":1}).
+In this case the frame sequence number is zero,
+and the ID is 0xaa 0xaa 0xaa 0xaa (transmitted) with the next ID bytes 0x55 0x55.
+ResetCounter = 42
+TxMsgCounter = 793
+(Thus nonce/IV: aa aa aa aa 55 55 00 00 2a 00 03 19)
+
+3e cf 04 aa aa aa aa 20 | b3 45 f9 29 69 57 0c b8 28 66 14 b4 f0 69 b0 08 71 da d8 fe 47 c1 c3 53 83 48 88 03 7d 58 75 75 | 00 00 2a 00 03 19 97 5b da df 92 08 42 b8 c1 3b dc 02 76 54 cb 8d 80 
+
+
+3e  length of header (62) after length byte 5 + (encrypted) body 32 + trailer 32
+cf  'O' secure OpenTRV basic frame
+04  0 sequence number, ID length 4
+aa  ID byte 1
+aa  ID byte 2
+aa  ID byte 3
+aa  ID byte 4
+20  body length 32 (after padding and encryption)
+    Plaintext body (length 8): 0x7f 0x11 { " b " : 1 
+    Padded: 7f 11 7b 22 62 22 3a 31 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 17
+b3 45 f9 ... 58 75 75  32 bytes of encrypted body
+00 00 2a  reset counter
+00 03 19  message counter
+97 5b da ... 54 cb 8d  16 bytes of authentication tag
+80  enc/auth type/format indicator.
+
 
 
 Footnotes
