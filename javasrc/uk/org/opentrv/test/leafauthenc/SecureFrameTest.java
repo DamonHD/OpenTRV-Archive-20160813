@@ -23,7 +23,6 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.UnsupportedEncodingException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -35,7 +34,11 @@ import org.junit.Test;
 
 import uk.org.opentrv.comms.util.crc.CRC7_5B;
 
-
+/**Tests for secureable frame format.
+ * See:
+ * https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
+ * and successors.
+ */
 public class SecureFrameTest
     {
     public static final int AES_KEY_SIZE = 128; // in bits
@@ -156,7 +159,7 @@ public class SecureFrameTest
 
         pos += decodedFrame.bl;                        // point pos at the trailer in the msgBuff
 
-        
+
         if (decodedFrame.il < 4){                        // check there are 4 bytes in the ID field in the header
             System.out.format("leaf node ID length %d in header too short. should be >=4bytes\r\n",decodedFrame.il);
             System.exit(1);
@@ -231,18 +234,15 @@ public class SecureFrameTest
     }
 
     /*
-     * 23 bytes made up as follows@
+     * 23 bytes made up as follows:
      * 3 LS Bytess of reset counter
      * 3 LS Bytes of message counter
      * 16 byte authentication tag from the crypto algorithm
      * a 0x80 marker to indicate that AESGCM is the encryption mode.
-     * 
+     *
      */
-    
-    public static int addTrailer (final byte[] msgBuff,int index, final byte[] authTag)
+    public static int addTrailer (final byte[] msgBuff, int index, final byte[] authTag)
     {
- 
-
         msgBuff[index++] = (byte)(ResetCounter >> 16);    //3 LSB of Reset Counter
         msgBuff[index++] = (byte)(ResetCounter >> 8);
         msgBuff[index++] = (byte) ResetCounter;
@@ -250,14 +250,13 @@ public class SecureFrameTest
         msgBuff[index++] = (byte)(TxMsgCounter >> 16);    // 3 LSBs of TXmessage counter
         msgBuff[index++] = (byte)(TxMsgCounter >> 8);
         msgBuff[index++] = (byte)TxMsgCounter;
-        
+
         System.arraycopy(authTag,0, msgBuff, index, authTag.length);     // copy the authentication tag into the message buffer
-        
+
         msgBuff[index+authTag.length] = AES_GCM_ID;                    // indicates AESGCM encryption mode - moved to back (byte 23) of trailer.
         index++;
-       
-        return (index+authTag.length);    // size of the completed TX packet
 
+        return (index+authTag.length);    // size of the completed TX packet
     }
 
 
@@ -305,7 +304,7 @@ public class SecureFrameTest
            // A better place to do this might be after the trailer has been built. An even better design would be to have separate
            // structures for header, body and trailer - this would make the design more extensible and do away with lots of magic numbers.
 
-           msgBuff[0] = (byte)(4+frame.il+input.length + 23);
+           msgBuff[0] = (byte)(3+frame.il+input.length + 23);
 
            // setup the bodylength now it has been padded
            frame.bl = (byte)input.length;
@@ -378,7 +377,7 @@ public class SecureFrameTest
 
        public static void decryptFrame(final byte[] msgBuff, final int index, final OFrameStruct decodedPacket) throws Exception{
 
-    	  
+
     	   // Check we are dealing with AESGCM by looking at the last byte of the packet
     	   if (msgBuff[index + decodedPacket.bl+22] != AES_GCM_ID){            // test trailer last (23rd) byte to make sure we are dealing with the correct algo
 
@@ -386,7 +385,7 @@ public class SecureFrameTest
                System.exit(1);
            }
 
-    	       	   
+
     	   // Retrieve Nonce
            final byte[] nonce = retrieveNonce (msgBuff, index,decodedPacket);
 
@@ -472,9 +471,9 @@ public class SecureFrameTest
        public static final int ID = 3;            // Start Position of ID
 
     /*
-     * Takes a 255 byte message buffer and builds the O'Frame in it by serialising the OFrame data structure for passing to the physical layer.
+     * Takes a 255 byte message buffer and builds the 'O' Frame in it by serialising the OFrame data structure for passing to the physical layer.
      */
-    public static  int buildOFrame (final byte[] msgBuff, final OFrameStruct msg){
+    public static int buildOFrame (final byte[] msgBuff, final OFrameStruct msg){
 
         byte crc = 0;
         int index = ID + msg.il;                        // set index to the position of body length field
@@ -585,7 +584,7 @@ public class SecureFrameTest
             }
 
 
-            index+= addTrailer (msgBuff,(bodyPos+length),authTag);
+            index = addTrailer (msgBuff,(bodyPos+length),authTag);
             return(index);
         }
 
@@ -694,9 +693,9 @@ public class SecureFrameTest
         else { // Extract the 23 byte trailer from the secure message
 
             final byte[] trailer = new byte[23];
-            
+
             // 3 fixed header bytes plus the length of the id plus body length byte plus the actual body length
-            int trailerPtr = 3+decodedPacket.il + 1 +decodedPacket.bl; 
+            int trailerPtr = 3+decodedPacket.il + 1 +decodedPacket.bl;
 
             for (i=0;i<23;i++)
                 {
@@ -719,8 +718,7 @@ public class SecureFrameTest
     @BeforeClass
     public static void beforeClass() throws NoSuchAlgorithmException
         {
-        final SecureRandom srnd;
-
+//        final SecureRandom srnd;
 //        srnd = SecureRandom.getInstanceStrong(); // JDK 8.
 
      // Generate Key - needs to be available for the decrypt side too
@@ -806,16 +804,11 @@ public class SecureFrameTest
     }
 
 
-
-    /**Playpen for understanding jUnit. */
+    /**Test non-secure frames. */
     @Test
-    public void testPlaypen()
+    public void testNonSecureFrames()
         {
-
-        final byte[] msgBuff = new byte[0xFF];
-        int msgLen,i;
-
-        // This is Example 1 in Damon's Spec
+        // This is example 1 in Spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final OFrameStruct packetToSendA = new OFrameStruct();
         final byte[] idA = {(byte)0x80,(byte)0x81};
         final byte[] idC = new byte[4];
@@ -835,7 +828,7 @@ public class SecureFrameTest
         packetToSendA.bl = 0x02;
         packetToSendA.body = bodyA;
 
-        //Example 2 in Damons spec
+        // Example 2 in spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final BodyTypeOStruct bodyB= new BodyTypeOStruct();
         bodyB.heat = false;
         bodyB.valvePos=0x7f;
@@ -850,8 +843,16 @@ public class SecureFrameTest
         packetToSendB.id = idA;
         packetToSendB.body = bodyB;
         packetToSendB.bl = (byte)(bodyB.stats.getBytes().length+2);
+        }
 
-        //Example 3 - secure version of example 2 above
+    /**Test secure frames. */
+    @Test
+    public void testSecureFrames()
+        {
+        final byte[] idC = new byte[4];
+        System.arraycopy(LeafID, 0, idC, 0, 4); // 4MSBs of leaf node ID
+
+        // Example 3 - secure version of example 2 from spec: https://raw.githubusercontent.com/DamonHD/OpenTRV/master/standards/protocol/IoTCommsFrameFormat/SecureBasicFrame-V0.1-201601.txt
         final BodyTypeOStruct bodyC= new BodyTypeOStruct();
         bodyC.heat = false;
         bodyC.valvePos=0x7f;
@@ -873,13 +874,11 @@ public class SecureFrameTest
 
         //TODO - set up an array of structure pointers and run the whole lot through the encode / decode functions
 
-        msgLen = buildOFrame (msgBuff,packetToSendC);
+        final byte[] msgBuff = new byte[0xFF];
+        final int msgLen = buildOFrame(msgBuff, packetToSendC);
 
-        System.out.format("Raw data packet  from encoder is: %02x bytes long \r\n",msgLen);
-        for (i=0;i<msgLen;i++)
-            {
-                System.out.format("%02x ", msgBuff[i]);
-                }
+        System.out.format("Raw data packet from encoder is: %02x bytes long \r\n", msgLen);
+        for (int i=0;i<msgLen;i++) { System.out.format("%02x ", msgBuff[i]); }
 
         System.out.println("");            // CR LF
 
@@ -920,12 +919,12 @@ public class SecureFrameTest
         return(crc);
         }
 
-    /**Simple minimal test of non-secure 'O' format frame.
+    /**Simple minimal test of CRC computations for non-secure 'O' format frame.
      * Do a valve frame at 0% open, no stats.
      * Do a non-valve frame with minimal representative {"b":1} stats.
      */
     @Test
-    public void testNonSecure()
+    public void testNonSecureCRCs()
         {
 //Example insecure frame, from valve unit 0% open, no call for heat/flags/stats.
 //
