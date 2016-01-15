@@ -391,7 +391,7 @@ void checkUserSchedule()
 // where EXT is the name of the extension, usually 3 letters.
 
 #include <OTProtocolCC.h>
-#include "RFM22_Radio.h"
+#include "Radio.h"
 
 // It is acceptable for extCLIHandler() to alter the buffer passed,
 // eg with strtok_t().
@@ -967,6 +967,36 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
       // Set only if the command line is (nearly) exactly "I *" to avoid accidental reset.
       // In either cas display the current one.
       // Should possibly restart the system afterwards.
+      //
+      // Example use:
+      //
+      //>I
+      //ID: 98 A4 F5 99 E3 94 A8 C2
+      //=F0%@18C6;X0;T15 38 W255 0 F255 0 W255 0 F255 0;S6 6 16;{"@":"98a4","L":146,"B|cV":333,"occ|%":0,"vC|%":0}
+      //
+      //>I
+      //ID: 98 A4 F5 99 E3 94 A8 C2
+      //=F0%@18C6;X0;T15 38 W255 0 F255 0 W255 0 F255 0;S6 6 16;{"@":"98a4","L":146,"B|cV":333,"occ|%":0,"vC|%":0}
+      //
+      //>
+      //
+      //>
+      //
+      //>
+      //
+      //>I *
+      //Setting ID byte 0 9F
+      //Setting ID byte 1 9C
+      //Setting ID byte 2 8B
+      //Setting ID byte 3 B2
+      //Setting ID byte 4 A0
+      //Setting ID byte 5 E2
+      //Setting ID byte 6 E2
+      //Setting ID byte 7 AF
+      //ID: 9F 9C 8B B2 A0 E2 E2 AF
+      //=F0%@18C6;X0;T15 38 W255 0 F255 0 W255 0 F255 0;S6 6 16;{"@":"9f9c","L":146,"B|cV":333,"occ|%":0,"vC|%":0}
+      //
+      //>
       case 'I':
         {
         if((3 == n) && ('*' == buf[2]))
