@@ -141,7 +141,7 @@ extern ExtTemperatureDS18B20C16 extDS18B20_0;
 // http://www.pocklington-trust.org.uk/Resources/Thomas%20Pocklington/Documents/PDF/Research%20Publications/GPG5.pdf
 // http://www.vishay.com/docs/84154/appnotesensors.pdf
 
-#ifndef OMIT_MODULE_LDROCCUPANCYDETECTION
+#ifdef ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT
 // Sensor for ambient light level; 0 is dark, 255 is bright.
 class AmbientLight : public OTV0P2BASE::SimpleTSUint8Sensor
   {
@@ -170,10 +170,23 @@ class AmbientLight : public OTV0P2BASE::SimpleTSUint8Sensor
     // So lightThreshold is strictly greater than darkThreshold.
     uint8_t darkThreshold, lightThreshold;
 
+    // Default value for defaultLightThreshold.
+    // Works for normal LDR pointing forward.
+    static const uint8_t DEFAULT_defaultLightThreshold = 50;
+
+    // Default light threshold (from which dark will be deduced as ~25% lower).
+    // Set in constructor.
+    // This is used if setMinMax() is not used.
+    const uint8_t defaultLightThreshold;
+
     // Set true if ambient light sensor may be unusable or unreliable.
     // This will be where (for example) there are historic values
     // but in a very narrow range which implies a broken sensor or shadowed location.
     bool unusable;
+
+    // 'Possible occupancy' callback function (for moderate confidence of human presence).
+    // If not NULL, is called when this sensor detects indications of occupancy.
+    void (*possOccCallback)();
 
     // Recomputes thresholds and 'unusable' based on current state.
     // WARNING: called from (static) constructors so do not attempt (eg) use of Serial.
@@ -181,11 +194,13 @@ class AmbientLight : public OTV0P2BASE::SimpleTSUint8Sensor
     void _recomputeThresholds(boolean sensitive = true);
 
   public:
-    AmbientLight()
+    AmbientLight(const uint8_t defaultLightThreshold_ = DEFAULT_defaultLightThreshold)
       : rawValue(~0U), // Initial values is distinct.
         isRoomLitFlag(false), darkTicks(0),
         recentMin(~0), recentMax(~0),
-        unusable(false)
+        defaultLightThreshold(min(254, max(1, defaultLightThreshold_))),
+        unusable(false),
+        possOccCallback(NULL)
       { _recomputeThresholds(); }
 
     // Force a read/poll of the ambient light level and return the value sensed [0,255] (dark to light).
@@ -208,6 +223,9 @@ class AmbientLight : public OTV0P2BASE::SimpleTSUint8Sensor
 
     // Returns true if this sensor is apparently unusable.
     virtual bool isUnavailable() const { return(unusable); }
+
+    // Set 'possible occupancy' callback function (for moderate confidence of human presence); NULL for no callback.
+    void setPossOccCallback(void (*possOccCallback_)()) { possOccCallback = possOccCallback_; }
 
     // Returns true if room is lit enough for someone to be active.
     // False if unknown.
@@ -242,7 +260,7 @@ class AmbientLight : public OTV0P2BASE::SimpleTSUint8Sensor
       { rawValue = newRawValue; value = newRawValue >> 2; isRoomLitFlag = newRoomLitFlag; darkTicks = newDarkTicks; }
 #endif
   };
-#else
+#else // !defined(ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT)
 // Placeholder namespace with dummy static status methods to reduce code complexity.
 class AmbientLight
   {
@@ -258,26 +276,11 @@ class AmbientLight
     // Thread-safe and usable within ISRs (Interrupt Service Routines).
     static bool isRoomDark() { return(false); }
   };
-#endif
+#endif // ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT
 // Singleton implementation/instance.
 extern AmbientLight AmbLight;
 
 
-
-#ifndef OMIT_MODULE_LDROCCUPANCYDETECTION
-bool hasEcoBias(); // Forward decl...
-// Update with rolling stats to adapt to sensors and local environment.
-// ...and prevailing mode, so may take a while to adjust.
-inline void updateAmbLightFromStats()
-  {
-  AmbLight.setMinMax(
-          OTV0P2BASE::getMinByHourStat(V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR),
-          OTV0P2BASE::getMaxByHourStat(V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR),
-          OTV0P2BASE::getMinByHourStat(V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR_SMOOTHED),
-          OTV0P2BASE::getMaxByHourStat(V0P2BASE_EE_STATS_SET_AMBLIGHT_BY_HOUR_SMOOTHED),
-          !hasEcoBias());
-  }
-#endif // OMIT_MODULE_LDROCCUPANCYDETECTION
 
 
 
