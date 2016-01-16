@@ -394,7 +394,7 @@ uint8_t ModelledRadValve::computeTargetTemp()
     //   AND no WARM schedule is active now (TODO-111)
     //   AND no recent manual interaction with the unit's local UI (TODO-464) indicating local settings override.
     // Note that this mainly has to work in domestic settings in winter (with ~8h of daylight)
-    // but should also work in artificially-lit offices (maybe ~12h continuous lighting).
+    // but should ideally also work in artificially-lit offices (maybe ~12h continuous lighting).
     // No 'lights-on' signal for a whole day is a fairly strong indication that the heat can be turned down.
     // TODO-451: TODO-453: ignore a short lights-off, eg from someone briefly leaving room or a transient shadow.
     // TODO: consider bottom quartile of ambient light as alternative setback trigger for near-continuously-lit spaces (aiming to spot daylight signature).
@@ -407,7 +407,7 @@ uint8_t ModelledRadValve::computeTargetTemp()
          OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED) &&
          OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::inOutlierQuartile_NEXT_HOUR));
     if(longVacant ||
-       ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > 10)) && !isAnyScheduleOnWARMNow() && !recentUIControlUse()))
+       ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > 10)) && !isAnyScheduleOnWARMNow() && !Occupancy.reportedRecently() && !recentUIControlUse()))
       {
       // Use a default minimal non-annoying setback if
       //   in upper part of comfort range
@@ -498,53 +498,6 @@ void ModelledRadValve::computeCallForHeat()
   retainedState.tick(value, inputState);
   }
 //#endif // ENABLE_MODELLED_RAD_VALVE
-#elif defined(SLAVE_TRV)
-// Singleton implementation for entire node.
-SimpleSlaveRadValve NominalRadValve;
-
-// Set new value.
-// Ignores invalid values.
-bool SimpleSlaveRadValve::set(const uint8_t newValue)
-  {
-  if(!isValid(newValue)) { return(false); }
-  if(newValue != value)
-    {
-    value = newValue;
-    // Regenerate buffer ready to TX to FHT8V.
-    //FHT8VCreateValveSetCmdFrame(*this);
-    FHT8V.set(newValue);
-    }
-  ticksLeft = TIMEOUT_MINS;
-  return(true);
-  }
-
-// Do any regular work that needs doing.
-// Deals with timeout and reversion to 'safe' valve position if the controller goes quiet.
-// Call at a fixed rate (1/60s).
-// Potentially expensive/slow.
-uint8_t SimpleSlaveRadValve::read()
-  {
-  if((0 == ticksLeft) || (0 == --ticksLeft))
-    {
-    value = SAFE_POSITION_PC;
-#if 1 && defined(DEBUG)
-    DEBUG_SERIAL_PRINTLN_FLASHSTRING("!controller silent: valve moved to safe position");
-#endif
-    }
-  return(value);
-  }
-
-// Returns true if (re)calibrating/(re)initialising/(re)syncing.
-// The target valve position is not lost while this is true.
-// By default there is no recalibration step.
-bool SimpleSlaveRadValve::isRecalibrating() const
-  {
-#ifdef USE_MODULE_FHT8VSIMPLE
-//  if(!isSyncedWithFHT8V()) { return(true); }
-  if(!FHT8V.isInNormalRunState()) { return(true); }
-#endif
-  return(false);
-  }
 #endif
 
 
@@ -1040,8 +993,6 @@ static void wireComponentsTogether()
 #endif // ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT
   // TODO
   }
-
-
 
 
 // Initialise sensors with stats info where needed.
