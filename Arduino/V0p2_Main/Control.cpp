@@ -125,7 +125,7 @@ uint8_t getFROSTTargetC()
   return(stored);
   }
 #else
-#define getFROSTTargetC() (FROST) // Fixed value.
+#define getFROSTTargetC() ((uint8_t)FROST) // Fixed value.
 #endif
 
 // Get 'WARM' target in C; no lower than getFROSTTargetC() returns, strictly positive, in range [MIN_TARGET_C,MAX_TARGET_C].
@@ -461,14 +461,15 @@ void ModelledRadValve::computeTargetTemperature()
   // Request a fast response from the valve if user is manually adjusting controls.
   const bool veryRecentUIUse = veryRecentUIControlUse();
   inputState.fastResponseRequired = veryRecentUIUse;
-  // Widen the allowed deadband significantly in a dark/quiet/vacant room (TODO-383, TODO-593)
+  // Widen the allowed deadband significantly in an unlit/quiet/vacant room (TODO-383, TODO-593)
   // (or in FROST mode, or if temperature is jittery eg changing fast and filtering has been engaged)
   // to attempt to reduce the total number and size of adjustments and thus reduce noise/disturbance (and battery drain).
   // The wider deadband (less good temperature regulation) might be noticeable/annoying to sensitive occupants.
   // With a wider deadband may also simply suppress any movement/noise on some/most minutes while close to target temperature.
   // For responsiveness, don't widen the deadband immediately after manual controls have been used (TODO-593).
+  // Note: use !AmbLight.isRoomLight() in case unit is getting poor ambient light readings to keep noise and battery use down.
   inputState.widenDeadband = (!veryRecentUIUse) &&
-      (retainedState.isFiltering || AmbLight.isRoomDark() || Occupancy.longVacant() || (!inWarmMode()));
+      (retainedState.isFiltering || (!AmbLight.isRoomLit() && !AmbLight.isUnavailable()) || Occupancy.longVacant() || (!inWarmMode()));
   // Capture adjusted reference/room temperatures
   // and set callingForHeat flag also using same outline logic as computeRequiredTRVPercentOpen() will use.
   inputState.setReferenceTemperatures(TemperatureC16.get());
@@ -786,10 +787,10 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 // Not thread-safe, eg not to be called from within an ISR.
 bool pollIO(const bool force)
   {
+#ifdef ENABLE_RADIO_PRIMARY_MODULE
 //  if(inHubMode())
 //    {
     static volatile uint8_t _pO_lastPoll;
-
     // Poll RX at most about every ~8ms.
     const uint8_t sct = OTV0P2BASE::getSubCycleTime();
     if(force || (sct != _pO_lastPoll))
@@ -798,9 +799,12 @@ bool pollIO(const bool force)
       // Poll for inbound frames.
       // The will generally be little time to do this before getting an overrun or dropped frame.
       PrimaryRadio.poll();
+#ifdef ENABLE_RADIO_SECONDARY_MODULE
       SecondaryRadio.poll();
+#endif
       }
 //    }
+#endif
   return(false);
   }
 
