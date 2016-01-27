@@ -642,21 +642,19 @@ void serialStatusReport()
   Serial.print(';'); // Terminate previous section.
   char buf[80];
   static OTV0P2BASE::SimpleStatsRotation<5> ss1; // Configured for maximum different stats.
-//  ss1.put(TemperatureC16); // Already at start of = stats line.
+//  ss1.put(TemperatureC16);
 #if defined(HUMIDITY_SENSOR_SUPPORT)
   ss1.put(RelHumidity);
-#endif // defined(HUMIDITY_SENSOR_SUPPORT)
-#if defined(ENABLE_AMBLIGHT_SENSOR)
+#endif
   ss1.put(AmbLight);
-#endif // ENABLE_AMBLIGHT_SENSOR
   ss1.put(Supply_cV);
 #if defined(ENABLE_OCCUPANCY_SUPPORT)
   ss1.put(Occupancy);
 //  ss1.put(Occupancy.vacHTag(), Occupancy.getVacancyH()); // EXPERIMENTAL
-#endif // defined(ENABLE_OCCUPANCY_SUPPORT)
-#if defined(ENABLE_MODELLED_RAD_VALVE)
+#endif
+#ifdef ENABLE_MODELLED_RAD_VALVE
     ss1.put(NominalRadValve.tagCMPC(), NominalRadValve.getCumulativeMovementPC()); // EXPERIMENTAL
-#endif // ENABLE_MODELLED_RAD_VALVE
+#endif
   const uint8_t wrote = ss1.writeJSON((uint8_t *)buf, sizeof(buf), 0, true);
   if(0 != wrote) { Serial.print(buf); }
 #endif
@@ -1081,7 +1079,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
 //          {
 //          const uint8_t setN = (uint8_t) atoi(tok1);
 //          for(uint8_t hh = 0; hh < 24; ++hh)
-//            { Serial.print(getByHourStat(setN, hh)); Serial_print_space(); }
+//            { Serial.print(getByHourStat(hh, setN)); Serial_print_space(); }
 //          Serial.println();
 //          }
 //        break;
@@ -1138,7 +1136,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
           // Now print values.
           for(uint8_t hh = 0; hh < 24; ++hh)
             {
-            const uint8_t statRaw = OTV0P2BASE::getByHourStat(setN, hh);
+            const uint8_t statRaw = OTV0P2BASE::getByHourStat(hh, setN);
             // For unset stat show '-'...
             if(OTV0P2BASE::STATS_UNSET_BYTE == statRaw) { Serial.print('-'); }
             // ...else print more human-friendly version of stat.
@@ -1157,12 +1155,6 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
                 { Serial.print(statRaw, HEX); break; }
 #endif
               }
-#if 0 && defined(DEBUG)
-            // Show how many values are lower than the current one.
-            Serial.print('(');
-            Serial.print(OTV0P2BASE::countStatSamplesBelow(setN, statRaw));
-            Serial.print(')');
-#endif
             if(hh == thisHH) { Serial.print('<'); } // Highlight current stat in this set.
 #if 0 && defined(DEBUG)
             if(inOutlierQuartile(false, setN, hh)) { Serial.print('B'); } // In bottom quartile.
@@ -1181,13 +1173,15 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
       // With F! force to frost and holiday (long-vacant) mode.  Useful for testing and for remote CLI use.
       case 'F':
         {
-#ifdef ENABLE_OCCUPANCY_SUPPORT
-        if((n == 2) && ('!' == buf[1]))
+        if(n == 2)
           {
-          Serial.println(F("hols"));
+          if('!' == buf[1]) { Serial.println(F("hols")); }
+#ifdef ENABLE_OCCUPANCY_SUPPORT
           Occupancy.setHolidayMode();
-          }
 #endif
+          setWarmModeDebounced(false);
+          break;
+          }
 #if defined(SETTABLE_TARGET_TEMPERATURES)
         char *last; // Used by strtok_r().
         char *tok1;
