@@ -356,12 +356,6 @@ void ModelledRadValve::recalibrate()
 // even if the device is left in WARM mode all the time,
 // using occupancy/light/etc to determine when temperature can be set back
 // without annoying users.
-//
-// Attempts in WARM mode to make the deepest reasonable cuts to maximise savings
-// when the room is vacant and not likely to become occupied again soon,
-// ie this looks ahead to give the room time to recover to target before occupancy.
-//
-// TODO: unit tests confirming that it is possible to reach all setback levels other than at highest comfort settings.
 uint8_t ModelledRadValve::computeTargetTemp()
   {
   // In FROST mode.
@@ -375,14 +369,14 @@ uint8_t ModelledRadValve::computeTargetTemp()
     // Don't do this if there has been recent manual intervention, eg to allow manual 'cancellation' of pre-heat (TODO-464).
     // Only do this if the target WARM temperature is NOT an 'eco' temperature (ie very near the bottom of the scale).
     // If well into the 'eco' zone go for a larger-than-usual setback, else go for usual small setback.
-    // Note: when pre-warm and warm time for schedule is ~1.5h, and default setback 1C,
-    // this is assuming that the room temperature can be raised by ~1C/h.
+    // Note: when pre-warm and warm time for schedule is ~1h, and default setback 1C,
+    // this is assuming that the room temperature can be raised by at least 1C/h.
     // See the effect of going from 2C to 1C setback: http://www.earth.org.uk/img/20160110-vat-b.png
     // (A very long pre-warm time may confuse or distress users, eg waking them in the morning.)
     if(!Occupancy.longVacant() && Scheduler.isAnyScheduleOnWARMSoon() && !recentUIControlUse())
       {
       const uint8_t warmTarget = getWARMTargetC();
-      // Compute putative pre-warm temperature, usually only just below WARM target.
+      // Compute putative pre-warm temperature, usually only just below WARM target,
       const uint8_t preWarmTempC = OTV0P2BASE::fnmax((uint8_t)(warmTarget - (isEcoTemperature(warmTarget) ? SETBACK_ECO : SETBACK_DEFAULT)), frostC);
       if(frostC < preWarmTempC) // && (!isEcoTemperature(warmTarget)))
         { return(preWarmTempC); }
@@ -405,8 +399,6 @@ uint8_t ModelledRadValve::computeTargetTemp()
     // or it is too dark for anyone to be active or the room is not likely occupied at this time
     //   AND no WARM schedule is active now (TODO-111)
     //   AND no recent manual interaction with the unit's local UI (TODO-464) indicating local settings override.
-    // The notion of "not likely occupied" is "not now"
-    // AND less likely than not at this hour of the day AND an hour ahead (TODO-753).
     // Note that this mainly has to work in domestic settings in winter (with ~8h of daylight)
     // but should ideally also work in artificially-lit offices (maybe ~12h continuous lighting).
     // No 'lights-on' signal for a whole day is a fairly strong indication that the heat can be turned down.
@@ -418,42 +410,28 @@ uint8_t ModelledRadValve::computeTargetTemp()
     const bool longVacant = longLongVacant || Occupancy.longVacant();
     const bool notLikelyOccupiedSoon = longLongVacant ||
         (Occupancy.isLikelyUnoccupied() &&
-        // No more than half the hours to be less occupied than this hour to be considered unlikely to be occupied.
-        (13 > OTV0P2BASE::countStatSamplesBelow(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::STATS_SPECIAL_HOUR_CURRENT_HOUR))) &&
-        // No more than a little over half the hours to be less occupied than the next hour to be considered unlikely to be occupied.
-        (14 > OTV0P2BASE::countStatSamplesBelow(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::STATS_SPECIAL_HOUR_NEXT_HOUR))));
-//         OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED) &&
-//         OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::STATS_SPECIAL_HOUR_NEXT_HOUR));
-    const uint8_t minLightsOffForSetbackMins = 10;
+         OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED) &&
+         OTV0P2BASE::inOutlierQuartile(false, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED, OTV0P2BASE::inOutlierQuartile_NEXT_HOUR));
     if(longVacant ||
-       ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > minLightsOffForSetbackMins)) && !Scheduler.isAnyScheduleOnWARMNow() && !recentUIControlUse()))
+       ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > 10)) && !Scheduler.isAnyScheduleOnWARMNow() && !recentUIControlUse()))
       {
       // Use a default minimal non-annoying setback if:
       //   in upper part of comfort range
       //   or if the room is likely occupied now
-      //   or if the room is not known to be dark and hasn't been vacant for a long time ie ~1d (TODO-107, TODO-758)
-      //      TODO POSSIBLY: limit to (say) 3--4h light time for when someone out but room daylit, but note that detecting occupancy will be harder too in daylight.
-      //      TODO POSSIBLY: after 3h vacancy AND apparent smoothed occupancy no-zero (so some can be detected) AND ambient light in top quartile or in middle of typical bright part of cycle (assume peak of daylight) then being lit is not enough to prevent a deeper setback.
-      //   or if the room is in the upper quartile of occupancy for this time and hasn't been vacant for a very long time
+      //   or if the room is not known to be dark and hasn't been vacant for a very long time (TODO-107)
+      //   or if the room is commonly occupied at this time and hasn't been vacant for a very long time
       //   or if a scheduled WARM period is due soon and the room hasn't been vacant for a moderately long time,
       // else usually use a somewhat bigger 'eco' setback
-      // else use an even bigger 'full' setback for maximum savings if in the eco region and
+      // else use an even bigger 'full' setback if in the eco region and
       //   the room has been vacant for a very long time
-      //   or is unlikely to be unoccupied at this time of day and
-      //     has been vacant and dark for a while or is in the lower part of the 'eco' range.
-      // This final dark/vacant timeout to enter FULL fallback while in mild eco mode
-      // should probably be longer than required to watch a decent movie or go to sleep (~2h) for example,
-      // but short enough to take effect overnight and to be in effect a reasonable fraction of (~8h) night.
-      const uint8_t minVacancyAndDarkForFULLSetbackH = 2; // Hours; strictly positive, typically 1--4.
+      //   or is unlikely to be unoccupied at this time of day and in the lower part of the 'eco' range.
       const uint8_t setback = (isComfortTemperature(wt) ||
                                Occupancy.isLikelyOccupied() ||
-                               (!longVacant && !AmbLight.isRoomDark()) ||
+                               (!longLongVacant && !AmbLight.isRoomDark()) ||
                                (!longLongVacant && OTV0P2BASE::inOutlierQuartile(true, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED)) ||
                                (!longVacant && Scheduler.isAnyScheduleOnWARMSoon())) ?
               SETBACK_DEFAULT :
-          ((hasEcoBias() && (longLongVacant ||
-              (notLikelyOccupiedSoon && (isEcoTemperature(wt) ||
-                  ((AmbLight.getDarkMinutes() > (uint8_t)min(254, 60*minVacancyAndDarkForFULLSetbackH)) && (Occupancy.getVacancyH() >= minVacancyAndDarkForFULLSetbackH)))))) ?
+          ((hasEcoBias() && (longLongVacant || (notLikelyOccupiedSoon && isEcoTemperature(wt)))) ?
               SETBACK_FULL : SETBACK_ECO);
 
       return(OTV0P2BASE::fnmax((uint8_t)(wt - setback), getFROSTTargetC())); // Target must never be set low enough to create a frost/freeze hazard.
@@ -933,31 +911,32 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     ss1.put(TemperatureC16);
 #if defined(HUMIDITY_SENSOR_SUPPORT)
     ss1.put(RelHumidity);
-#endif // defined(HUMIDITY_SENSOR_SUPPORT)
+#endif
 #if defined(ENABLE_OCCUPANCY_SUPPORT)
     ss1.put(Occupancy.twoBitTag(), Occupancy.twoBitOccupancyValue()); // Reduce spurious TX cf percentage.
     ss1.put(Occupancy.vacHTag(), Occupancy.getVacancyH()); // EXPERIMENTAL
-#endif // defined(ENABLE_OCCUPANCY_SUPPORT)
+#endif
     // OPTIONAL items
     // Only TX supply voltage for units apparently not mains powered.
     if(!Supply_cV.isMains()) { ss1.put(Supply_cV); } else { ss1.remove(Supply_cV.tag()); }
 #ifdef ENABLE_BOILER_HUB
     // Show boiler state for boiler hubs.
     ss1.put("b", (int) isBoilerOn());
-#endif // ENABLE_BOILER_HUB
-#ifdef ENABLE_AMBLIGHT_SENSOR
+#endif
     ss1.put(AmbLight); // Always send ambient light level (assuming sensor is present).
-#endif // ENABLE_AMBLIGHT_SENSOR
 #ifdef ENABLE_VOICE_STATS
     ss1.put(Voice);	// FIXME voice stats
-#endif // ENABLE_VOICE_STATS
-#if defined(LOCAL_TRV) // Deploying as sensor unit, not TRV controller, so show all sensors and no TRV stuff.
+#endif
+#if !defined(LOCAL_TRV) // Deploying as sensor unit, not TRV controller, so show all sensors and no TRV stuff.
+//    // Only show raw ambient light levels for non-TRV pure-sensor units.
+//    ss1.put(AmbLight);
+#else
     ss1.put(NominalRadValve);
     ss1.put(NominalRadValve.tagTTC(), NominalRadValve.getTargetTempC());
 #if 1
     ss1.put(NominalRadValve.tagCMPC(), NominalRadValve.getCumulativeMovementPC()); // EXPERIMENTAL
 #endif
-#endif // defined(LOCAL_TRV)
+#endif
 
     // If not doing a doubleTX then consider sometimes suppressing the change-flag clearing for this send
     // to reduce the chance of important changes being missed by the receiver.
@@ -1046,7 +1025,7 @@ static void wireComponentsTogether()
   // Mark UI as used and indirectly mark occupancy when control is used.
   TempPot.setOccCallback(markUIControlUsed);
   // Callbacks to set various mode combinations.
-  // Typically at most one call would be made on any appropriate pot adjustment.
+  // Typically at most one call would be made on any approriate pot adjustment. 
   TempPot.setWFBCallbacks(setWarmModeDebounced, setBakeModeDebounced);
 #endif // TEMP_POT_AVAILABLE
 
@@ -1081,14 +1060,13 @@ static void updateSensorsFromStats()
 
 #if defined(ENABLE_BOILER_HUB)
 // Ticks until locally-controlled boiler should be turned off; boiler should be on while this is positive.
-// Ticks are of the main loop, ie 2s (almost always).
+// Ticks are the mail loop time, 1s or 2s.
 // Used in hub mode only.
 static uint16_t boilerCountdownTicks;
 // True if boiler should be on.
 static bool isBoilerOn() { return(0 != boilerCountdownTicks); }
 // Minutes that the boiler has been off for, allowing minimum off time to be enforced.
 // Does not roll once at its maximum value (255).
-// DHD20160124: starting at zero forces at least for off time after power-up before firing up boiler (good after power-cut).
 static uint8_t boilerNoCallM;
 // Reducing listening if quiet for a while helps reduce self-heating temperature error
 // (~2C as of 2013/12/24 at 100% RX, ~100mW heat dissipation in V0.2 REV1 box) and saves some energy.
@@ -1354,7 +1332,7 @@ void remoteCallForHeatRX(const uint16_t id, const uint8_t percentOpen)
   const uint8_t minvro = default_minimum;
 #endif
 
-  // TODO-553: after over an hour of continuous boiler running
+  // TODO-553: after getting on for an hour of continuous boiler running
   // raise the percentage threshold to successfully call for heat (for a while).
   // The aim is to allow a (combi) boiler to have reached maximum efficiency
   // and to have potentially made a significant difference to room temperature
@@ -1364,28 +1342,19 @@ void remoteCallForHeatRX(const uint16_t id, const uint8_t percentOpen)
   // and have only limited ability to modulate down,
   // so may end up cycling anyway while running the circulation pump if left on.
   // Modelled on DHD habit of having many 15-minute boiler timer segments
-  // in 'off' period even during the day for many many years!
+  // in 'off' period even during the day for many years!
   //
   // Note: could also consider pause if mains frequency is low indicating grid stress.
-  const uint8_t boilerCycleWindowMask = 0x3f;
-  const uint8_t boilerCycleWindow = (minuteCount & boilerCycleWindowMask);
-  const bool considerPause = (boilerCycleWindow < (boilerCycleWindowMask >> 2));
-
-  // Equally the threshold could be lowered in the period after a possible pause (TODO-593, TODO-553)
-  // to encourage the boiler to start and run harder
-  // and to get a little closer to target temperatures.
-  const bool encourageOn = !considerPause && (boilerCycleWindow < (boilerCycleWindowMask >> 1));
+  const bool considerPause = ((minuteCount & 0x63) <= 0xf);
 
   // TODO-555: apply some basic hysteresis to help reduce boiler short-cycling.
   // Try to force a higher single-valve-%age threshold to start boiler if off,
   // at a level where at least a single valve is moderately open.
-  // Selecting "quick heat" at a valve should immediately pass this,
-  // as should normal warm in cold but newly-occupied room (TODO-593).
-  // (This will not provide hysteresis for very high minimum really-open valve values.)
-  // Be slightly tolerant with the 'moderately open' threshold
-  // to allow quick start from a range of devices (TODO-593)
-  // and in the face of imperfect rounding/conversion to/from percentages over the air.
-  const uint8_t threshold = (!considerPause && (encourageOn || isBoilerOn())) ?
+  // Selecting "quick heat" at a valve should immediately pass this.
+  // (Will not provide hysteresis for very high minimum really-open value.)
+  // Be slightly tolerant on 'moderately open' threshold to allow quick start from a range of devices
+  // and in the face of imperfect rounding/conversion to/from percentages.
+  const uint8_t threshold = (!considerPause && isBoilerOn()) ?
       minvro : OTV0P2BASE::fnmax(minvro, (uint8_t) (OTRadValve::DEFAULT_VALVE_PC_MODERATELY_OPEN-1));
 
   if(percentOpen >= threshold)
@@ -1531,7 +1500,6 @@ void loopOpenTRV()
         // forcing a time longer than the specified minimum,
         // regardless of when second0 happens to be.
         // (The min(254, ...) is to ensure that the boiler can come on even if minOnMins == 255.)
-        // TODO: randomly extend the off-time a little (eg during grid stress) partly to randmonise whole cycle length.
         if(boilerNoCallM <= min(254, minOnMins)) { ignoreRCfH = true; }
         if(OTV0P2BASE::getSubCycleTime() >= nearOverrunThreshold) { } // { tooNearOverrun = true; }
         else if(ignoreRCfH) { OTV0P2BASE::serialPrintlnAndFlush(F("RCfH-")); } // Remote call for heat ignored.
@@ -1539,7 +1507,7 @@ void loopOpenTRV()
         }
       if(!ignoreRCfH)
         {
-        const uint16_t onTimeTicks = minOnMins * (uint16_t) (60U / OTV0P2BASE::MAIN_TICK_S);
+        const uint8_t onTimeTicks = minOnMins * (60 / OTV0P2BASE::MAIN_TICK_S);
         // Restart count-down time (keeping boiler on) with new call for heat.
         boilerCountdownTicks = onTimeTicks;
         boilerNoCallM = 0; // No time has passed since the last call.
@@ -1889,11 +1857,8 @@ void loopOpenTRV()
     case 4: { if(runAll) { Supply_cV.read(); } break; }
 
 #ifdef ALLOW_STATS_TX
-    // Periodic transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
-    // Randomised somewhat between slots and also within the slot to help avoid collisions.
-    static uint8_t txTick;
-    case 6: { txTick = OTV0P2BASE::randRNG8() & 3; break; } // Pick which of the 4 slots to use.
-    case 8: case 10: case 12: case 14: if(0 != txTick--) { break; } // Only the slot where onSec is zero is used.
+    // Regular transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
+    case 10:
       {
       if(!enableTrailingStatsPayload()) { break; } // Not allowed to send stuff like this.
 #if defined(ENABLE_FHT8VSIMPLE)
@@ -1902,12 +1867,14 @@ void loopOpenTRV()
       if(localFHT8VTRVEnabled() && useExtraFHT8VTXSlots) { break; }
 #endif
 
-      // Stats TX in the minute after all sensors should have been polled (so that readings are fresh).
-      if(minute1From4AfterSensors)
+      // Generally only attempt stats TX in the minute after all sensors should have been polled (so that readings are fresh).
+      if(minute1From4AfterSensors ||
+        (!batteryLow && (0 == (0x24 & OTV0P2BASE::randRNG8())))) // Occasional additional TX when not conserving power.
         {
         pollIO(); // Deal with any pending I/O.
         // Sleep randomly up to 128ms to spread transmissions and thus help avoid collisions.
         OTV0P2BASE::sleepLowPowerLessThanMs(1 + (OTV0P2BASE::randRNG8() & 0x7f));
+//        nap(randRNG8NextBoolean() ? WDTO_60MS : WDTO_120MS); // FIXME: need a different random interval generator!
         handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
         // Send it!
         // Try for double TX for extra robustness unless:
@@ -1996,11 +1963,11 @@ void loopOpenTRV()
         // Only continue if temperature appears not to be falling compared to previous hour (TODO-696).
         // No previous temperature will show as a very large number so should fail safe.
         // Note use of compress/expand to try to get round companding granularity issues.
-        if(expandTempC16(compressTempC16(TemperatureC16.get())) >= expandTempC16(OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR, OTV0P2BASE::getPrevHourLT())))
+        if(expandTempC16(compressTempC16(TemperatureC16.get())) >= expandTempC16(OTV0P2BASE::getByHourStat(OTV0P2BASE::getPrevHourLT(), V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR)))
           {
-          const uint8_t lastRH = OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR, OTV0P2BASE::getPrevHourLT());
+          const uint8_t lastRH = OTV0P2BASE::getByHourStat(OTV0P2BASE::getPrevHourLT(), V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR);
           if((OTV0P2BASE::STATS_UNSET_BYTE != lastRH) &&
-             (RelHumidity.get() >= lastRH + OTV0P2BASE::HumiditySensorSHT21::HUMIDITY_OCCUPANCY_PC_MIN_RISE_PER_H))
+             (RelHumidity.get() >= lastRH + HumiditySensorSHT21::HUMIDITY_OCCUPANCY_PC_MIN_RISE_PER_H))
             { Occupancy.markAsPossiblyOccupied(); }
           }
         }
