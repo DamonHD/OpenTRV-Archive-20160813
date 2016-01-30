@@ -256,7 +256,11 @@ void optionalPOST()
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   PrimaryRadio.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
+#ifdef ALLOW_CC1_SUPPORT
   if(!PrimaryRadio.configure(2, &RFMConfig) || !PrimaryRadio.begin()) { panic(); }
+#else
+  if(!PrimaryRadio.configure(1, &RFMConfig) || !PrimaryRadio.begin()) { panic(); }
+#endif
   // Apply filtering, if any, while we're having fun...
   PrimaryRadio.setFilterRXISR(FilterRXISR);
 //  if(neededToWakeSPI) { OTV0P2BASE::powerDownSPI(); }

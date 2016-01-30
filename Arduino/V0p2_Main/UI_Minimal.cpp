@@ -451,13 +451,24 @@ static bool extCLIHandler(Print *const p, char *const buf, const uint8_t n)
             atoi(tok6));
         if(q.isValid())
           {
+#ifdef ALLOW_CC1_SUPPORT
           uint8_t txbuf[OTProtocolCC::CC1PollAndCommand::primary_frame_bytes+1]; // More than large enough for preamble + sync + alert message.
           const uint8_t bodylen = q.encodeSimple(txbuf, sizeof(txbuf), true);
+#else
+    uint8_t txbuf[STATS_MSG_START_OFFSET + OTProtocolCC::CC1Alert::primary_frame_bytes+1]; // More than large enough for preamble + sync + alert message.
+    uint8_t *const bptr = RFM22RXPreambleAdd(txbuf);
+    const uint8_t bodylen = a.encodeSimple(bptr, sizeof(txbuf) - STATS_MSG_START_OFFSET, true);
+    const uint8_t buflen = STATS_MSG_START_OFFSET + bodylen;
+#endif
 #if 0 && defined(DEBUG)
     OTRadioLink::printRXMsg(p, txbuf, bodylen);
 #endif
           // TX at normal volume since ACKed and can be repeated if necessary.
-          if(PrimaryRadio.sendRaw(txbuf, bodylen, 1))
+#ifdef ALLOW_CC1_SUPPORT
+          if(PrimaryRadio.sendRaw(txbuf, bodylen)) // Send at default volume...  One going missing won't hurt that much.
+#else
+          if(PrimaryRadio.sendRaw(txbuf, buflen)) // Send at default volume...  One going missing won't hurt that much.
+#endif
             { return(true); } // Done it!
           }
         }
