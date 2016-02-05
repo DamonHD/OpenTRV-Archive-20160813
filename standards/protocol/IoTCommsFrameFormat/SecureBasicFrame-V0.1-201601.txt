@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160205: adding ASCII-art frame diagrams.
 V0.1.20160111: pending change to padding accepted; adding example 3 (secure).
 V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
 V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
@@ -97,6 +98,11 @@ Generic Frame Structure
 Unless otherwise dictated by bearer/carrier/encoding the order of bytes is
 as specified below, and within each byte the most significant bit is sent first.
 (As for RFM23B TX/RX via the FIFOs.)
+
+    Frame format excluding logical leading length (fl) byte:
+    +------+--------+-----------------+----+--------------------+------------------+
+    | type | seqidl | ID [0,15] bytes | bl | body [0,254] bytes | trailer 1+ bytes |
+    +------+--------+-----------------+----+--------------------+------------------+
 
 Bytes   Section Description
 
@@ -196,12 +202,18 @@ and that for non-secure frames that tl == fl - 1.
 (Note that radios may themselves reject potentially-mangled frames in
 noisy environments because of carrier drop-out, preamble mismatches, etc.)
 
+    Minimal frame (excluding logical leading length fl byte) is:
+    +------+--------+----+----------------+
+    | type | seqidl | bl | 1-byte-trailer |
+    +------+--------+----+----------------+
+
 All small systems by default may reject frames with fl >= 64 bytes
 (fl == 63 is the limit in size of a 'small' frame, excluding fl itself,
 to allow for typical radio packet buffers/FIFOs including fl of 64 bytes).
 
 Per-frame type structural validation can and should be performed further
 down the processing chain for those types that are understood.
+
 
 
 OpenTRV Basic Radiator Valve / Sensor Frame Details
