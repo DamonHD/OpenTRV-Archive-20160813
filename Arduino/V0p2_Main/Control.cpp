@@ -1062,6 +1062,10 @@ static void wireComponentsTogether()
   AmbLight.setPossOccCallback(genericMarkAsPossiblyOccupied);
 #endif // ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT
 
+#if defined(ENABLE_OCCUPANCY_SUPPORT) && defined(ENABLE_OCCUPANCY_DETECTION_FROM_VOICE)
+  Voice.setPossOccCallback(genericMarkAsPossiblyOccupied);
+#endif // ENABLE_OCCUPANCY_DETECTION_FROM_VOICE
+
 #if defined(TEMP_POT_AVAILABLE)
 //  TempPot.setOccCallback(genericMarkAsOccupied); // markUIControlUsed
   // Mark UI as used and indirectly mark occupancy when control is used.
@@ -1071,8 +1075,8 @@ static void wireComponentsTogether()
   TempPot.setWFBCallbacks(setWarmModeDebounced, setBakeModeDebounced);
 #endif // TEMP_POT_AVAILABLE
 #if V0p2_REV == 14
-  pinMode(A3, OUTPUT);
-  fastDigitalWrite(A3, HIGH);
+  pinMode(REGULATOR_POWERUP, OUTPUT);
+  fastDigitalWrite(REGULATOR_POWERUP, HIGH);
 #endif
   // TODO
   }
