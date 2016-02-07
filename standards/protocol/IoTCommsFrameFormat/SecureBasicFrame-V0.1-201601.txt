@@ -311,7 +311,7 @@ When secure:
     frame header sequence number.
   * The entire frame header content (including length) is protected by the
     AES-GCM authentication tag.
-  * The last byte of the trailer is 0x80 to indicate V1 128-bit AES-GCM,
+  * The last byte of the trailer is 0x80 to indicate V1 OpenTRV 128-bit AES-GCM,
     and to avoid the final frame byte being 0 or 0xff,
     preceded by 22 further bytes as follows:
       * 3 bytes of restart/reboot counter msb first,
