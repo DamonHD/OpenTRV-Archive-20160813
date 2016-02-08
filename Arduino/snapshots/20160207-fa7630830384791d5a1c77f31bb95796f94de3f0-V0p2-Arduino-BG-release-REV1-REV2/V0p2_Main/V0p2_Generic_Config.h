@@ -26,13 +26,10 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #ifndef V0P2_GENERIC_CONFIG_H
 #define V0P2_GENERIC_CONFIG_H
 
-// Define/uncomment exactly one of the CONFIG_XXX flags below
-// to enable a standard configuration set.
+// Define/uncomment exactly one of the CONFIG_XXX flags to enable a configuration set below.
 // Some can be specific to particular locations and boards,
 // others can be vanilla ready to be configured by the end-user one way or another.
-// As far as possible the configs should simply #define/#undef a set of ENABLE_XXX flags.
-// There is a set of 'default' ENABLE_XXX flags which will evolve over time,
-// requiring alterations to them to be tracked in individual configs.
+// As far as possible the configs should #define/#undef a set of ENABLE_XXX flags.
 
 //#define CONFIG_GENERIC_ROOM_NODE
 //#define CONFIG_GENERIC_BOILER_NODE
@@ -44,11 +41,11 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 //#define CONFIG_Trial2013Winter_Round1 // REV1 default config.
 //#define CONFIG_Trial2013Winter_Round1_LVBHSH // REV1: local valve control, boiler hub, stats hub & TX.
 //#define CONFIG_Trial2013Winter_Round1_BOILERHUB // REV1 as plain boiler node.
-//#define CONFIG_Trial2013Winter_Round1_NOHUB // REV1 as TX-only leaf node.
+#define CONFIG_Trial2013Winter_Round1_NOHUB // REV1 as TX-only leaf node.
 //#define CONFIG_Trial2013Winter_Round2 // REV2 cut4 default config.
 //#define CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
 //#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
-#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
+//#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_NOHUB // REV2 cut4 as TX-only leaf node.
 //#define CONFIG_DORM1 // REV7 / DORM1 Winter 2014/2015 all-in-one valve unit.
@@ -492,7 +489,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // IF DEFINED: enable OpenTRV secure frame encoding/decoding (as of 2015/12).
 #define ENABLE_OTSECUREFRAME_ENCODING_SUPPORT
 // IF DEFINED: allow non-secure OpenTRV secure frame RX (as of 2015/12): DISABLED BY DEFAULT.
-#define ENABLE_OTSECUREFRAME_INSECURE_RX_PERMITTED
+#undef ENABLE_OTSECUREFRAME_INSECURE_RX_PERMITTED
 #endif
 
 #ifdef CONFIG_Trial2013Winter_Round2 // For trial over winter of 2013--4, second round (REV2).

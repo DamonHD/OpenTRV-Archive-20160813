@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.UnsupportedEncodingException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Formatter;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -268,7 +269,7 @@ public class SecureFrameTest
         where:
 
         inputs
-        * The secret key is the 128bit preshared key
+        * The secret key is the 128-bit preshared key
         * The IV is as per this spec - http://www.earth.org.uk/OpenTRV/stds/network/20151203-DRAFT-SecureBasicFrame.txt
         * The plain text is the message body, 0 padded to 15 +1 bytes (the 1 byte indicating the amount of padding)
         * AAD is the 8 header bytes of the frame (length, type, seqlen, 4xID bytes, bodyLength)
@@ -861,8 +862,10 @@ public class SecureFrameTest
 
         final OFrameStruct packetToSendC = new OFrameStruct();
         packetToSendC.secFlag = true;
-        packetToSendC.frameType = 0x4F; // secure O Frame
-        packetToSendC.frameSeqNo = 0;
+        packetToSendC.frameType = 0x4F; // (secure) O Frame
+        // Set the frame sequence number to match the 4 lsbs of the message counter
+        // which are in the last IV/nonce byte.
+        packetToSendC.frameSeqNo = (byte)(generateNonce()[11] & 0xf);
         packetToSendC.il = 4;        // needs to be 4 bytes or more. Behaviour undefined if more at the moment
         packetToSendC.id = idC;
         packetToSendC.body = bodyC;        // This must happen before the next line to avoid null pointer exception!!
@@ -878,7 +881,12 @@ public class SecureFrameTest
         final int msgLen = buildOFrame(msgBuff, packetToSendC);
 
         System.out.format("Raw data packet from encoder is: %02x bytes long \r\n", msgLen);
-        for (int i=0;i<msgLen;i++) { System.out.format("%02x ", msgBuff[i]); }
+        StringBuilder sb = new StringBuilder(3 * msgLen);
+        for (int i=0;i<msgLen;i++) { sb.append((new Formatter()).format("%02x", msgBuff[i])).append(' '); }
+        System.out.println(sb);
+        final String expected = "3e cf 94 aa aa aa aa 20 b3 45 f9 29 69 57 0c b8 28 66 14 b4 f0 69 b0 08 71 da d8 fe 47 c1 c3 53 83 48 88 03 7d 58 75 75 00 00 2a 00 03 19 29 3b 31 52 c3 26 d2 6d d0 8d 70 1e 4b 68 0d cb 80 ";
+        // Actually verify the output/frame generated!
+        assertEquals(expected, sb.toString());
 
         System.out.println("");            // CR LF
 
