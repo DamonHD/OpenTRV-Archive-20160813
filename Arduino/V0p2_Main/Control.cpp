@@ -416,7 +416,8 @@ uint8_t ModelledRadValve::computeTargetTemp()
     // No 'lights-on' signal for a whole day is a fairly strong indication that the heat can be turned down.
     // TODO-451: TODO-453: ignore a short lights-off, eg from someone briefly leaving room or a transient shadow.
     // TODO: consider bottom quartile of ambient light as alternative setback trigger for near-continuously-lit spaces (aiming to spot daylight signature).
-    // Look ahead to next time period (as well as current) to determine notLikelyOccupiedSoon.
+    // Look ahead to next time period (as well as current) to determine notLikelyOccupiedSoon
+    // but suppress lookahead of occupancy when its been dark for many hours (eg overnight) to avoid disturbing/waking.  (TODO-792)
     // Note that deeper setbacks likely offer more savings than faster (but shallower) setbacks.
     const bool longLongVacant = Occupancy.longLongVacant();
     const bool longVacant = longLongVacant || Occupancy.longVacant();
@@ -432,7 +433,8 @@ uint8_t ModelledRadValve::computeTargetTemp()
         // No more than about half the hours to be less occupied than this hour to be considered unlikely to be occupied.
         (hoursLessOccupiedThanThis < thisHourNLOThreshold) &&
         // Allow to be a little bit more occupied for the next hour than the current hour.
-        (hoursLessOccupiedThanNext < (thisHourNLOThreshold+1)));
+        // Suppress occupancy lookahead if room has been dark for several hours, eg overnight.  (TODO-792)
+        ((AmbLight.getDarkMinutes() > 240) || (hoursLessOccupiedThanNext < (thisHourNLOThreshold+1))));
     const uint8_t minLightsOffForSetbackMins = ecoBias ? 10 : 20;
     if(longVacant ||
        ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > minLightsOffForSetbackMins) || (ecoBias && (Occupancy.getVacancyH() > 0) && (0 == OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR, OTV0P2BASE::STATS_SPECIAL_HOUR_CURRENT_HOUR)))) &&
@@ -1781,7 +1783,7 @@ void loopOpenTRV()
   // High-priority UI handing, every other/even second.
   // Show status if the user changed something significant.
   // Must take ~300ms or less so as not to run over into next half second if two TXs are done.
-  bool recompute = false; // Set true an extra recompute of target temperature should be done.
+  bool recompute = false; // Set true if an extra recompute of target temperature should be done.
 #if !defined(V0P2BASE_TWO_S_TICK_RTC_SUPPORT)
   if(0 == (TIME_LSD & 1))
 #endif
@@ -1877,10 +1879,21 @@ void loopOpenTRV()
       // Stats TX in the minute after all sensors should have been polled (so that readings are fresh).
       if(minute1From4AfterSensors)
         {
-        pollIO(); // Deal with any pending I/O.
-        // Sleep randomly up to 128ms to spread transmissions and thus help avoid collisions.
-        OTV0P2BASE::sleepLowPowerLessThanMs(1 + (OTV0P2BASE::randRNG8() & 0x7f));
-        handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
+        // Sleep randomly up to 25% of the minor cycle
+        // to spread transmissions and thus help avoid collisions.
+        const uint8_t stopBy = 1 + (((OTV0P2BASE::GSCT_MAX >> 2) | 7) & OTV0P2BASE::randRNG8());
+        while(OTV0P2BASE::getSubCycleTime() <= stopBy)
+          {
+          // Sleep a little.
+          OTV0P2BASE::nap(WDTO_15MS, true);
+          // Deal with any pending I/O.
+          pollIO(); 
+          handleQueuedMessages(&Serial, true, &PrimaryRadio);
+          }
+//        pollIO(); // Deal with any pending I/O.
+//        // Sleep randomly up to 128ms to spread transmissions and thus help avoid collisions.
+//        OTV0P2BASE::sleepLowPowerLessThanMs(1 + (OTV0P2BASE::randRNG8() & 0x7f));
+//        handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
         // Send it!
         // Try for double TX for extra robustness unless:
         //   * this is a speculative 'extra' TX
@@ -2137,7 +2150,7 @@ void loopOpenTRV()
   // Only calling this after most other heavy-lifting work is likely done.
   // Note that FHT8V sync will take up at least the first 1s of a 2s subcycle.
   if(!showStatus &&
-     (ValveDirect.isInNormalRunState() || (0 == (3 & TIME_LSD))) &&
+     // (ValveDirect.isInNormalRunState() || (0 == (3 & TIME_LSD))) &&
      (OTV0P2BASE::getSubCycleTime() < ((OTV0P2BASE::GSCT_MAX/4)*3)))
     { ValveDirect.read(); }
 #endif
@@ -2155,7 +2168,7 @@ void loopOpenTRV()
     {
     const uint8_t sct = OTV0P2BASE::getSubCycleTime();
     const uint8_t listenTime = max(OTV0P2BASE::GSCT_MAX/16, CLI_POLL_MIN_SCT);
-    if(sct < (OTV0P2BASE::GSCT_MAX - 2*listenTime))
+    if(sct < (OTV0P2BASE::GSCT_MAX - 1 - 2*listenTime))
       // Don't listen beyond the last 16th of the cycle,
       // or a minimal time if only prodding for interaction with automated front-end,
       // as listening for UART RX uses lots of power.
@@ -2184,9 +2197,9 @@ void loopOpenTRV()
     const uint8_t orc = 1 + ~eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER);
     OTV0P2BASE::eeprom_smart_update_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER, ~orc);
 #if 1 && defined(DEBUG)
-    DEBUG_SERIAL_PRINTLN_FLASHSTRING("!loop overrun");
-//    DEBUG_SERIAL_PRINT(orc);
-//    DEBUG_SERIAL_PRINTLN();
+    DEBUG_SERIAL_PRINT_FLASHSTRING("!loop overrun");
+    DEBUG_SERIAL_PRINT(TIME_LSD);
+    DEBUG_SERIAL_PRINTLN();
 #endif
 #if defined(ENABLE_FHT8VSIMPLE)
     FHT8V.resyncWithValve(); // Assume that sync with valve may have been lost, so re-sync.
