@@ -47,12 +47,12 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 //#define CONFIG_Trial2013Winter_Round1_NOHUB // REV1 as TX-only leaf node.
 //#define CONFIG_Trial2013Winter_Round2 // REV2 cut4 default config.
 //#define CONFIG_Trial2013Winter_Round2_LVBHSH // REV2 cut4: local valve control, boiler hub, stats hub & TX.
-//#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
+#define CONFIG_Trial2013Winter_Round2_LVBH // REV2 cut4 local valve control and boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_BOILERHUB // REV2 cut4 as plain boiler hub.
 //#define CONFIG_Trial2013Winter_Round2_STATSHUB // REV2 cut4 as stats hub.
 //#define CONFIG_Trial2013Winter_Round2_NOHUB // REV2 cut4 as TX-only leaf node.
-#define CONFIG_DORM1 // REV7 / DORM1 all-in-one valve unit.
-//#define CONFIG_DORM1_BOILER // REV8 / DORM1 Winter 2014/2015 boiler-control unit.
+//#define CONFIG_DORM1 // REV7 / DORM1 all-in-one valve unit.
+//#define CONFIG_DORM1_BOILER // REV8 / DORM1 boiler-control unit.
 //#define CONFIG_REV11_RAW_JSON // REV11 as raw JSON-only stats/sensor leaf.
 
 
@@ -114,20 +114,15 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #undef ENABLE_TRIMMED_BANDWIDTH
 // IF DEFINED: minimise boot effort and energy eg for intermittently-powered energy-harvesting applications.
 #undef ENABLE_MIN_ENERGY_BOOT
-// IF DEFINED: basic FROST/WARM temperatures are settable.
-#define ENABLE_SETTABLE_TARGET_TEMPERATURES
 // IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
 #define ENABLE_LOCAL_TRV
 // IF DEFINED: this unit controls a valve, but provides slave valve control only.
 #undef ENABLE_SLAVE_TRV
 // IF DEFINED: this unit *can* act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
 #define ENABLE_BOILER_HUB
+//////////////////////////////////////// DEV/MAINT UI OPTIONS (and support for them)
 // IF DEFINED: allow JSON stats frames alongside binary ones.
 #define ENABLE_JSON_OUTPUT
-// IF DEFINED: support one on and one off time per day (possibly in conjunction with 'learn' button).
-#define ENABLE_SINGLETON_SCHEDULE
-// IF DEFINED: use active-low LEARN button(s).  Needs ENABLE_SINGLETON_SCHEDULE.
-#define ENABLE_LEARN_BUTTON // OPTIONAL ON V0.09 PCB1
 // IF DEFINED: allow periodic machine- and human- readable status report to serial, starting with "=".
 #define ENABLE_SERIAL_STATUS_REPORT
 // IF DEFINED: this unit supports CLI over the USB/serial connection, eg for run-time reconfig.
@@ -140,10 +135,19 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #define ENABLE_FULL_OT_UI
 // IF DEFINED: enable and extended CLI with a longer input buffer for example.
 #undef ENABLE_EXTENDED_CLI
-// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
-#undef ENABLE_PRIMARY_TEMP_SENSOR_SHT21
+// IF DEFINED: physical UI use wakes CLI (not needed when CLI can auto-wake from serial).
+#undef ENABLE_UI_WAKES_CLI
+//////////////////////////////////////// DEVICE UI OPTIONS (and support for them)
+// IF DEFINED: basic FROST/WARM temperatures are settable.
+#define ENABLE_SETTABLE_TARGET_TEMPERATURES
+// IF DEFINED: support one on and one off time per day (possibly in conjunction with 'learn' button).
+#define ENABLE_SINGLETON_SCHEDULE
+// IF DEFINED: use active-low LEARN button(s).  Needs ENABLE_SINGLETON_SCHEDULE.
+#define ENABLE_LEARN_BUTTON // OPTIONAL ON V0.09 PCB1
 // IF DEFINED: enable use of second UI LED if available.
 #define ENABLE_UI_LED_2_IF_AVAILABLE
+// IF DEFINED: simplified mode button behaviour: tapping button invokes BAKE, not mode cycling.
+#undef ENABLE_SIMPLIFIED_MODE_BAKE 
 //////////////////////////////////////// SENSOR OPTIONS (and support for them)
 // IF DEFINED: allow use of ambient light sensor.
 #define ENABLE_AMBLIGHT_SENSOR
@@ -513,6 +517,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // Does not ever need to act as a boiler hub nor to receive stats.
 // Although LEARN buttons are provided, by default they are disabled as is the scheduler.
 #define V0p2_REV 7
+// IF DEFINED: simplified mode button behaviour: tapping button invokes BAKE, not mode cycling.
+#define ENABLE_SIMPLIFIED_MODE_BAKE 
 // IF DEFINED: support one on and one off time per day (possibly in conjunction with 'learn' button).
 #undef ENABLE_SINGLETON_SCHEDULE
 // IF DEFINED: use active-low LEARN button(s).  Needs ENABLE_SINGLETON_SCHEDULE.
@@ -520,7 +526,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // IF DEFINED: try to trim memory (primarily RAM, also code/Flash) space used.
 #undef ENABLE_TRIMMED_MEMORY
 // IF DEFINED: initial direct motor drive design.
-#define DIRECT_MOTOR_DRIVE_V1
+#define ENABLE_V1_DIRECT_MOTOR_DRIVE
 // IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
 #define ENABLE_PRIMARY_TEMP_SENSOR_SHT21
 // Using RoHS-compliant phototransistor in place of LDR.
@@ -554,6 +560,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #define ENABLE_FULL_OT_UI
 // IF DEFINED: enable use of second UI LED if available.
 #undef ENABLE_UI_LED_2_IF_AVAILABLE
+// IF DEFINED: reverse DORM1 motor with respect to very first samples.
+#define ENABLE_DORM1_MOTOR_REVERSED
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
@@ -587,7 +595,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // IF UNDEFINED: don't allow RX of stats frames (since there is no easy way to plug in a serial connection to relay them!)
 #undef ENABLE_STATS_RX
 // IF DEFINED: initial direct motor drive design.
-//#define DIRECT_MOTOR_DRIVE_V1
+//#define ENABLE_V1_DIRECT_MOTOR_DRIVE
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
@@ -725,7 +733,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // IF UNDEFINED: don't allow RX of stats frames (since there is no easy way to plug in a serial connection to relay them!)
 #undef ENABLE_STATS_RX
 // IF DEFINED: initial direct motor drive design.
-//#define DIRECT_MOTOR_DRIVE_V1
+//#define ENABLE_V1_DIRECT_MOTOR_DRIVE
 // Use common settings.
 #define COMMON_SETTINGS
 #endif
@@ -763,7 +771,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // In this off-label mode being used as stats gatherers or simple hubs.
 #define V0p2_REV 7
 // IF DEFINED: initial direct motor drive design.  Doesn't imply it gets used, but I/O can be set up safely.
-#define DIRECT_MOTOR_DRIVE_V1
+#define ENABLE_V1_DIRECT_MOTOR_DRIVE
 // IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
 #define ENABLE_PRIMARY_TEMP_SENSOR_SHT21
 // Using RoHS-compliant phototransistor in place of LDR.
@@ -805,7 +813,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // Does not ever need to act as a boiler hub nor to receive stats.
 #define V0p2_REV 7
 // IF DEFINED: initial direct motor drive design.
-#undef DIRECT_MOTOR_DRIVE_V1
+#undef ENABLE_V1_DIRECT_MOTOR_DRIVE
 // IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
 #define ENABLE_PRIMARY_TEMP_SENSOR_SHT21
 // Using RoHS-compliant phototransistor in place of LDR.

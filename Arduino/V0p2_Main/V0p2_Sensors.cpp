@@ -45,7 +45,15 @@ OTV0P2BASE::SupplyVoltageCentiVolts Supply_cV;
 #if defined(TEMP_POT_REVERSE)
 OTV0P2BASE::SensorTemperaturePot TempPot(OTV0P2BASE::SensorTemperaturePot::TEMP_POT_RAW_MAX, 0);
 #else
+#if (V0p2_REV != 7) // For DORM1/REV7 natural direction for temp dial pot is correct.
 OTV0P2BASE::SensorTemperaturePot TempPot(0, OTV0P2BASE::SensorTemperaturePot::TEMP_POT_RAW_MAX);
+#else
+// DORM1 / REV7 initial unit range ~[45,293] DHD20160211.
+// Thus could be ~27 points per item on scale: * 16 17 18 >19< 20 21 22 BOOST
+static const uint16_t REV7_pot_low = 45;
+static const uint16_t REV7_pot_high = 293;
+OTV0P2BASE::SensorTemperaturePot TempPot(REV7_pot_low, REV7_pot_high);
+#endif // (V0p2_REV != 7)
 #endif // defined(TEMP_POT_REVERSE)
 #endif
 
@@ -132,9 +140,9 @@ OTV0P2BASE::VoiceDetectionQM1 Voice;
 
 // DORM1/REV7 direct drive actuator.
 #ifdef HAS_DORM1_VALVE_DRIVE
-//#ifdef DIRECT_MOTOR_DRIVE_V1
+//#ifdef ENABLE_V1_DIRECT_MOTOR_DRIVE
 // Singleton implementation/instance.
-#ifdef ENABLE_DORM1_MOTOR_REVERSED // Reversed vs sample 2015/12
+#ifdef ENABLE_DORM1_MOTOR_REVERSED // Reversed vs sample 2015/12.
 OTRadValve::ValveMotorDirectV1<MOTOR_DRIVE_ML, MOTOR_DRIVE_MR, MOTOR_DRIVE_MI_AIN, MOTOR_DRIVE_MC_AIN> ValveDirect;
 #else
 OTRadValve::ValveMotorDirectV1<MOTOR_DRIVE_MR, MOTOR_DRIVE_ML, MOTOR_DRIVE_MI_AIN, MOTOR_DRIVE_MC_AIN> ValveDirect;

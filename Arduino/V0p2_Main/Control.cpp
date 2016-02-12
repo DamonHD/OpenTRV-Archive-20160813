@@ -46,7 +46,8 @@ static bool isBoilerOn();
 // If true then is in WARM (or BAKE) mode; defaults to (starts as) false/FROST.
 // Should be only be set when 'debounced'.
 // Defaults to (starts as) false/FROST.
-static bool isWarmMode;
+// Marked volatile to allow atomic access from ISR without a lock.
+static volatile bool isWarmMode;
 // If true then the unit is in 'warm' (heating) mode, else 'frost' protection mode.
 bool inWarmMode() { return(isWarmMode); }
 // Has the effect of forcing the warm mode to the specified state immediately.
@@ -54,33 +55,49 @@ bool inWarmMode() { return(isWarmMode); }
 // If forcing to FROST mode then any pending BAKE time is cancelled.
 void setWarmModeDebounced(const bool warm)
   {
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("Call to setWarmModeDebounced(");
-  DEBUG_SERIAL_PRINT(warm);
-  DEBUG_SERIAL_PRINT_FLASHSTRING(")");
-  DEBUG_SERIAL_PRINTLN();
-#endif
   isWarmMode = warm;
   if(!warm) { cancelBakeDebounced(); }
   }
+// Start/cancel WARM mode in one call, driven by manual UI input.
+static void setWarmModeFromManualUI(const bool warm)
+  {
+  // Give feedback when changing WARM mode.
+  if(inWarmMode() != warm) { markUIControlUsedSignificant(); }
+  // Now set/cancel WARM.
+  setWarmModeDebounced(warm);
+  }
 
 // Only relevant if isWarmMode is true.
-static uint_least8_t bakeCountdownM;
+// Marked volatile to allow atomic access from ISR without a lock; decrements should lock out interrupts.
+static volatile uint_least8_t bakeCountdownM;
 // If true then the unit is in 'BAKE' mode, a subset of 'WARM' mode which boosts the temperature target temporarily.
+// ISR-safe.
 bool inBakeMode() { return(isWarmMode && (0 != bakeCountdownM)); }
 // Should be only be called once 'debounced' if coming from a button press for example.
 // Cancel 'bake' mode if active; does not force to FROST mode.
 void cancelBakeDebounced() { bakeCountdownM = 0; }
 // Start/restart 'BAKE' mode and timeout.
-// Should be only be called once 'debounced' if coming from a button press for example.
-void startBakeDebounced() { isWarmMode = true; bakeCountdownM = BAKE_MAX_M; }
-
-// Start/cancel BAKE mode in one call.
-void setBakeModeDebounced(const bool start)
+// Should ideally be only be called once 'debounced' if coming from a button press for example.
+// Is thread-/ISR- safe.
+void startBake() { isWarmMode = true; bakeCountdownM = BAKE_MAX_M; }
+#if defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+// Start BAKE from manual UI interrupt; marks UI as used also.
+// Is thread-/ISR- safe.
+static void startBakeFromInt()
   {
-  if(start) { startBakeDebounced(); }
-  else { cancelBakeDebounced(); }
+  startBake();
+  markUIControlUsedSignificant();
   }
+#endif // defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+// Start/cancel BAKE mode in one call, driven by manual UI input.
+void setBakeModeFromManualUI(const bool start)
+  {
+  // Give feedback when changing BAKE mode.
+  if(inBakeMode() != start) { markUIControlUsedSignificant(); }
+  // Now set/cancel BAKE.
+  if(start) { startBake(); } else { cancelBakeDebounced(); }
+  }
+
 
 
 #if defined(UNIT_TESTS)
@@ -423,6 +440,8 @@ uint8_t ModelledRadValve::computeTargetTemp()
     const bool longVacant = longLongVacant || Occupancy.longVacant();
     const bool likelyVacantNow = longVacant || Occupancy.isLikelyUnoccupied();
     const bool ecoBias = hasEcoBias();
+    // True if the room has been dark long enough to indicate night.  (TODO-792)
+    const bool darkForHours = AmbLight.getDarkMinutes() > 245; // A little over 4h, not quite max 255.
     // Be more ready to decide room not likely occupied soon if eco-biased.
     // Note that this value is likely to be used +/- 1 so must be in range [1,23].
     const uint8_t thisHourNLOThreshold = ecoBias ? 15 : 12;
@@ -434,7 +453,7 @@ uint8_t ModelledRadValve::computeTargetTemp()
         (hoursLessOccupiedThanThis < thisHourNLOThreshold) &&
         // Allow to be a little bit more occupied for the next hour than the current hour.
         // Suppress occupancy lookahead if room has been dark for several hours, eg overnight.  (TODO-792)
-        ((AmbLight.getDarkMinutes() > 240) || (hoursLessOccupiedThanNext < (thisHourNLOThreshold+1))));
+        (darkForHours || (hoursLessOccupiedThanNext < (thisHourNLOThreshold+1))));
     const uint8_t minLightsOffForSetbackMins = ecoBias ? 10 : 20;
     if(longVacant ||
        ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > minLightsOffForSetbackMins) || (ecoBias && (Occupancy.getVacancyH() > 0) && (0 == OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR, OTV0P2BASE::STATS_SPECIAL_HOUR_CURRENT_HOUR)))) &&
@@ -446,7 +465,7 @@ uint8_t ModelledRadValve::computeTargetTemp()
       //   or if the room is not known to be dark and hasn't been vacant for a long time ie ~1d and not in the very bottom range occupancy (TODO-107, TODO-758)
       //      TODO POSSIBLY: limit to (say) 3--4h light time for when someone out but room daylit, but note that detecting occupancy will be harder too in daylight.
       //      TODO POSSIBLY: after ~3h vacancy AND apparent smoothed occupancy non-zero (so some can be detected) AND ambient light in top quartile or in middle of typical bright part of cycle (assume peak of daylight) then being lit is not enough to prevent a deeper setback.
-      //   or is fairly likely to be occupied in the next hour (to pre-warm) and the room hasn't been vacant for a long time
+      //   or is fairly likely to be occupied in the next hour (to pre-warm) and the room hasn't been dark for hours and vacant for a long time
       //   or if a scheduled WARM period is due soon and the room hasn't been vacant for a long time,
       // else usually use a somewhat bigger 'eco' setback
       // else use an even bigger 'full' setback for maximum savings if in the eco region and
@@ -456,17 +475,17 @@ uint8_t ModelledRadValve::computeTargetTemp()
       // This final dark/vacant timeout to enter FULL fallback while in mild eco mode
       // should probably be longer than required to watch a typical movie or go to sleep (~2h) for example,
       // but short enough to take effect overnight and to be in effect a reasonable fraction of a (~8h) night.
-      const uint8_t minVacancyAndDarkForFULLSetbackH = 2; // Hours; strictly positive, typically 1--4.
+      const uint8_t minVacantAndDarkForFULLSetbackH = 2; // Hours; strictly positive, typically 1--4.
       const uint8_t setback = (isComfortTemperature(wt) ||
                                Occupancy.isLikelyOccupied() ||
                                (!longVacant && !AmbLight.isRoomDark() && (hoursLessOccupiedThanThis > 4)) ||
-                               (!longVacant && (hoursLessOccupiedThanNext >= thisHourNLOThreshold-1)) ||
+                               (!longVacant && !darkForHours && (hoursLessOccupiedThanNext >= thisHourNLOThreshold-1)) ||
 //                               (!longLongVacant && OTV0P2BASE::inOutlierQuartile(true, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED)) || // if the room is in the upper quartile of occupancy for this time and hasn't been vacant for a very long time
                                (!longVacant && Scheduler.isAnyScheduleOnWARMSoon())) ?
               SETBACK_DEFAULT :
           ((ecoBias && (longLongVacant ||
               (notLikelyOccupiedSoon && (isEcoTemperature(wt) ||
-                  ((AmbLight.getDarkMinutes() > (uint8_t)min(254, 60*minVacancyAndDarkForFULLSetbackH)) && (Occupancy.getVacancyH() >= minVacancyAndDarkForFULLSetbackH)))))) ?
+                  ((AmbLight.getDarkMinutes() > (uint8_t)min(254, 60*minVacantAndDarkForFULLSetbackH)) && (Occupancy.getVacancyH() >= minVacantAndDarkForFULLSetbackH)))))) ?
               SETBACK_FULL : SETBACK_ECO);
 
       return(OTV0P2BASE::fnmax((uint8_t)(wt - setback), getFROSTTargetC())); // Target must never be set low enough to create a frost/freeze hazard.
@@ -822,7 +841,7 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 // Call this to do an I/O poll if needed; returns true if something useful happened.
 // This call should typically take << 1ms at 1MHz CPU.
 // Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or sleep.
-// Should also does nothing that interacts with Serial.
+// Should also do nothing that interacts with Serial.
 // Limits actual poll rate to something like once every 8ms, unless force is true.
 //   * force if true then force full poll on every call (ie do not internally rate-limit)
 // Not thread-safe, eg not to be called from within an ISR.
@@ -1061,7 +1080,7 @@ static void wireComponentsTogether()
   // Load EEPROM house codes into primary FHT8V instance at start.
   FHT8VLoadHCFromEEPROM();
 #ifdef ALLOW_CC1_SUPPORT
-  FHT8V.setChannelTX(1);        // Ch0=OOK, kept for clarity
+  FHT8V.setChannelTX(1);
 #endif // ALLOW_CC1_SUPPORT
 #endif // ENABLE_FHT8VSIMPLE
 
@@ -1079,13 +1098,12 @@ static void wireComponentsTogether()
   TempPot.setOccCallback(markUIControlUsed);
   // Callbacks to set various mode combinations.
   // Typically at most one call would be made on any appropriate pot adjustment.
-  TempPot.setWFBCallbacks(setWarmModeDebounced, setBakeModeDebounced);
+  TempPot.setWFBCallbacks(setWarmModeFromManualUI, setBakeModeFromManualUI);
 #endif // TEMP_POT_AVAILABLE
 #if V0p2_REV == 14
   pinMode(REGULATOR_POWERUP, OUTPUT);
   fastDigitalWrite(REGULATOR_POWERUP, HIGH);
 #endif
-  // TODO
   }
 
 
@@ -1134,15 +1152,24 @@ static uint8_t minuteCount;
 #define MASK_PC_BASIC 0b00000000 // Nothing.
 
 // Mask for Port D input change interrupts.
-#define MASK_PD_BASIC 0b00000001 // Just RX.
+#define MASK_PD_BASIC 0b00000001 // Serial RX by default.
 #if defined(ENABLE_VOICE_SENSOR)
-#if VOICE_NIRQ > 7
-#error voice interrupt on wrong port
-#endif
-#define VOICE_INT_MASK (1 << (VOICE_NIRQ&7))
-#define MASK_PD (MASK_PD_BASIC | VOICE_INT_MASK)
+  #if VOICE_NIRQ > 7
+    #error VOICE_NIRQ expected to be on port D
+  #endif
+  #define VOICE_INT_MASK (1 << (VOICE_NIRQ&7))
+  #define MASK_PD1 (MASK_PD_BASIC | VOICE_INT_MASK)
 #else
-#define MASK_PD MASK_PD_BASIC // Just RX.
+  #define MASK_PD1 MASK_PD_BASIC // Just serial RX, no voice.
+#endif
+#if defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+#if BUTTON_MODE_L > 7
+  #error BUTTON_MODE_L expected to be on port D
+#endif
+  #define MODE_INT_MASK (1 << (BUTTON_MODE_L&7))
+  #define MASK_PD (MASK_PD1 | MODE_INT_MASK) // MODE button interrupt (et al).
+#else
+  #define MASK_PD MASK_PD1 // No MODE button interrupt.
 #endif
 
 void setupOpenTRV()
@@ -1162,9 +1189,9 @@ void setupOpenTRV()
   // Set up async edge interrupts.
   ATOMIC_BLOCK (ATOMIC_RESTORESTATE)
     {
-   //PCMSK0 = PB; PCINT  0--7    (LEARN1 and Radio)
+    //PCMSK0 = PB; PCINT  0--7    (LEARN1 and Radio)
     //PCMSK1 = PC; PCINT  8--15
-    //PCMSK2 = PD; PCINT 16--24   (LEARN2 and MODE, RX)
+    //PCMSK2 = PD; PCINT 16--24   (Serial RX and LEARN2 and MODE and Voice)
 
     PCICR =
 #if defined(MASK_PB) && (MASK_PB != 0) // If PB interrupts required.
@@ -1229,11 +1256,6 @@ void setupOpenTRV()
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("setup stats sent");
 #endif
 
-//#if defined(ENABLE_LOCAL_TRV) && defined(DIRECT_MOTOR_DRIVE_V1)
-//  // Signal some sort of life on waking up...
-//  ValveDirect.wiggle();
-//#endif
-
 #if !defined(DONT_RANDOMISE_MINUTE_CYCLE)
   // Start local counters in randomised positions to help avoid inter-unit collisions,
   // eg for mains-powered units starting up together after a power cut,
@@ -1248,6 +1270,11 @@ void setupOpenTRV()
 
 #if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("Finishing setup...");
+#endif
+
+#if 0
+  // Provide feedback to user that UI is coming to life (if any).
+  userOpFeedback();
 #endif
 
   // Set appropriate loop() values just before entering it.
@@ -1303,6 +1330,12 @@ ISR(PCINT2_vect)
   const uint8_t changes = pins ^ prevStatePD;
   prevStatePD = pins;
 
+#if defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+  // Mode button detection is on the falling edge (button pressed).
+  if((changes & MODE_INT_MASK) && (pins & MODE_INT_MASK))
+    { startBakeFromInt(); }
+#endif // defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+
 #if defined(ENABLE_VOICE_SENSOR)
 //  // Voice detection is a falling edge.
 //  // Handler routine not required/expected to 'clear' this interrupt.
@@ -1313,7 +1346,7 @@ ISR(PCINT2_vect)
   // FIXME: ensure that Voice.handleInterruptSimple() is inlineable to minimise ISR prologue/epilogue time and space.
   if((changes & VOICE_INT_MASK) && (pins & VOICE_INT_MASK))
     { Voice.handleInterruptSimple(); }
-#endif
+#endif // defined(ENABLE_VOICE_SENSOR)
 
   // TODO: MODE button and other things...
 
@@ -1613,7 +1646,6 @@ void loopOpenTRV()
   DEBUG_SERIAL_PRINTLN();
 #endif
 
-
   // Set up some variables before sleeping to minimise delay/jitter after the RTC tick.
   bool showStatus = false; // Show status at end of loop?
 
@@ -1837,12 +1869,12 @@ void loopOpenTRV()
 
   // DO SCHEDULING
 
-  // Once-per-minute tasks: all must take << 0.3s.
+  // Once-per-minute tasks: all must take << 0.3s unless particular care is taken.
   // Run tasks spread throughout the minute to be as kind to batteries (etc) as possible.
   // Only when runAll is true run less-critical tasks that be skipped sometimes when particularly conserving energy.
   // Run all for first full 4-minute cycle, eg because unit may start anywhere in it.
+  // Note: ensure only take ambient light reading at times when all LEDs are off (or turn them off).
   // TODO: coordinate temperature reading with time when radio and other heat-generating items are off for more accurate readings.
-  // TODO: ensure only take ambient light reading at times when all LEDs are off.
   const bool runAll = (!conserveBattery) || minute0From4ForSensors || (minuteCount < 4);
 
   switch(TIME_LSD) // With V0P2BASE_TWO_S_TICK_RTC_SUPPORT only even seconds are available.
@@ -2168,11 +2200,12 @@ void loopOpenTRV()
     {
     const uint8_t sct = OTV0P2BASE::getSubCycleTime();
     const uint8_t listenTime = max(OTV0P2BASE::GSCT_MAX/16, CLI_POLL_MIN_SCT);
-    if(sct < (OTV0P2BASE::GSCT_MAX - 1 - 2*listenTime))
+    const uint8_t stopBy = nearOverrunThreshold - 1 - listenTime;
+    if(sct < (stopBy - 1 - listenTime))
       // Don't listen beyond the last 16th of the cycle,
       // or a minimal time if only prodding for interaction with automated front-end,
       // as listening for UART RX uses lots of power.
-      { pollCLI(humanCLIUse ? (OTV0P2BASE::GSCT_MAX-listenTime) : (sct+CLI_POLL_MIN_SCT), 0 == TIME_LSD); }
+      { pollCLI(humanCLIUse ? stopBy : (sct+CLI_POLL_MIN_SCT), 0 == TIME_LSD); }
     }
 #endif
 
@@ -2197,7 +2230,7 @@ void loopOpenTRV()
     const uint8_t orc = 1 + ~eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER);
     OTV0P2BASE::eeprom_smart_update_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER, ~orc);
 #if 1 && defined(DEBUG)
-    DEBUG_SERIAL_PRINT_FLASHSTRING("!loop overrun");
+    DEBUG_SERIAL_PRINT_FLASHSTRING("!loop overrun ");
     DEBUG_SERIAL_PRINT(TIME_LSD);
     DEBUG_SERIAL_PRINTLN();
 #endif

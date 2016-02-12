@@ -61,18 +61,38 @@ void resetCLIActiveTimer() { CLITimeoutM = CLI_DEFAULT_TIMEOUT_M; }
 // Thread-safe.
 bool isCLIActive() { return(0 != CLITimeoutM); }
 
-// Record local manual operation of a local physical UI control, eg not remote or via CLI.
+// Record local manual operation of a physical UI control, eg not remote or via CLI.
 // Marks room as occupied amongst other things.
-// To be thread-safe, everything that this touches or calls must be.
+// To be thread-/ISR- safe, everything that this touches or calls must be.
 // Thread-safe.
 void markUIControlUsed()
   {
   statusChange = true; // Note user interaction with the system.
   uiTimeoutM = UI_DEFAULT_RECENT_USE_TIMEOUT_M; // Ensure that UI controls are kept 'warm' for a little while.
+#if defined(ENABLE_UI_WAKES_CLI)
   // Make CLI active for a while (at some slight possibly-significant energy cost).
   resetCLIActiveTimer(); // Thread-safe.
+#endif
   // User operation of controls locally is strong indication of presence.
   Occupancy.markAsOccupied(); // Thread-safe.
+  }
+
+// Set true on significant local UI operation.
+// Should be cleared when feedback has been given.
+// Marked volatile for thread-safe lockless access;
+static volatile bool significantUIOp;
+// Record significant local manual operation of a physical UI control, eg not remote or via CLI.
+// Marks room as occupied amongst other things.
+// As markUIControlUsed() but likely to generate some feedback to the user, ASAP.
+// Thread-safe.
+void markUIControlUsedSignificant()
+  {
+  // Provide some instant visual feedback if possible.
+  LED_HEATCALL_ON_ISR_SAFE();
+  // Flag up need for feedback.
+  significantUIOp = true;
+  // Do main UI-touched work.
+  markUIControlUsed();
   }
 
 // True if a manual UI control has been very recently (minutes ago) operated.
@@ -86,6 +106,31 @@ bool veryRecentUIControlUse() { return(uiTimeoutM >= (UI_DEFAULT_RECENT_USE_TIME
 // Thread-safe....
 bool recentUIControlUse() { return(0 != uiTimeoutM); }
 
+// UI feedback.
+// Provide low-key visual / audio / tactile feedback on a significant user action.
+// May take hundreds of milliseconds and noticeable energy.
+// By default includes visual feedback,
+// but that can be prevented if other visual feedback already in progress.
+// Marks the UI as used.
+// Not thread-/ISR- safe.
+void userOpFeedback(bool includeVisual)
+  {
+  if(includeVisual) { LED_HEATCALL_ON(); }
+  markUIControlUsed();
+#if defined(ENABLE_LOCAL_TRV) && defined(ENABLE_V1_DIRECT_MOTOR_DRIVE)
+  // Sound and tactile feedback with local valve, like mobile phone vibrate mode.
+  // Only do this if in a normal state, eg not calibrating nor in error.
+  if(ValveDirect.isInNormalRunState()) { ValveDirect.wiggle(); }
+    else
+#else
+  // In absence of being all-in-one, or as else where valve cannot be used...
+  // pause briefly to let LED on be seen.
+    { if(includeVisual) { smallPause(); } }
+#endif
+  if(includeVisual) { LED_HEATCALL_OFF(); }
+  // Note that feedback for significant UI action has been given.
+  significantUIOp = false;
+  }
 
 
 #ifdef ENABLE_LEARN_BUTTON
@@ -161,6 +206,17 @@ bool tickUI(const uint_fast8_t sec)
     }
 #endif
 
+  // Provide feedback of significant UI activity...
+  if(significantUIOp)
+    {
+    userOpFeedback();
+    }
+
+#if !defined(ENABLE_SIMPLIFIED_MODE_BAKE)
+  // Full MODE button behaviour:
+  //   * cycle through FROST/WARM/BAKE while held down
+  //   * switch to selected mode on release
+  //
   // If true then is in WARM (or BAKE) mode; defaults to (starts as) false/FROST.
   // Should be only be set when 'debounced'.
   // Defaults to (starts as) false/FROST.
@@ -215,7 +271,9 @@ bool tickUI(const uint_fast8_t sec)
       }
     }
   else
+#endif // !defined(ENABLE_SIMPLIFIED_MODE_BAKE)
     {
+#if !defined(ENABLE_SIMPLIFIED_MODE_BAKE)
     // Update real control variables for mode when button is released.
     if(modeButtonWasPressed)
       {
@@ -223,13 +281,14 @@ bool tickUI(const uint_fast8_t sec)
       // Will also capture programmatic changes to isWarmMode, eg from schedules.
       const bool isWarmModeDebounced = isWarmModePutative;
       setWarmModeDebounced(isWarmModeDebounced);
-      if(isBakeModePutative) { startBakeDebounced(); } else { cancelBakeDebounced(); }
+      if(isBakeModePutative) { startBake(); } else { cancelBakeDebounced(); }
 
       markUIControlUsed(); // Note activity on release of MODE button...
       modeButtonWasPressed = false;
       }
+#endif // !defined(ENABLE_SIMPLIFIED_MODE_BAKE)
 
-    // Keep reporting UI status if the user has just touched the unit in some way or UI is enhanced
+    // Keep reporting UI status if the user has just touched the unit in some way or UI feedback is enhanced.
     const bool justTouched = statusChange || enhancedUIFeedback;
 
     // Mode button not pressed: indicate current mode with flash(es); more flashes if actually calling for heat.
@@ -334,7 +393,7 @@ bool tickUI(const uint_fast8_t sec)
   if(fastDigitalRead(BUTTON_LEARN_L) == LOW)
     {
     handleLEARN(0);
-    markUIControlUsed(); // Mark controls used and room as currently occupied given button press.
+    userOpFeedback(false); // Mark controls used and room as currently occupied given button press.
     LED_HEATCALL_ON(); // Leave heatcall LED on while learn button held down.
     }
 
@@ -343,7 +402,7 @@ bool tickUI(const uint_fast8_t sec)
   else if(fastDigitalRead(BUTTON_LEARN2_L) == LOW)
     {
     handleLEARN(1);
-    markUIControlUsed(); // Mark controls used and room as currently occupied given button press.
+    userOpFeedback(false); // Mark controls used and room as currently occupied given button press.
     LED_HEATCALL_ON(); // Leave heatcall LED on while learn button held down.
     }
 #endif
@@ -633,7 +692,7 @@ void serialStatusReport()
 
 #if 1 && defined(ENABLE_JSON_OUTPUT) && !defined(ENABLE_TRIMMED_MEMORY)
   Serial.print(';'); // Terminate previous section.
-  char buf[80];
+  char buf[40];
   static const uint8_t maxStatsLineValues = 5;
   static OTV0P2BASE::SimpleStatsRotation<maxStatsLineValues> ss1; // Configured for maximum different stats.
 //  ss1.put(TemperatureC16); // Already at start of = stats line.
@@ -1335,7 +1394,7 @@ void pollCLI(const uint8_t maxSCT, const bool startOfMinute)
 #endif // ENABLE_LEARN_BUTTON
 
       // Switch to (or restart) BAKE (Quick Heat) mode: Q
-      case 'Q': { startBakeDebounced(); break; }
+      case 'Q': { startBake(); break; }
 
       // Time set T HH MM.
       case 'T':
