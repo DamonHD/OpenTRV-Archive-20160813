@@ -1,0 +1,158 @@
+The OpenTRV project licenses this file to you
+under the Apache Licence, Version 2.0 (the "Licence");
+you may not use this file except in compliance
+with the Licence. You may obtain a copy of the Licence at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the Licence is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the Licence for the
+specific language governing permissions and limitations
+under the Licence.
+
+Author(s) / Copyright (s): Damon Hart-Davis 2014--2015
+
+
+REVISIONS
+
+2015/11/27: Revision 6 proposal, New I2CEXT design.
+2014/09/14: Revision 5, adding some more details of location and form.
+2014/09/08: Revision 4, allowing 4k7 for RX/TX serial for common values.
+2014/09/08: Revision 3, note that the nIRQ and nSC lines can be left unconnected on some board variants.
+2014/09/04: Revision 2, 14-pin connector, added nINT and nSC2 after dev mailing list suggestions
+2014/09/03: Revision 1, 12-pin connector
+
+
+Aim:
+
+Trying to develop a simple I/O extension/shield system for OpenTRV to add more sensors (etc) easily.
+
+Also this should allow an easy bridge to other systems such as RPi / BB / etc.
+
+This must be simple and small and cheap enough to use in hobby / dev / prod environments and allow (in priority order):
+
+1) I2C expansion.
+2) In-Circuit Programming of AVR.
+3) One-Wire expansion.
+4) Serial off-take, eg for CLI interaction.
+
+The connection should ideally be keyable or at least not cause instant destruction if reversed for example.
+
+
+New Suggestion:
+
+20 way (2x10) pin stackable
+
+0.1 " pitch
+
+Following pin pattern:
+  PIN 1| PIN 2
+MISO * .. * 3V3 (Vcc)
+ SCK * .. * MOSI
+nRST * .. * GND
+ N/P X .. X N/P
+ SCL * .. * GND
+ SDA * .. * GND
+nIRQ * .. * N/C
+ nSS * .. * TX
+  DQ * .. * RX
+ PIO * .. * RTS
+
+1) Pins 1-6 are standard AVR ICSP connections
+2) 7-8 have no pins. This:
+    a) Gives space for an IDC connector when programming with ICSP.
+    b) Allows for a keyed 20 pin IDC.
+3) 10-20 (even only) are standard FTDI connections (as on cable from RS components)
+4) 9 & 11 are I2C connections.
+5) 13 is a generic interrupt line to the AVR.
+6) 15 is a slave select line in case of an external SPI peripheral. NOT the one connected to an on board radio module (if present).
+7) 17 is a one wire serial connection.
+8) 19 is a peripheral power enable line.
+
+a) N/C means No Contact.
+b) RX and TX are protected by 4K7 series resistors from AVR.
+c) nRST (input to main board) is active low and is pulled up to 3V3/Vcc with 4k7--10K series resistor at AVR.
+d) SCL and SDA are pulled up at AVR with 4K7 resistors to 3V3/Vcc.
+e) 3V3 can be anywhere from 1V8 to 3V6 absolute; 2V to 3V6 operating.
+f) nIRQ (input to main board) is active low and is pulled up to 3V3/Vcc with a 10K--47K nominal resistor and a 1K series resistor: this should be driven with open collector/drain driver only.
+g) nSS (output from main board) is the active low select for an SPI device on the bus,
+h) The nIRQ and nSS lines can be left unconnected unless the main board variant explicitly supports them.
+i) N/P means No Pin.
+j) PIO is connected to the IO_POWER_UP pin (via a resistor?) and is used for switching external sensors on
+k) RTS is connected to nRST via a 100nF capacitor
+
+Features:
+
+1) Top 6 pins can be used directly with 6-pin AVR programmer.
+2) 6 pins down the side can be used directly with a 6 pin FTDI cable (but must be powered from a different source)
+3) When used with properly keyed IDC, cable cannot be inserted the wrong way.
+4) The connector must be laid out as a single unit on the PCB ie. as a single 20 pin header
+5) The connector may be populated by a 6 pin and a 12 pin header
+
+
+
+
+
+Current:
+
+14-way (2x6) pin stackable (pins or socket on board, suggestions please, RPi is pins).
+
+0.1" pitch to be easy for DIY shields, eg with Veroboard as I just did for my RPi.
+
+Following pin pattern:
+
+MISO * .. * 3V3 (Vcc)
+ SCK * .. * MOSI
+nRST * .. * GND
+nIRQ * .. * nSC
+ SCL * .. * SDA
+  RX * .. * TX
+ N/C * .. * DQ
+
+a) N/C means No Contact and can be used to key the connector.
+b) RX and TX are protected by 10k series resistors from AVR.
+c) nRST (input to main board) is active low and is pulled up to 3V3/Vcc with 4k7--10K series resistor at AVR.
+d) SCL and SDA are pulled up at AVR with 4K7 resistors to 3V3/Vcc.
+e) 3V3 can be anywhere from 1V8 to 3V6 absolute; 2V to 3V6 operating.
+f) nIRQ (input to main board) is active low and is pulled up to 3V3/Vcc with a 10K--47K nominal resistor and a 1K series resistor: this should be driven with open collector/drain driver only.
+g) nSC (output from main board) is the active low select for an SPI device on the bus,
+h) The nIRQ and nSC lines can be left unconnected unless the main board variant explicitly supports them.
+
+Features:
+
+1) Top 6 pins can be used directly with 6-pin AVR programmer.
+2) Rest of pins carry I2C (SDA, SCL), OneWire (DQ) and serial (RX, TX, protected by 10k series resistors)
+3) If entire connector rotated boards unlikely to be destroyed instantly.
+
+Bit more on (3): RX and TX are safe to short to GND or 3V3 or anything else, nRST safe to short to either rail, DQ/SCA/SCL safe to short to GND.
+
+
+Connector form/style and location, and constraints:
+
+1) Should be near board edge but not in corner for REV2-style 5x5 box.
+2) Should be placed prob near edge for easy dev access with 3D-printed board.
+3) Should allow USB micro socket to go back in its REV2 position if possible.
+4) Should allow I2CEXT board on 5x5 footprint to also be RPi HAT board.
+5) Must not be single-source nor expensive nor anywhere near end-of-life.
+
+Some agreed details:
+
+a) Male 7x2 0.1" pitch connector like top part of Raspberry Pi A/B/B+ GPIO connector, with pins above the board (component side).
+b) Stacked board to have female connector below the board with extra long pins up.
+c) Location on standard 5cm x 5cm OpenTRV board:
+   6.35mm (left) x 2.375mm (down) from top left corner of board to centre of top-left pin (3V3)
+   with the connector running left to right
+   with pins pointing vertically away from the plane of the board towards the viewer.
+
+
+
+
+
+
+
+
+
+
+Note: see alternatives such as http://www.tag-connect.com/ for SPI/ICP part.
