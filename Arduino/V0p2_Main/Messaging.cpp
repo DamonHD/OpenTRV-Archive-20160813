@@ -88,7 +88,7 @@ OTRadioLink::OTNullRadioLink NullRadio;
 // Brings in necessary radio libs.
 #ifdef ENABLE_RADIO_RFM23B
 #if defined(ENABLE_TRIMMED_MEMORY) || !defined(ENABLE_CONTINUOUS_RX)
-static const uint8_t RFM23B_RX_QUEUE_SIZE = 1;
+static const uint8_t RFM23B_RX_QUEUE_SIZE = max(2, OTRFM23BLink::DEFAULT_RFM23B_RX_QUEUE_CAPACITY) - 1;
 #else
 static const uint8_t RFM23B_RX_QUEUE_SIZE = OTRFM23BLink::DEFAULT_RFM23B_RX_QUEUE_CAPACITY;
 #endif
@@ -97,7 +97,12 @@ static const int8_t RFM23B_IRQ_PIN = PIN_RFM_NIRQ;
 #else
 static const int8_t RFM23B_IRQ_PIN = -1;
 #endif
-OTRFM23BLink::OTRFM23BLink<PIN_SPI_nSS, RFM23B_IRQ_PIN, RFM23B_RX_QUEUE_SIZE> RFM23B;
+#if defined(ENABLE_RADIO_RX)
+static const bool RFM23B_allowRX = true;
+#else
+static const bool RFM23B_allowRX = false;
+#endif
+OTRFM23BLink::OTRFM23BLink<PIN_SPI_nSS, RFM23B_IRQ_PIN, RFM23B_RX_QUEUE_SIZE, RFM23B_allowRX> RFM23B;
 #endif // ENABLE_RADIO_RFM23B
 #ifdef ENABLE_RADIO_SIM900
 OTSIM900Link::OTSIM900Link SIM900(REGULATOR_POWERUP, RADIO_POWER_PIN, SOFTSERIAL_RX_PIN, SOFTSERIAL_TX_PIN);
@@ -119,7 +124,7 @@ OTRadioLink::OTRadioLink &PrimaryRadio = NullRadio;
 #ifdef ENABLE_RADIO_SECONDARY_MODULE
 #if defined(RADIO_SECONDARY_RFM23B)
 OTRadioLink::OTRadioLink &SecondaryRadio = RFM23B;
-#elif defined(RADIO_SECONDARY_SIM900)
+#elif defined(ENABLE_RADIO_SECONDARY_SIM900)
 OTRadioLink::OTRadioLink &SecondaryRadio = SIM900;
 #elif defined(RADIO_SECONDARY_RN2483)
 OTRadioLink::OTRadioLink &SecondaryRadio = RN2483;
@@ -130,6 +135,7 @@ OTRadioLink::OTRadioLink &SecondaryRadio = NullRadio;
 
 // RFM22 is apparently SPI mode 0 for Arduino library pov.
 
+#if defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
 // Send the underlying stats binary/text 'whitened' message.
 // This must be terminated with an 0xff (which is not sent),
 // and no longer than STATS_MSG_MAX_LEN bytes long in total (excluding the terminating 0xff).
@@ -160,6 +166,7 @@ void RFM22RawStatsTXFFTerminated(uint8_t * const buf, const bool doubleTX, bool 
     } // DEBUG
   //DEBUG_SERIAL_PRINTLN_FLASHSTRING("RS");
   }
+#endif // defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
 
 
 #ifdef ALLOW_CC1_SUPPORT_RELAY
@@ -192,10 +199,6 @@ OTRadioLink::printRXMsg(p, txbuf, bodylen);
 // Returns true on success, false otherwise.
 static bool decodeAndHandleFTp2_FS20_native(Print *p, const bool secure, const uint8_t * const msg, const uint8_t msglen)
 {
-#if 0 && defined(DEBUG)
-  OTRadioLink::printRXMsg(p, msg, msglen);
-#endif
-
   // Decode the FS20/FHT8V command into the buffer/struct.
   OTRadValve::FHT8VRadValveBase::fht8v_msg_t command;
   uint8_t const *lastByte = msg+msglen-1;
@@ -297,7 +300,7 @@ static bool decodeAndHandleOTSecureableFrame(Print *p, const bool secure, const 
   // If isOK flag is set false for any reason, frame is broken/unsafe/unauth.
   bool isOK = (l > 0);
 #if 0 && defined(DEBUG)
-if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon RX failed at header decode"); }
+if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX bad secure header"); }
 #endif
   // If failed this early and this badly, let someone else try parsing the message buffer...
   if(!isOK) { return(false); }
@@ -335,27 +338,34 @@ if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon RX failed at header decode"
       {
       isOK = false;
 #if 1 && defined(DEBUG)
-      DEBUG_SERIAL_PRINTLN_FLASHSTRING("Failed (no key)");
+      DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX no key");
 #endif
       }
     }
+  uint8_t senderNodeID[OTV0P2BASE::OpenTRV_Node_ID_Bytes];
   if(secureFrame && isOK)
     {
-    const uint8_t dl = OTRadioLink::decodeSecureSmallFrameFromID(&sfh, msg-1, msglen+1,
+    // Look up the full node ID of the sender in the associations table,
+    // and if successful then attempt to decode the message.
+    const int8_t index = OTV0P2BASE::getNextMatchingNodeID(0, sfh.id, sfh.getIl(), senderNodeID);
+#if 0 && defined(DEBUG)
+    if(index < 0) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX no assoc"); }
+#endif
+    isOK = (index >= 0) &&
+           (0 != OTRadioLink::decodeSecureSmallFrameFromID(&sfh, msg-1, msglen+1,
                               OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleDec_DEFAULT_STATELESS,
-                              sfh.id, sfh.getIl(), // FIXME needs lookup and possible munging! // id, sizeof(id),
+                              senderNodeID, sizeof(senderNodeID),
                               NULL, key,
-                              secBodyBuf, sizeof(secBodyBuf), decryptedBodyOutSize);
-    if(0 == dl) { isOK = false; } // Failed auth/decrypt.
+                              secBodyBuf, sizeof(secBodyBuf), decryptedBodyOutSize));
 #if 1 && defined(DEBUG)
-    if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("RX auth failed"); }
+    if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX assoc/auth"); }
 #endif
     }
 
   if(!isOK) { return(false); } // Stop if not OK.
 
   // If frame still OK to process then switch on frame type.
-#if 1 && defined(DEBUG)
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINT_FLASHSTRING("RX seq#");
 DEBUG_SERIAL_PRINT(sfh.getSeq());
 DEBUG_SERIAL_PRINTLN();
@@ -385,7 +395,9 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon");
       if(decryptedBodyOutSize != 0)
         {
 #if 1 && defined(DEBUG)
-DEBUG_SERIAL_PRINTLN_FLASHSTRING("!Beacon data");
+DEBUG_SERIAL_PRINT_FLASHSTRING("!Beacon data ");
+DEBUG_SERIAL_PRINT(decryptedBodyOutSize);
+DEBUG_SERIAL_PRINTLN();
 #endif
         break;
         }
@@ -395,13 +407,13 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("!Beacon data");
 
     case 'O' | 0x80: // Basic OpenTRV secure frame...
       {
-#if 1 && defined(DEBUG)
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINTLN_FLASHSTRING("'O'");
 #endif
       if(decryptedBodyOutSize < 2)
         {
 #if 1 && defined(DEBUG)
-DEBUG_SERIAL_PRINTLN_FLASHSTRING("!O frame short");
+DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX O short"); // "O' frame too short.
 #endif
         break;
         }
@@ -413,18 +425,25 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("!O frame short");
       const uint8_t percentOpen = secBodyBuf[0];
       if(percentOpen <= 100) { remoteCallForHeatRX(0, percentOpen); }
 #endif
-      // If containing JSON stats
-      // then forward secure frame as-is across the secondary link,
+      // If the frame contains JSON stats
+      // then forward entire secure frame as-is across the secondary radio relay link,
       // else print directly to console/Serial.
-      if((decryptedBodyOutSize > 3) && ('{' == secBodyBuf[2]))
+      if((0 != (secBodyBuf[1] & 0x10)) && (decryptedBodyOutSize > 3) && ('{' == secBodyBuf[2]))
         {
 #ifdef ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
         SecondaryRadio.queueToSend(msg, msglen); 
 #else // Don't write to console/Serial also if relayed.
-//        // Write out the JSON message.
+        // Write out the JSON message, inserting synthetic ID/@ and seq/+.
+        Serial.print(F("{\"@\":\""));
+        for(int i = 0; i < OTV0P2BASE::OpenTRV_Node_ID_Bytes; ++i) { Serial.print(senderNodeID[i], HEX); }
+        Serial.print(F("\",\"+\":"));
+        Serial.print(sfh.getSeq());
+        Serial.print(',');
+        Serial.write(secBodyBuf + 3, decryptedBodyOutSize - 3);
+        Serial.println('}');
 //        OTV0P2BASE::outputJSONStats(&Serial, secure, msg, msglen);
-//        // Attempt to ensure that trailing characters are pushed out fully.
-//        OTV0P2BASE::flushSerialProductive();
+        // Attempt to ensure that trailing characters are pushed out fully.
+        OTV0P2BASE::flushSerialProductive();
 #endif // ENABLE_RADIO_SECONDARY_MODULE_AS_RELAY
         }
       return(true);
@@ -455,8 +474,9 @@ static void decodeAndHandleRawRXedMessage(Print *p, const bool secure, const uin
 
   // TODO: consider extracting hash of all message data (good/bad) and injecting into entropy pool.
 #if 0 && defined(DEBUG)
-  OTRadioLink::printRXMsg(p, msg, msglen);
+  OTRadioLink::printRXMsg(p, msg-1, msglen+1); // Print len+frame.
 #endif
+
   if(msglen < 2) { return; } // Too short to be useful, so ignore.
 
    // Length-first OpenTRV secureable-frame format...
@@ -659,7 +679,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Stats IDx");
 #endif // ENABLE_FS20_ENCODING_SUPPORT
 
   // Unparseable frame: drop it; possibly log it as an error.
-#if 0 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
   p->print(F("!RX bad msg, len+prefix: ")); OTRadioLink::printRXMsg(p, msg-1, min(msglen+1, 8));
 #endif
   return;

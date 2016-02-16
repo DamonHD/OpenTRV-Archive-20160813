@@ -88,11 +88,13 @@ extern const OTSIM900Link::OTSIM900LinkConfig_t SIM900Config;
 //#define STATS_MSG_MAX_LEN (64 - STATS_MSG_START_OFFSET)
 #define STATS_MSG_START_OFFSET (RFM22_PREAMBLE_BYTES + RFM22_SYNC_MIN_BYTES)
 #define STATS_MSG_MAX_LEN (64 - STATS_MSG_START_OFFSET)
+#if defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
 void RFM22RawStatsTXFFTerminated(uint8_t *buf, bool doubleTX, bool RFM23BFramed = true);
-
+#endif
+#if defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
 // Adds the STATS_MSG_START_OFFSET preamble to enable reception by a remote RFM22B/RFM23B.
 // Returns the first free byte after the preamble.
-static inline uint8_t *RFM22RXPreambleAdd(uint8_t *buf)
+inline uint8_t *RFM22RXPreambleAdd(uint8_t *buf)
   {
   // Start with RFM23-friendly preamble which ends with with the aacccccc sync word.
   memset(buf, RFM22_PREAMBLE_BYTE, RFM22_PREAMBLE_BYTES);
@@ -103,6 +105,7 @@ static inline uint8_t *RFM22RXPreambleAdd(uint8_t *buf)
   // Return the adjusted pointer.
   return(buf);
   }
+#endif
 
 
 #ifdef ALLOW_CC1_SUPPORT_RELAY

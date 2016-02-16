@@ -205,11 +205,11 @@ static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChanne
 #endif // ENABLE_RADIO_PRIMARY_RFM23B
 
 
-#ifdef RADIO_SECONDARY_SIM900
+#ifdef ENABLE_RADIO_SECONDARY_SIM900
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true);
 #else
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true);
-#endif // RADIO_SECONDARY_SIM900
+#endif // ENABLE_RADIO_SECONDARY_SIM900
 
 
 #if defined(ALLOW_CC1_SUPPORT_RELAY)
@@ -295,10 +295,6 @@ void optionalPOST()
 //  const bool neededToWakeSPI = OTV0P2BASE::powerUpSPIIfDisabled();
 //  DEBUG_SERIAL_PRINT(neededToWakeSPI);
 //  DEBUG_SERIAL_PRINTLN();
-#if !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(ENABLE_MIN_ENERGY_BOOT)
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING("(Using RFM22.)");
-#endif // !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(ENABLE_MIN_ENERGY_BOOT)
-
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   PrimaryRadio.preinit(NULL);
 #if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
@@ -321,12 +317,15 @@ void optionalPOST()
 
 #ifdef ENABLE_RADIO_SECONDARY_MODULE
 #ifdef ENABLE_RADIO_SIM900
-// Turn power on for SIM900 with PFET for secondary power control.
-fastDigitalWrite(A3, 0);
-pinMode(A3, OUTPUT);
+  // Turn power on for SIM900 with PFET for secondary power control.
+  fastDigitalWrite(A3, 0);
+  pinMode(A3, OUTPUT);
 #endif // ENABLE_RADIO_SIM900
-// Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
+  // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   SecondaryRadio.preinit(NULL);
+#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("R2");
+#endif
   // Check that the radio is correctly connected; panic if not...
   if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
   // Assume no RX nor filtering on secondary radio.

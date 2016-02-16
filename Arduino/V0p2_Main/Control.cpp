@@ -33,9 +33,11 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include <OTAESGCM.h>
 #endif
 
-// TODO: may want to declare only when used, eg with local valve.
+
+#if defined(SCHEDULER_AVAILABLE)
 // Singleton scheduler instance.
 SimpleValveSchedule Scheduler;
+#endif
 
 
 #ifdef ENABLE_BOILER_HUB
@@ -82,9 +84,15 @@ void cancelBakeDebounced() { bakeCountdownM = 0; }
 void startBake() { isWarmMode = true; bakeCountdownM = BAKE_MAX_M; }
 #if defined(ENABLE_SIMPLIFIED_MODE_BAKE)
 // Start BAKE from manual UI interrupt; marks UI as used also.
+// Vetos switch to BAKE mode if a temp pot/dial is present and at the low end stop, ie in FROST position.
 // Is thread-/ISR- safe.
 static void startBakeFromInt()
   {
+#ifdef TEMP_POT_AVAILABLE
+  // Veto if dial is at FROST position.
+  const bool isLo = TempPot.isAtLoEndStop(); // ISR-safe.
+  if(isLo) { markUIControlUsed(); return; }
+#endif
   startBake();
   markUIControlUsedSignificant();
   }
@@ -151,32 +159,83 @@ uint8_t getFROSTTargetC()
 #if defined(TEMP_POT_AVAILABLE)
 // Derived from temperature pot position, 0 for coldest (most eco), 255 for hottest (comfort).
 // Temp ranges from eco-1C to comfort+1C levels across full (reduced jitter) [0,255] pot range.
+// Everything beyond the lo/hi end-stop thresholds is forced to the appropriate end temperature.
 // May be fastest computing values at the extreme ends of the range.
 // Exposed for unit testing.
-uint8_t computeWARMTargetC(const uint8_t pot)
+uint8_t computeWARMTargetC(const uint8_t pot, const uint8_t loEndStop, const uint8_t hiEndStop)
   {
 #if defined(V0p2_REV)
-#if 7 == V0p2_REV // Must match DORM1 scale 7 position scale 16|17|18|19|20|21|22 with frost/boost at extremes.
+#if 7 == V0p2_REV // Must match DORM1 scale 1+7+1 position scale FROST|16|17|18|19|20|21|22|BOOST.
 #if (16 != TEMP_SCALE_MIN) || (22 != TEMP_SCALE_MAX)
 #error Temperature scale must run from 16 to 22 inclusive for REV7 / DORM1 unit.
 #endif
 #endif
 #endif
-  const uint8_t range = TEMP_SCALE_MAX - TEMP_SCALE_MIN + 1;
-  const uint8_t band = 256 / range; // Width of band for each degree C...
+
+#if 0 && defined(DEBUG)
+  DEBUG_SERIAL_PRINT_FLASHSTRING("cWT(): ");
+  DEBUG_SERIAL_PRINT(pot);
+  DEBUG_SERIAL_PRINTLN();
+#endif
+
+  // Everything in the end-stop regions is assigned to the appropriate end temperature.
+  // As a tiny optimisation we note that the in-scale end points must be the end temperatures also.
+  if(pot <= loEndStop) { return(TEMP_SCALE_MIN); } // At/near bottom...
+  if(pot >= hiEndStop) { return(TEMP_SCALE_MAX); } // At/near top...
+
+  // Allow actual full temp range between low and high end points,
+  // plus possibly a little more wiggle-room / manufacturing tolerance.
+  // Range is number of actual distinct temperatures on scale between end-stop regions.
+  const uint8_t usefulScale = hiEndStop - loEndStop + 1;
+#define DIAL_TEMPS (TEMP_SCALE_MAX - TEMP_SCALE_MIN + 1)
+  const uint8_t range = DIAL_TEMPS;
+#if 7 == DIAL_TEMPS
+  // REV7 / DORM1 case, with usefulScale ~ 47 as of 20160212 on first sample unit.
+#define DIAL_TEMPS_SHIM
+  const uint8_t rangeUsed = 8;
+  const uint8_t band = (usefulScale+4) >> 3; // Width of band for each degree C...
+#else
+  // General case.
+  const uint8_t rangeUsed = range;
+  const uint8_t band = (usefulScale+(rangeUsed/2)) / rangeUsed; // Width of band for each degree C...
+#endif
+
+#if 0 && defined(DEBUG)
+  DEBUG_SERIAL_PRINT_FLASHSTRING("cWT(): ");
+  DEBUG_SERIAL_PRINT(pot);
+  DEBUG_SERIAL_PRINT(' ');
+  DEBUG_SERIAL_PRINT(loEndStop);
+  DEBUG_SERIAL_PRINT(' ');
+  DEBUG_SERIAL_PRINT(hiEndStop);
+  DEBUG_SERIAL_PRINTLN();
+#endif
+
+  // Adjust for actual bottom of useful range...
+  const uint8_t ppotBasic = pot - loEndStop;
+#ifndef DIAL_TEMPS_SHIM
+  const uint8_t ppot = ppotBasic;
+#else
+  const uint8_t shim = (band >> 1);
+  if(ppotBasic <= shim) { return(TEMP_SCALE_MIN); }
+  const uint8_t ppot = ppotBasic - shim; // Shift up by half a slot... (using n temps in space for n+1)
+#endif
 
   // If there are is relatively small number of distinct temperature values
-  // then compute result iteratively...
-  if(pot >= 256 - band) { return(TEMP_SCALE_MAX); } // At top... (optimisation / robustness)
-  if(pot < band) { return(TEMP_SCALE_MIN); } // At bottom... (optimisation / robustness)
-  if(range < 10)
+  // then compute the result iteratively...
+#if DIAL_TEMPS < 10
     {
-    uint8_t result = TEMP_SCALE_MIN+1;
-    for(uint8_t ppot = band<<1; ppot < pot; ++result) { ppot += band; }
+    uint8_t result = TEMP_SCALE_MIN;
+    uint8_t bottomOfNextBand = band;
+    while((ppot >= bottomOfNextBand) && (result < TEMP_SCALE_MAX))
+      {
+      ++result;
+      bottomOfNextBand += band;
+      }
     return(result);
     }
-  // ...else do it in one step with a division.
-  return((pot / band) + TEMP_SCALE_MIN); // Intermediate (requires expensive run-time division).
+#else  // ...else do it in one step with a division.
+  return((ppot / band) + TEMP_SCALE_MIN); // Intermediate (requires expensive run-time division).
+#endif
   }
 
 // Exposed implementation.
@@ -203,7 +262,7 @@ uint8_t getWARMTargetC()
   // or apparently no calc done yet (unlikely/impossible zero cached result).
   if((potLast != pot) || (0 == resultLast))
     {
-    const uint8_t result = computeWARMTargetC(pot);
+    const uint8_t result = computeWARMTargetC(pot, TempPot.loEndStop, TempPot.hiEndStop);
     // Cache input/result.
     resultLast = result;
     potLast = pot;
@@ -441,7 +500,8 @@ uint8_t ModelledRadValve::computeTargetTemp()
     const bool likelyVacantNow = longVacant || Occupancy.isLikelyUnoccupied();
     const bool ecoBias = hasEcoBias();
     // True if the room has been dark long enough to indicate night.  (TODO-792)
-    const bool darkForHours = AmbLight.getDarkMinutes() > 245; // A little over 4h, not quite max 255.
+    const uint8_t dm = AmbLight.getDarkMinutes();
+    const bool darkForHours = dm > 245; // A little over 4h, not quite max 255.
     // Be more ready to decide room not likely occupied soon if eco-biased.
     // Note that this value is likely to be used +/- 1 so must be in range [1,23].
     const uint8_t thisHourNLOThreshold = ecoBias ? 15 : 12;
@@ -456,7 +516,7 @@ uint8_t ModelledRadValve::computeTargetTemp()
         (darkForHours || (hoursLessOccupiedThanNext < (thisHourNLOThreshold+1))));
     const uint8_t minLightsOffForSetbackMins = ecoBias ? 10 : 20;
     if(longVacant ||
-       ((notLikelyOccupiedSoon || (AmbLight.getDarkMinutes() > minLightsOffForSetbackMins) || (ecoBias && (Occupancy.getVacancyH() > 0) && (0 == OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR, OTV0P2BASE::STATS_SPECIAL_HOUR_CURRENT_HOUR)))) &&
+       ((notLikelyOccupiedSoon || (dm > minLightsOffForSetbackMins) || (ecoBias && (Occupancy.getVacancyH() > 0) && (0 == OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR, OTV0P2BASE::STATS_SPECIAL_HOUR_CURRENT_HOUR)))) &&
            !Scheduler.isAnyScheduleOnWARMNow() && !recentUIControlUse()))
       {
       // Use a default minimal non-annoying setback if:
@@ -480,12 +540,11 @@ uint8_t ModelledRadValve::computeTargetTemp()
                                Occupancy.isLikelyOccupied() ||
                                (!longVacant && !AmbLight.isRoomDark() && (hoursLessOccupiedThanThis > 4)) ||
                                (!longVacant && !darkForHours && (hoursLessOccupiedThanNext >= thisHourNLOThreshold-1)) ||
-//                               (!longLongVacant && OTV0P2BASE::inOutlierQuartile(true, V0P2BASE_EE_STATS_SET_OCCPC_BY_HOUR_SMOOTHED)) || // if the room is in the upper quartile of occupancy for this time and hasn't been vacant for a very long time
                                (!longVacant && Scheduler.isAnyScheduleOnWARMSoon())) ?
               SETBACK_DEFAULT :
           ((ecoBias && (longLongVacant ||
               (notLikelyOccupiedSoon && (isEcoTemperature(wt) ||
-                  ((AmbLight.getDarkMinutes() > (uint8_t)min(254, 60*minVacantAndDarkForFULLSetbackH)) && (Occupancy.getVacancyH() >= minVacantAndDarkForFULLSetbackH)))))) ?
+                  ((dm > (uint8_t)min(254, 60*minVacantAndDarkForFULLSetbackH)) && (Occupancy.getVacancyH() >= minVacantAndDarkForFULLSetbackH)))))) ?
               SETBACK_FULL : SETBACK_ECO);
 
       return(OTV0P2BASE::fnmax((uint8_t)(wt - setback), getFROSTTargetC())); // Target must never be set low enough to create a frost/freeze hazard.
@@ -528,7 +587,7 @@ void ModelledRadValve::computeTargetTemperature()
   inputState.widenDeadband = (!veryRecentUIUse) &&
       (retainedState.isFiltering ||
       (!inWarmMode()) ||
-      (!AmbLight.isRoomLit() && !AmbLight.isUnavailable()) ||
+      AmbLight.isRoomDark() || // Must be false if light sensor not usable.
       Occupancy.longVacant() || (hasEcoBias() && (Occupancy.getVacancyH() >= minVacancyHoursForWideningECO)));
   // Capture adjusted reference/room temperatures
   // and set callingForHeat flag also using same outline logic as computeRequiredTRVPercentOpen() will use.
@@ -673,7 +732,7 @@ void sampleStats(const bool fullSample)
   if(inWarmMode()) { ++warmCount; } else { --warmCount; }
 #endif
   // Ambient light.
-  const uint16_t ambLight = OTV0P2BASE::fnmin(AmbLight.get(), (uint8_t)MAX_STATS_AMBLIGHT); // Constrain value at top end to avoid 'not set' value.
+  const uint16_t ambLight = OTV0P2BASE::fnmin(AmbLight.get(), OTV0P2BASE::MAX_STATS_AMBLIGHT); // Constrain value at top end to avoid 'not set' value.
   static uint16_t ambLightTotal;
   ambLightTotal = firstSample ? ambLight : (ambLightTotal + ambLight);
   const int tempC16 = TemperatureC16.get();
@@ -708,7 +767,7 @@ void sampleStats(const bool fullSample)
                          ((2==sc)?((tempC16Total+1)>>1):
                                   ((tempC16Total + (sc>>1)) / sc));
 #endif
-  const uint8_t temp = compressTempC16(tempCTotal);
+  const uint8_t temp = OTV0P2BASE::compressTempC16(tempCTotal);
 #if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("SU tempC16Total=");
   DEBUG_SERIAL_PRINT(tempC16Total);
@@ -761,42 +820,6 @@ void sampleStats(const bool fullSample)
   }
 
 
-// Range-compress an signed int 16ths-Celsius temperature to a unsigned single-byte value < 0xff.
-// This preserves at least the first bit after the binary point for all values,
-// and three bits after binary point for values in the most interesting mid range around normal room temperatures,
-// with transitions at whole degrees Celsius.
-// Input values below 0C are treated as 0C, and above 100C as 100C, thus allowing air and DHW temperature values.
-#define COMPRESSION_C16_FLOOR_VAL 0 // Floor input value to compression.
-#define COMPRESSION_C16_LOW_THRESHOLD (16<<4) // Values in range [COMPRESSION_LOW_THRESHOLD_C16,COMPRESSION_HIGH_THRESHOLD_C16[ have maximum precision.
-#define COMPRESSION_C16_LOW_THR_AFTER (COMPRESSION_C16_LOW_THRESHOLD>>3) // Low threshold after compression.
-#define COMPRESSION_C16_HIGH_THRESHOLD (24<<4)
-#define COMPRESSION_C16_HIGH_THR_AFTER (COMPRESSION_C16_LOW_THR_AFTER + ((COMPRESSION_C16_HIGH_THRESHOLD-COMPRESSION_C16_LOW_THRESHOLD)>>1)) // High threshold after compression.
-#define COMPRESSION_C16_CEIL_VAL (100<<4) // Ceiling input value to compression.
-#define COMPRESSION_C16_CEIL_VAL_AFTER (COMPRESSION_C16_HIGH_THR_AFTER + ((COMPRESSION_C16_CEIL_VAL-COMPRESSION_C16_HIGH_THRESHOLD) >> 3)) // Ceiling input value after compression.
-uint8_t compressTempC16(int tempC16)
-  {
-  if(tempC16 <= 0) { return(0); } // Clamp negative values to zero.
-  if(tempC16 < COMPRESSION_C16_LOW_THRESHOLD) { return(tempC16 >> 3); } // Preserve 1 bit after the binary point (0.5C precision).
-  if(tempC16 < COMPRESSION_C16_HIGH_THRESHOLD)
-    { return(((tempC16 - COMPRESSION_C16_LOW_THRESHOLD) >> 1) + COMPRESSION_C16_LOW_THR_AFTER); }
-  if(tempC16 < COMPRESSION_C16_CEIL_VAL)
-    { return(((tempC16 - COMPRESSION_C16_HIGH_THRESHOLD) >> 3) + COMPRESSION_C16_HIGH_THR_AFTER); }
-  return(COMPRESSION_C16_CEIL_VAL_AFTER);
-  }
-
-// Reverses range compression done by compressTempC16(); results in range [0,100], with varying precision based on original value.
-// 0xff (or other invalid) input results in STATS_UNSET_INT. 
-int expandTempC16(uint8_t cTemp)
-  {
-  if(cTemp < COMPRESSION_C16_LOW_THR_AFTER) { return(cTemp << 3); }
-  if(cTemp < COMPRESSION_C16_HIGH_THR_AFTER)
-    { return(((cTemp - COMPRESSION_C16_LOW_THR_AFTER) << 1) + COMPRESSION_C16_LOW_THRESHOLD); }
-  if(cTemp <= COMPRESSION_C16_CEIL_VAL_AFTER)
-    { return(((cTemp - COMPRESSION_C16_HIGH_THR_AFTER) << 3) + COMPRESSION_C16_HIGH_THRESHOLD); }
-  return(OTV0P2BASE::STATS_UNSET_INT); // Invalid/unset input.
-  }
-
-
 #ifdef ENABLE_FS20_ENCODING_SUPPORT
 // Clear and populate core stats structure with information from this node.
 // Exactly what gets filled in will depend on sensors on the node,
@@ -831,10 +854,6 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 #endif
   }
 #endif // ENABLE_FS20_ENCODING_SUPPORT
-
-
-
-
 
 
 
@@ -878,10 +897,27 @@ static OTV0P2BASE::SimpleStatsRotation<10> ss1; // Configured for maximum differ
 // to current channel security and sensitivity level.
 // This may be binary or JSON format.
 //   * allowDoubleTX  allow double TX to increase chance of successful reception
-//   * doBinary  send binary form, else JSON form if supported
-//   * RFM23BFramed   Add preamble and CRC to frame. Defaults to true for compatibility
-void bareStatsTX(const bool allowDoubleTX, const bool doBinary, const bool RFM23BFramed)
+//   * doBinary  send binary form if supported, else JSON form if supported
+// Sends stats on primary radio channel 0 with possible duplicate to secondary channel.
+// If sending encrypted then ID/counter fields (eg @ and + for JSON) are omitted
+// as assumed supplied by security layer to remote recipent.
+void bareStatsTX(const bool allowDoubleTX, const bool doBinary)
   {
+  // Note if radio/comms channel is itself framed.
+  const bool framed = !PrimaryRadio.getChannelConfig()->isUnframed;
+#if defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
+  // Add RFM23B preamble and a trailing CRC to the frame IFF channel is unframed.
+  const bool RFM23BFramed = !framed;
+#else
+  const bool RFM23BFramed = false; // Never use this raw framing unless enabled explicitly.
+#endif
+
+#if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+  const bool doEnc = true;
+#else
+  const bool doEnc = false;
+#endif
+
   const bool neededWaking = OTV0P2BASE::powerUpSerialIfDisabled<V0P2_UART_BAUD>(); // FIXME
 #if (FullStatsMessageCore_MAX_BYTES_ON_WIRE > STATS_MSG_MAX_LEN)
 #error FullStatsMessageCore_MAX_BYTES_ON_WIRE too big
@@ -895,8 +931,8 @@ void bareStatsTX(const bool allowDoubleTX, const bool doBinary, const bool RFM23
   //   * max binary length, or max JSON length + 1 for CRC + 1 to allow detection of oversize message
   //   * terminating 0xff
 //  uint8_t buf[STATS_MSG_START_OFFSET + max(FullStatsMessageCore_MAX_BYTES_ON_WIRE,  MSG_JSON_MAX_LENGTH+1) + 1];
-  // Buffer need be no larger than typical 64-byte radio module TX buffer limit + optional terminator.
-  const uint8_t MSG_BUF_SIZE = 64 + 1;
+  // Buffer need be no larger than leading length byte + typical 64-byte radio module TX buffer limit + optional terminator.
+  const uint8_t MSG_BUF_SIZE = 1 + 64 + 1;
   uint8_t buf[MSG_BUF_SIZE];
 #if 0
   // Make sure buffer is cleared for debug purposes
@@ -904,10 +940,10 @@ void bareStatsTX(const bool allowDoubleTX, const bool doBinary, const bool RFM23
 #endif // 0
 
 #if defined(ENABLE_JSON_OUTPUT)
-  if(doBinary)
+  if(doBinary && !doEnc) // Note that binary form is not secure, so not permitted for secure systems.
 #endif // ENABLE_JSON_OUTPUT
     {
-#if defined(ENABLE_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+#if defined(ENABLE_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT) && !defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
     // Send binary message first (insecure, FS20-piggyback format).
     // Gather core stats.
     OTV0P2BASE::FullStatsMessageCore_t content;
@@ -923,50 +959,57 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     // Send it!
     RFM22RawStatsTXFFTerminated(buf, allowDoubleTX);
     // Record stats as if remote, and treat channel as secure.
-//    recordCoreStats(true, &content);
     outputCoreStats(&Serial, true, &content);
     handleQueuedMessages(&Serial, false, &PrimaryRadio); // Serial must already be running!
-#endif // ENABLE_BINARY_STATS_TX
+#endif // defined(ENABLE_BINARY_STATS_TX) ...
     }
 
 #if defined(ENABLE_JSON_OUTPUT)
   else // Send binary *or* JSON on each attempt so as not to overwhelm the receiver.
     {
     // Send JSON message.
-    // set pointer location based on whether start of message will have preamble TODO move to OTRFM23BLink queueToSend?
+    bool sendingJSONFailed = false; // Set true and stop attempting JSON send in case of error.
+
+    // Set pointer location based on whether start of message will have preamble TODO move to OTRFM23BLink queueToSend?
     uint8_t *bptr = buf;
-    if (RFM23BFramed) bptr += STATS_MSG_START_OFFSET;
+    if(RFM23BFramed) { bptr += STATS_MSG_START_OFFSET; }
+    // Leave space for possible leading frame-length byte, eg for encrypted frame.
+    else { ++bptr; }
+    // Where to write the real frame content.
+    uint8_t *const realTXFrameStart = bptr;
 
-    // Now append JSON text and closing 0xff...
-    // Use letters that correspond to the values in ParsedRemoteStatsRecord and when displaying/parsing @ status records.
-    int8_t wrote;
-
-#ifdef ENABLE_FHT8VSIMPLE
-    // Insert FHT8V-style ID in stats messages if appropriate.
-    static char idBuf[5]; // Static so as to have lifetime not shorter than ss1.
-    if(localFHT8VTRVEnabled())
+    // If forcing encryption then suppress the "@" ID field entirely,
+    // assuming that the encrypted commands will carry the ID, ie in the 'envelope'.
+    if(doEnc) { static const char nul[1] = {}; ss1.setID(nul); }
+    else
       {
-      const uint8_t hc1 = FHT8VGetHC1();
-      const uint8_t hc2 = FHT8VGetHC2();
-      idBuf[0] = OTV0P2BASE::hexDigit(hc1 >> 4);
-      idBuf[1] = OTV0P2BASE::hexDigit(hc1);
-      idBuf[2] = OTV0P2BASE::hexDigit(hc2 >> 4);
-      idBuf[3] = OTV0P2BASE::hexDigit(hc2);
-      idBuf[4] = '\0';
-      ss1.setID(idBuf);
-      }
-    else { ss1.setID(NULL); } // Use build-in ID.
+#if defined(ENABLE_FHT8VSIMPLE)
+      // Insert FHT8V-style ID in stats messages if appropriate.
+      // Will not be appropriate if primary channel provides ID itself.
+      static char idBuf[5]; // Static so as to have lifetime no shorter than ss1.
+      if(localFHT8VTRVEnabled())
+        {
+        const uint8_t hc1 = FHT8VGetHC1();
+        const uint8_t hc2 = FHT8VGetHC2();
+        idBuf[0] = OTV0P2BASE::hexDigit(hc1 >> 4);
+        idBuf[1] = OTV0P2BASE::hexDigit(hc1);
+        idBuf[2] = OTV0P2BASE::hexDigit(hc2 >> 4);
+        idBuf[3] = OTV0P2BASE::hexDigit(hc2);
+        idBuf[4] = '\0';
+        ss1.setID(idBuf);
+        }
+      else { ss1.setID(NULL); } // Use built-in ID.
 #endif
+      }
 
     // Managed JSON stats.
     const bool maximise = true; // Make best use of available bandwidth...
     if(ss1.isEmpty())
       {
-//#ifdef DEBUG
-      ss1.enableCount(true); // For diagnostic purposes, eg while TX is lossy.
-//#endif
-//      // Try and get as much out on the first TX as possible.
-//      maximise = true;
+      // Enable "+" count field for diagnostic purposes, eg while TX is lossy,
+      // if the primary radio channel does not include a sequence number itself.
+      // Assume that an encrypted channel will provide its own (visible) sequence counter.
+      ss1.enableCount(!doEnc); 
       }
     ss1.put(TemperatureC16);
 #if defined(HUMIDITY_SENSOR_SUPPORT)
@@ -975,12 +1018,12 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
 #if defined(ENABLE_OCCUPANCY_SUPPORT)
     ss1.put(Occupancy.twoBitTag(), Occupancy.twoBitOccupancyValue()); // Reduce spurious TX cf percentage.
 #if !defined(ENABLE_TRIMMED_BANDWIDTH)
-    ss1.put(Occupancy.vacHTag(), Occupancy.getVacancyH()); // EXPERIMENTAL
+    ss1.put(Occupancy.vacHTag(), Occupancy.getVacancyH(), true); // Low priority as notionally redundant.
 #endif // !defined(ENABLE_TRIMMED_BANDWIDTH)
 #endif // defined(ENABLE_OCCUPANCY_SUPPORT)
     // OPTIONAL items
-    // Only TX supply voltage for units apparently not mains powered.
-    if(!Supply_cV.isMains()) { ss1.put(Supply_cV); } else { ss1.remove(Supply_cV.tag()); }
+    // Only TX supply voltage for units apparently not mains powered, and TX with low priority as slow changing.
+    if(!Supply_cV.isMains()) { ss1.put(Supply_cV, true); } else { ss1.remove(Supply_cV.tag()); }
 #ifdef ENABLE_BOILER_HUB
     // Show boiler state for boiler hubs.
     ss1.put("b", (int) isBoilerOn());
@@ -995,69 +1038,160 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     ss1.put(NominalRadValve);
     ss1.put(NominalRadValve.tagTTC(), NominalRadValve.getTargetTempC());
 #if !defined(ENABLE_TRIMMED_BANDWIDTH)
-    ss1.put(NominalRadValve.tagCMPC(), NominalRadValve.getCumulativeMovementPC()); // EXPERIMENTAL
+    ss1.put(NominalRadValve.tagCMPC(), NominalRadValve.getCumulativeMovementPC(), true); // Low priority as notionally redundant.
 #endif // !defined(ENABLE_TRIMMED_BANDWIDTH)
 #endif // defined(ENABLE_LOCAL_TRV)
 
 #if defined(ENABLE_ALWAYS_TX_ALL_STATS)
-    const uint8_t privacyLevel = OTV0P2BASE::stTXmostUnsec;
+    const uint8_t privacyLevel = OTV0P2BASE::stTXalwaysAll;
 #else
     const uint8_t privacyLevel = OTV0P2BASE::getStatsTXLevel();
 #endif
-    wrote = ss1.writeJSON(bptr, sizeof(buf) - (bptr-buf), privacyLevel, maximise); //!allowDoubleTX && randRNG8NextBoolean());
 
-    if(0 == wrote)
+    // Buffer to write JSON to before encryption.
+    // Size for JSON in 'O' frame is:
+    //    ENC_BODY_SMALL_FIXED_PTEXT_MAX_SIZE - 2 leading body bytes + for trailing '}' not sent.
+    const uint8_t maxSecureJSONSize = OTRadioLink::ENC_BODY_SMALL_FIXED_PTEXT_MAX_SIZE - 2 + 1;
+    // writeJSON() requires two further bytes including one for the trailing '\0'.
+    uint8_t ptextBuf[maxSecureJSONSize + 2];
+
+    // Redirect JSON output appropriately.
+    uint8_t *const bufJSON = doEnc ? ptextBuf : bptr;
+    const uint8_t bufJSONlen = doEnc ? sizeof(ptextBuf) : min(OTV0P2BASE::MSG_JSON_MAX_LENGTH+2, sizeof(buf) - (bptr-buf));
+
+    // Number of bytes written for body.
+    // For non-secure, this is the size of the JSON text.
+    // For secure this is overridden with the secure frame size.
+    int8_t wrote = 0;
+
+    // Generate JSON text.
+    if(!sendingJSONFailed)
       {
+      // Generate JSON and write to appropriate buffer:
+      // direct to TX buffer if not encrypting, else to separate buffer.
+      wrote = ss1.writeJSON(bufJSON, bufJSONlen, privacyLevel, maximise); //!allowDoubleTX && randRNG8NextBoolean());
+      if(0 == wrote)
+        {
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
-      return;
+#endif
+        sendingJSONFailed = true;
+        }
       }
 
-    OTV0P2BASE::outputJSONStats(&Serial, true, bptr, sizeof(buf) - (bptr-buf)); // Serial must already be running!
-    OTV0P2BASE::flushSerialSCTSensitive(); // Ensure all flushed since system clock may be messed with...
+    // Push the JSON output to Serial.
+    if(!sendingJSONFailed)
+      {
+ #if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+      if(doEnc)
+        {
+        // Insert synthetic full ID/@ field for local stats, but no sequence number for now.
+        Serial.print(F("{\"@\":\""));
+        for(int i = 0; i < OTV0P2BASE::OpenTRV_Node_ID_Bytes; ++i) { Serial.print(eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_ID+i), HEX); }
+        Serial.print(F("\","));
+        Serial.write(bufJSON+1, wrote-1);
+        Serial.println();
+        }
+      else
+#endif // defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+        { OTV0P2BASE::outputJSONStats(&Serial, true, bufJSON, bufJSONlen); } // Serial must already be running!
+      OTV0P2BASE::flushSerialSCTSensitive(); // Ensure all flushed since system clock may be messed with...
+      }
+
+    // Get the 'building' key for stats sending.
+    uint8_t key[16];
+    if(!sendingJSONFailed && doEnc)
+      {
+#if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+      if(!OTV0P2BASE::getPrimaryBuilding16ByteSecretKey(key))
+        {
+        sendingJSONFailed = true;
+#if 0 && defined(DEBUG)
+        DEBUG_SERIAL_PRINTLN_FLASHSTRING("!failed (no key)");
+#endif
+        }
+#else
+      sendingJSONFailed = true; // Crypto support may not be available.
+#endif // defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+      }
+
+    // If doing encryption
+    // then build encrypted frame from raw JSON.
+    if(!sendingJSONFailed && doEnc)
+      {
+#if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+      const OTRadioLink::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
+      const uint8_t txIDLen = OTRadioLink::ENC_BODY_DEFAULT_ID_BYTES;
+      // When sending on a channel with framing, do not explicitly send the frame length byte.
+      const uint8_t offset = framed ? 1 : 0;
+      // Assumed to be at least one free writeable byte ahead of bptr.
+#if defined(ENABLE_NOMINAL_RAD_VALVE)
+      // Get current modelled valve position.
+      const uint8_t valvePC = NominalRadValve.get();
+#else
+      // Distinguished 'invalid' valve position; never mistaken for a real valve.
+      const uint8_t valvePC = 0x7f;
+#endif // defined(ENABLE_NOMINAL_RAD_VALVE)
+      const uint8_t bodylen = OTRadioLink::generateSecureOFrameRawForTX(
+            realTXFrameStart - offset, sizeof(buf) - (realTXFrameStart-buf) + offset,
+            txIDLen, valvePC, (const char *)bufJSON, e, NULL, key);
+      sendingJSONFailed = (0 == bodylen);
+      wrote = bodylen - offset;
+#else
+      sendingJSONFailed = true; // Crypto support may not be available.
+#endif // defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
+      }
+
+#if 0 && defined(DEBUG)
+    if(sendingJSONFailed) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!failed JSON enc"); }
+#endif
 
 #ifdef ENABLE_RADIO_SECONDARY_MODULE
-// FIXME secondary send assumes SIM900.
-// FIXME cannot use strlen for binary frames
-#if 0 && defined(DEBUG)
-    OTV0P2BASE::serialPrintAndFlush(F("full: "));
-    PrimaryRadio.queueToSend(buf, 64); // debug
-#endif // 0
-    SecondaryRadio.queueToSend(buf + STATS_MSG_START_OFFSET, strlen((const char*)buf+STATS_MSG_START_OFFSET));
+    if(!sendingJSONFailed)
+      {
+      // Write out unadjusted JSON or encrypted frame on secondary radio.
+      SecondaryRadio.queueToSend(realTXFrameStart, doEnc ? (bptr - realTXFrameStart) : wrote);
+      }
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
 #ifdef ENABLE_RADIO_RX
     handleQueuedMessages(&Serial, false, &PrimaryRadio); // Serial must already be running!
 #endif
-    // Adjust JSON message for transmission.
-    // (Set high-bit on final closing brace to make it unique, and compute (non-0xff) CRC.)
-    // This is only required for RFM23B
-    if (RFM23BFramed) {
-          const uint8_t crc = OTV0P2BASE::adjustJSONMsgForTXAndComputeCRC((char *)bptr);
-          if(0xff == crc)
-            {
-    #if 0 && defined(DEBUG)
-            DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON msg bad!");
-    #endif
-            return;
-            }
-        bptr += wrote;
-        *bptr++ = crc; // Add 7-bit CRC for on-the-wire check.
-    } else {
-        bptr += wrote;    // to avoid another conditional
-    }
-    *bptr = 0xff; // Terminate message for TX.
 
-#if 0 && defined(DEBUG)
-    if(bptr - buf >= 64)
+    if(!sendingJSONFailed)
       {
-      DEBUG_SERIAL_PRINT_FLASHSTRING("Too long for RFM2x: ");
-      DEBUG_SERIAL_PRINT((int)(bptr - buf));
-      DEBUG_SERIAL_PRINTLN();
-      return;
-      }
+      // If not encrypting, adjust the JSON for transmission and add a CRC.
+      // (Set high-bit on final closing brace to make it unique, and compute (non-0xff) CRC.)
+      if(!doEnc)
+          {
+          const uint8_t crc = OTV0P2BASE::adjustJSONMsgForTXAndComputeCRC((char *)bptr);
+          if(0xff == crc) { sendingJSONFailed = true; }
+          else
+            {
+            bptr += wrote;
+            *bptr++ = crc; // Add 7-bit CRC for on-the-wire check.
+            ++wrote;
+            }
+          }
+
+#if defined(ENABLE_RFM23B_FS20_RAW_PREAMBLE)
+      // Use ugly 0xff-terminated RFM23B send.
+      if(RFM23BFramed)
+        {
+        *bptr = 0xff; // Terminate message for TX.
+        RFM22RawStatsTXFFTerminated(buf, allowDoubleTX, RFM23BFramed);
+        }
+      else
 #endif
-    // Send it!
-    RFM22RawStatsTXFFTerminated(buf, allowDoubleTX, RFM23BFramed);
+        {
+        // Send directly to the primary radio...
+        PrimaryRadio.queueToSend(realTXFrameStart, wrote);
+        }
+      }
+
+#if 1 && defined(DEBUG)
+    if(sendingJSONFailed) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!failed JSON TX"); }
+#endif
     }
 #endif // defined(ENABLE_JSON_OUTPUT)
 
@@ -1138,7 +1272,7 @@ static uint8_t minuteCount;
 
 // Mask for Port B input change interrupts.
 #define MASK_PB_BASIC 0b00000000 // Nothing.
-#ifdef PIN_RFM_NIRQ
+#if defined(PIN_RFM_NIRQ) && defined(ENABLE_RADIO_RX) // RFM23B IRQ only used for RX.
   #if (PIN_RFM_NIRQ < 8) || (PIN_RFM_NIRQ > 15)
     #error PIN_RFM_NIRQ expected to be on port B
   #endif
@@ -1183,7 +1317,7 @@ void setupOpenTRV()
   PrimaryRadio.listen(false);
 
 #if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING("RFM23B.listen(false);");
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("PrimaryRadio.listen(false);");
 #endif
 
   // Set up async edge interrupts.
@@ -1332,7 +1466,7 @@ ISR(PCINT2_vect)
 
 #if defined(ENABLE_SIMPLIFIED_MODE_BAKE)
   // Mode button detection is on the falling edge (button pressed).
-  if((changes & MODE_INT_MASK) && (pins & MODE_INT_MASK))
+  if((changes & MODE_INT_MASK) && !(pins & MODE_INT_MASK))
     { startBakeFromInt(); }
 #endif // defined(ENABLE_SIMPLIFIED_MODE_BAKE)
 
@@ -1456,7 +1590,7 @@ void remoteCallForHeatRX(const uint16_t id, const uint8_t percentOpen)
 #endif
 
 
-
+#if defined(ENABLE_RADIO_RX)
 // Returns true if continuous background RX has been set up.
 static bool setUpContinuousRX(const bool second0)
   {
@@ -1498,7 +1632,7 @@ static bool setUpContinuousRX(const bool second0)
 
   if(needsToListen)
     {
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+#if 1 && defined(DEBUG) && defined(ENABLE_RADIO_RX) && !defined(ENABLE_TRIMMED_MEMORY)
     for(uint8_t lastErr; 0 != (lastErr = PrimaryRadio.getRXErr()); )
       {
       DEBUG_SERIAL_PRINT_FLASHSTRING("!RX err ");
@@ -1540,6 +1674,7 @@ static bool setUpContinuousRX(const bool second0)
   return(false);
 #endif // defined(ENABLE_CONTINUOUS_RX)
   }
+#endif // defined(ENABLE_RADIO_RX)
 
 // Process calls for heat, ie turn boiler on and off as appropriate.
 // Has control of OUT_HEATCALL if defined(ENABLE_BOILER_HUB).
@@ -1837,10 +1972,9 @@ void loopOpenTRV()
       }
 #endif
     }
-#ifdef ENABLE_RADIO_RX
+
   // Handling the UI may have taken a little while, so process I/O a little.
   handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
-#endif
 
 
 #ifdef ENABLE_MODELLED_RAD_VALVE
@@ -1953,18 +2087,17 @@ void loopOpenTRV()
 #if 1 && defined(DEBUG)
       DEBUG_SERIAL_PRINT_FLASHSTRING("Beacon TX... ");
 #endif
-      // Get the 'building' key for braadcast.
+      // Get the 'building' key for broadcast.
       uint8_t key[16];
       if(!OTV0P2BASE::getPrimaryBuilding16ByteSecretKey(key))
         {
 #if 1 && defined(DEBUG)
-        DEBUG_SERIAL_PRINTLN_FLASHSTRING("failed (no key)");
+        DEBUG_SERIAL_PRINTLN_FLASHSTRING("!failed (no key)");
 #endif
         break;
         }
       const OTRadioLink::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
-      // Generate beacon with ID long enough to used directly in the IV with no lookup.
-      const uint8_t txIDLen = 6;
+      const uint8_t txIDLen = OTRadioLink::ENC_BODY_DEFAULT_ID_BYTES;
       uint8_t buf[OTRadioLink::generateSecureBeaconMaxBufSize];
       const uint8_t bodylen = OTRadioLink::generateSecureBeaconRawForTX(buf, sizeof(buf), txIDLen, e, NULL, key);
       // ASSUME FRAMED CHANNEL 0 (but could check with config isUnframed flag).
@@ -2029,7 +2162,7 @@ void loopOpenTRV()
     // This should happen as soon after the latest readings as possible (temperature especially).
     case 56:
       {
-#ifdef ENABLE_OCCUPANCY_SUPPORT
+#if defined(ENABLE_OCCUPANCY_SUPPORT)
       // Update occupancy measures that partially use rolling stats.
 #if defined(ENABLE_OCCUPANCY_DETECTION_FROM_RH) && defined(HUMIDITY_SENSOR_SUPPORT)
       // If RH% is rising fast enough then take this a mild occupancy indicator.
@@ -2055,11 +2188,11 @@ void loopOpenTRV()
             { Occupancy.markAsPossiblyOccupied(); }
           }
         }
-#endif
+#endif // defined(ENABLE_OCCUPANCY_DETECTION_FROM_RH) && defined(HUMIDITY_SENSOR_SUPPORT)
+
       // Update occupancy status (fresh for target recomputation) at a fixed rate.
       Occupancy.read();
-#endif
-
+#endif // defined(ENABLE_OCCUPANCY_SUPPORT)
 
 #ifdef ENABLE_NOMINAL_RAD_VALVE
       // Recompute target, valve position and call for heat, etc.
@@ -2159,7 +2292,7 @@ void loopOpenTRV()
 
 #if defined(HAS_DORM1_VALVE_DRIVE) && defined(ENABLE_LOCAL_TRV)
   // Handle local direct-drive valve, eg DORM1.
-#ifdef ENABLE_NOMINAL_RAD_VALVE
+#if defined(ENABLE_NOMINAL_RAD_VALVE)
   // Get current modelled valve position into abstract driver.
   ValveDirect.set(NominalRadValve.get());
 #endif
@@ -2210,7 +2343,6 @@ void loopOpenTRV()
 #endif
 
 
-
 #if 0 && defined(DEBUG)
   const int tDone = getSubCycleTime();
   if(tDone > 1) // Ignore for trivial 1-click time.
@@ -2230,9 +2362,7 @@ void loopOpenTRV()
     const uint8_t orc = 1 + ~eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER);
     OTV0P2BASE::eeprom_smart_update_byte((uint8_t *)V0P2BASE_EE_START_OVERRUN_COUNTER, ~orc);
 #if 1 && defined(DEBUG)
-    DEBUG_SERIAL_PRINT_FLASHSTRING("!loop overrun ");
-    DEBUG_SERIAL_PRINT(TIME_LSD);
-    DEBUG_SERIAL_PRINTLN();
+    DEBUG_SERIAL_PRINTLN_FLASHSTRING("!loop overrun");
 #endif
 #if defined(ENABLE_FHT8VSIMPLE)
     FHT8V.resyncWithValve(); // Assume that sync with valve may have been lost, so re-sync.

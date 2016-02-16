@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160215: adjusting 'O' frame flags meanings, primarily to include frost indicator.
 V0.1.20160207: fixing encrypted example to enforce seqNum == message count & 0xf.
 V0.1.20160205: adding ASCII-art frame diagrams.
 V0.1.20160111: pending change to padding accepted; adding example 3 (secure).
@@ -268,9 +269,10 @@ Bytes   Section Description
           * Bit 7: fault (if 1)
           * Bit 6: battery/power low (if 1)
           * Bit 5: tamper (if 1)
-          * Bit 4: stats or further present (if 1)
+          * Bit 4: stats or further present (if 1) *** May reassign as redundant with bl>2
           * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
-          * Bits 0&1: reserved with value 0x1
+          * Bit 1: frost risk (if 1) eg below unit's own frost-protection threshold
+          * Bit 0: reserved with value 0
 
 st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
