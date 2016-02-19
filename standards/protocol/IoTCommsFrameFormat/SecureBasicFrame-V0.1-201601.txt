@@ -19,6 +19,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160215: adjusting 'O' frame flags meanings, primarily to include frost indicator.
+V0.1.20160207: fixing encrypted example to enforce seqNum == message count & 0xf.
+V0.1.20160205: adding ASCII-art frame diagrams.
 V0.1.20160111: pending change to padding accepted; adding example 3 (secure).
 V0.1.20160104: pending change to padding to allow fixed-size (32 byte) crypto blocks for simplicity.
 V0.1.20160104: noted that 'O' frame 'stats present' flag is redundant and may be removed.
@@ -98,6 +101,11 @@ Unless otherwise dictated by bearer/carrier/encoding the order of bytes is
 as specified below, and within each byte the most significant bit is sent first.
 (As for RFM23B TX/RX via the FIFOs.)
 
+    Frame format excluding logical leading length (fl) byte:
+    +------+--------+-----------------+----+--------------------+------------------+
+    | type | seqidl | ID [0,15] bytes | bl | body [0,251] bytes | trailer 1+ bytes |
+    +------+--------+-----------------+----+--------------------+------------------+
+
 Bytes   Section Description
 
 pr      preamble and sync if required, length pl
@@ -133,7 +141,7 @@ id      ID bytes (0 implies anonymous, 1 or 2 typical domestic, length il)
 
 bl      body length including any padding [0,251] but generally << 60.
 
-        For an unencrypted body this is the exact lengh of the body content,
+        For an unencrypted body this is the exact length of the body content,
         else it is the size of the body after padding and encryption
         (ie the decrypted form will indicate the true body content length).
         In both cases bl is the number of bytes of data before the trailer.
@@ -196,12 +204,18 @@ and that for non-secure frames that tl == fl - 1.
 (Note that radios may themselves reject potentially-mangled frames in
 noisy environments because of carrier drop-out, preamble mismatches, etc.)
 
+    Minimal frame (excluding logical leading length fl byte) is:
+    +------+--------+----+----------------+
+    | type | seqidl | bl | 1-byte-trailer |
+    +------+--------+----+----------------+
+
 All small systems by default may reject frames with fl >= 64 bytes
 (fl == 63 is the limit in size of a 'small' frame, excluding fl itself,
 to allow for typical radio packet buffers/FIFOs including fl of 64 bytes).
 
 Per-frame type structural validation can and should be performed further
 down the processing chain for those types that are understood.
+
 
 
 OpenTRV Basic Radiator Valve / Sensor Frame Details
@@ -255,9 +269,10 @@ Bytes   Section Description
           * Bit 7: fault (if 1)
           * Bit 6: battery/power low (if 1)
           * Bit 5: tamper (if 1)
-          * Bit 4: stats or further present (if 1)
+          * Bit 4: stats or further present (if 1) *** May reassign as redundant with bl>2
           * Bits 2&3: occupancy (0:unreported, 1:none, 2:possible, 3:likely)
-          * Bits 0&1: reserved with value 0x1
+          * Bit 1: frost risk (if 1) eg below unit's own frost-protection threshold
+          * Bit 0: reserved with value 0
 
 st      Stats or further info (optional, zero length if absent)
         The length of this section is the body length (bl) - 2.
@@ -283,23 +298,23 @@ When secure:
     allowing a different algorithm to be used in future.)
   * Construction and use of IV/nonce as:
     http://www.earth.org.uk/note-on-IoT-security.html#app4
-      * 4 most-significant bytes (32 bits) of leaf ID,
-        all transmitted in the ADATA (authenticated) section
-        (with two further bytes of ID pre-shared)
+      * 6 most-significant bytes of leaf ID,
+        with all of the ID that is in the header thus in ADATA (authenticated) section,
+        and with any trailing ID not in the header needing to pre-shared
       * 3 bytes transmitted of restart/reboot count + implicit further ID byte
         (allows 17 million restarts of 30 years at 1 per minute,
         which my be needed for energy-harvesting for example)
       * 3 bytes TXed of message counter since restart + implicit further ID byte
         (allows 30 years of transmissions at 1 per minute)
-  * The ID in the header is preferably at least 4 bytes,
+  * The ID in the header is *preferably* at least 2--4 bytes,
     and the leading/most-significant bytes of the ID participate in the IV
-    as above, but in any if less than 6 leading bytes of ID are in th header
+    as above, but in any if less than 6 leading bytes of ID are in the header
     then the rest must have been pre-shared, eg with the key.
   * The least significant 4 bits of the IV message counter are the same as the
     frame header sequence number.
   * The entire frame header content (including length) is protected by the
     AES-GCM authentication tag.
-  * The last byte of the trailer is 0x80 to indicate V1 128-bit AES-GCM,
+  * The last byte of the trailer is 0x80 to indicate V1 OpenTRV 128-bit AES-GCM,
     and to avoid the final frame byte being 0 or 0xff,
     preceded by 22 further bytes as follows:
       * 3 bytes of restart/reboot counter msb first,
@@ -321,7 +336,7 @@ When secure:
 
 Note on nonce/IV construction and counter use:
 
-The nonce is 6 (six) leading bytes of node ID,
+The IV is 6 (six) leading bytes of node ID,
 then 3 (three) bytes of restart counter,
 then 3 (three) bytes of message counter.
 
@@ -330,7 +345,7 @@ The main complication in terms of what goes over the wire is:
     and forming the leading part of the IV/nonce,
     with that part sent in the header a prefix into the remainder,
     preferably unique else all candidates have to be tried,
-  * the rest of the nonce has to be assembled from (or dispersed to)
+  * the rest of the IV has to be assembled from (or dispersed to)
     parts of the header and trailer.
 
 The restart/reboot count must be incremented by at least 1 on each restart
@@ -361,13 +376,13 @@ overcome transmission losses where repeats may be and should be dropped).
 
 *Note2: where the key is used for sending a message *from* the specified ID
 (ie the ID is a source address) the most-significant bit of the least
-significant byte (6) of the ID used in the nonce must be forced to one (1),
+significant byte (6) of the ID used in the IV must be forced to one (1),
 which for OpenTRV ID will be its normal value, else if the the message
 is being sent *to* the specified ID, ie typically a back-channel, then
 the bit must be forced to zero (0).  This allows the same key to be used
-for the back-channel and the IV/nonces will be unique.  This changed bit
+for the back-channel and the IVs/nonces will be unique.  This changed bit
 is not transmitted, even if more bytes of ID are sent, ie the correct
-ID prefix is always transmitted but the nonce calculation is adjusted.
+ID prefix is always transmitted but the IV calculation is adjusted.
 
 
 EXAMPLE FRAMES
@@ -406,14 +421,13 @@ In this case the frame sequence number is zero, and ID is 0x80 0x81.
 61  CRC value
 
 Example 3: secure, no valve, representative minimum stats {"b":1}).
-In this case the frame sequence number is zero,
+Note that the sequence number must match the 4 lsbs of the message count, ie from iv[11].
 and the ID is 0xaa 0xaa 0xaa 0xaa (transmitted) with the next ID bytes 0x55 0x55.
 ResetCounter = 42
 TxMsgCounter = 793
 (Thus nonce/IV: aa aa aa aa 55 55 00 00 2a 00 03 19)
 
-3e cf 04 aa aa aa aa 20 | b3 45 f9 29 69 57 0c b8 28 66 14 b4 f0 69 b0 08 71 da d8 fe 47 c1 c3 53 83 48 88 03 7d 58 75 75 | 00 00 2a 00 03 19 97 5b da df 92 08 42 b8 c1 3b dc 02 76 54 cb 8d 80 
-
+3e cf 94 aa aa aa aa 20 | b3 45 f9 29 69 57 0c b8 28 66 14 b4 f0 69 b0 08 71 da d8 fe 47 c1 c3 53 83 48 88 03 7d 58 75 75 | 00 00 2a 00 03 19 29 3b 31 52 c3 26 d2 6d d0 8d 70 1e 4b 68 0d cb 80
 
 3e  length of header (62) after length byte 5 + (encrypted) body 32 + trailer 32
 cf  'O' secure OpenTRV basic frame
@@ -428,7 +442,7 @@ aa  ID byte 4
 b3 45 f9 ... 58 75 75  32 bytes of encrypted body
 00 00 2a  reset counter
 00 03 19  message counter
-97 5b da ... 54 cb 8d  16 bytes of authentication tag
+29 3b 31 ... 68 0d cb  16 bytes of authentication tag
 80  enc/auth type/format indicator.
 
 
@@ -499,7 +513,7 @@ Trailer
 7) Is this encrypted in the secure version?
 
 In a secure frame the trailer consists of the data required by the
-authentication and encryption algorithm (such as authetication tag and
+authentication and encryption algorithm (such as authentication tag and
 nonce/IV) but none of the trailer itself is generally ‘encrypted’.
 
 8) Where is the length defined or is it always 1 byte? Trailer section says it
@@ -589,7 +603,7 @@ Show example bit patterns for 'O' frames:
   * secure and non-secure
   * leaf ID of 81 82 83 84 85 86 87
   * all zeros AES key
-  * all zeros nonce sequence/restart counter bytes
+  * all zeros IV sequence/restart counter bytes
   * with percent-open byte at 0x00 and 0x11100100 (ie 100% + call for heat)
   * with flags 0 (no stats) and 0x40 (with stats)
   * with no stats and with {"v|%":42} JSON stats

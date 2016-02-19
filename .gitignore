@@ -2,6 +2,7 @@
 /out_D/
 /out_O/
 /bin/
+/Arduino/hardware/**/*.l#*
 /Arduino/hardware/**/*.b#*
 /Arduino/hardware/**/*.s#*
 /Arduino/hardware/**/*.pro

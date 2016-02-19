@@ -93,8 +93,8 @@ extern OTV0P2BASE::TemperatureC16_DS18B20 extDS18B20_0;
 extern OTV0P2BASE::RoomTemperatureC16_SHT21 TemperatureC16; // SHT21 impl.
 #elif defined(ENABLE_PRIMARY_TEMP_SENSOR_DS18B20)
   #if defined(ENABLE_MINIMAL_ONEWIRE_SUPPORT)
-// DSB18B20 temperature impl, with slightly reduced precision to improve speed.
-extern OTV0P2BASE::TemperatureC16_DS18B20 TemperatureC16;
+  // DSB18B20 temperature impl, with slightly reduced precision to improve speed.
+  extern OTV0P2BASE::TemperatureC16_DS18B20 TemperatureC16;
   #endif // defined(ENABLE_MINIMAL_ONEWIRE_SUPPORT)
 #else // Don't use TMP112 if SHT21 or DS18B20 have been selected.
 extern OTV0P2BASE::RoomTemperatureC16_TMP112 TemperatureC16;
@@ -119,66 +119,8 @@ extern OTV0P2BASE::DummyHumiditySensorSHT21 RelHumidity;
 
 
 #ifdef ENABLE_VOICE_SENSOR
-/*
- Voice sensor.
-
- EXPERIMENTAL
-
- Functionality and code only enabled if ENABLE_VOICE_SENSOR is defined.
- */
-// Sensor for supply (eg battery) voltage in millivolts.
-class VoiceDetection : public OTV0P2BASE::SimpleTSUint8Sensor
-  {
-  private:
-    // Activity count.
-    // Marked volatile for thread-safe (simple) lock-free access.
-    volatile uint8_t count;
-    // True if voice is detected.
-    // Marked volatile for thread-safe lock-free access.
-    volatile bool isDetected;
-    // Last time sensor was polled
-    // Marked volatile for thread-safe (simple) lock-free access.
-//    volatile uint16_t endOfLocking;
-//    // True if there is new data to poll
-//    // Marked volatile for thread-safe (simple) lock-free access.
-//    volatile bool isTriggered;
-//    // Lock out time after interrupt
-//    // only needs to be > 10secs, but go for between 2 mins to make sure (we have a 4 min cycle anyway)
-//    static const uint8_t lockingPeriod = 2;
-
- 
-  public:
-    // Initialise to cautious values.
-    VoiceDetection() : count(0), isDetected(false) { }
-
-    // Force a read/poll of the voice level and return the value sensed.
-    // Potentially expensive/slow.
-    // Thread-safe and usable within ISRs (Interrupt Service Routines), though not recommended.
-    virtual uint8_t read();
-
-    // Returns preferred poll interval (in seconds); non-zero.
-    virtual uint8_t preferredPollInterval_s() const { return(60); }
-
-    // Handle simple interrupt.
-    // Fast and ISR (Interrupt Service Routines) safe.
-    // Returns true if interrupt was successfully handled and cleared
-    // else another interrupt handler in the chain may be called
-    // to attempt to clear the interrupt.
-    virtual bool handleInterruptSimple();
-
-    // Returns true if voice has been detected in this or previous poll period.
-    bool isVoiceDetected() { return(isDetected); }
-
-    // Returns true if more than a minute has passed since last interrupt and sensor has not been polled.
-//    bool isVoiceReady() { return (isTriggered && (OTV0P2BASE::getMinutesSinceMidnightLT() >= endOfLocking)); }
-
-    // Returns a suggested (JSON) tag/field/key name including units of get(); NULL means no recommended tag.
-    // The lifetime of the pointed-to text must be at least that of the Sensor instance.
-    virtual const char *tag() const { return("av"); }
-
-  };
-// Singleton implementation/instance.
-extern VoiceDetection Voice;
+// TODO
+extern OTV0P2BASE::VoiceDetectionQM1 Voice;
 #endif
 
 
@@ -186,10 +128,10 @@ extern VoiceDetection Voice;
 
 
 // DORM1/REV7 direct drive motor actuator.
-#if /* defined(LOCAL_TRV) && */ defined(DIRECT_MOTOR_DRIVE_V1)
+#if /* defined(ENABLE_LOCAL_TRV) && */ defined(ENABLE_V1_DIRECT_MOTOR_DRIVE)
 #define HAS_DORM1_VALVE_DRIVE
 // Singleton implementation/instance.
-#ifdef ENABLE_DORM1_MOTOR_REVERSED // Reversed vs sample 2015/12
+#ifdef ENABLE_DORM1_MOTOR_REVERSED // Reversed vs sample 2015/12.
 extern OTRadValve::ValveMotorDirectV1<MOTOR_DRIVE_ML, MOTOR_DRIVE_MR, MOTOR_DRIVE_MI_AIN, MOTOR_DRIVE_MC_AIN> ValveDirect;
 #else
 extern OTRadValve::ValveMotorDirectV1<MOTOR_DRIVE_MR, MOTOR_DRIVE_ML, MOTOR_DRIVE_MI_AIN, MOTOR_DRIVE_MC_AIN> ValveDirect;
@@ -206,7 +148,7 @@ extern OTRadValve::FHT8VRadValve<_FHT8V_MAX_EXTRA_TRAILER_BYTES, OTRadValve::FHT
 // Returns TRV if valve/radiator is to be controlled by this unit.
 // Usually the case, but may not be for (a) a hub or (b) a not-yet-configured unit.
 // Returns false if house code parts are set to invalid or uninitialised values (>99).
-#if defined(LOCAL_TRV) || defined(SLAVE_TRV)
+#if defined(ENABLE_LOCAL_TRV) || defined(ENABLE_SLAVE_TRV)
 inline bool localFHT8VTRVEnabled() { return(!FHT8V.isUnavailable()); }
 #else
 #define localFHT8VTRVEnabled() (false) // Local FHT8V TRV disabled.

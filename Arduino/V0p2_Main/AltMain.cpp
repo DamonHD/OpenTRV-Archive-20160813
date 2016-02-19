@@ -136,11 +136,11 @@ void POSTalt()
   fastDigitalWrite(A3, LOW);  // This turns power to the shield on
   pinMode(A3, OUTPUT);
   
-#elif defined(USE_MODULE_RFM22RADIOSIMPLE)
+#elif defined(ENABLE_RADIO_PRIMARY_RFM23B)
   static const OTRadioLink::OTRadioChannelConfig RFMConfig(NULL, true, true, true);
 #endif // USE_MODULE_SIM900
 
-#if defined(USE_MODULE_RFM22RADIOSIMPLE) 
+#if defined(ENABLE_RADIO_PRIMARY_RFM23B)
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   PrimaryRadio.preinit(NULL);
   // Check that the radio is correctly connected; panic if not...
@@ -201,7 +201,7 @@ void POSTalt()
 //  pinMode(3, INPUT);        // FIXME Move to where they are set automatically
 //  digitalWrite(3, LOW);
 
-  bareStatsTX(false, false, false);
+  bareStatsTX(false, false, false, false);
 
   }
 
@@ -294,7 +294,7 @@ void loopAlt()
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("*E"); // End-of-cycle sleep.
 #endif
 
-#if !defined(MIN_ENERGY_BOOT)
+#if !defined(ENABLE_MIN_ENERGY_BOOT)
   OTV0P2BASE::powerDownSerial(); // Ensure that serial I/O is off.
   // Power down most stuff (except radio for hub RX).
   minimisePowerWithoutSleep();
@@ -312,7 +312,7 @@ void loopAlt()
 
 // If missing h/w interrupts for anything that needs rapid response
 // then AVOID the lowest-power long sleep.
-#if CONFIG_IMPLIES_MAY_NEED_CONTINUOUS_RX && !defined(PIN_RFM_NIRQ)
+#if defined(ENABLE_CONTINUOUS_RX) && !defined(PIN_RFM_NIRQ)
 #define MUST_POLL_FREQUENTLY true
 #else
 #define MUST_POLL_FREQUENTLY false
@@ -367,7 +367,7 @@ void loopAlt()
 
   switch(TIME_LSD)
     {
-#ifdef ALLOW_STATS_TX
+#ifdef ENABLE_STATS_TX
     // Regular transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
     case 10:
       {
@@ -383,7 +383,7 @@ void loopAlt()
           // Ie, if doesn't have a local TRV then it must send binary some of the time.
           // Any recently-changed stats value is a hint that a strong transmission might be a good idea.
           const bool doBinary = false; // !localFHT8VTRVEnabled() && OTV0P2BASE::randRNG8NextBoolean();
-          bareStatsTX(false, false, false);
+          bareStatsTX(false, false, false, false);
           }
       break;
       }

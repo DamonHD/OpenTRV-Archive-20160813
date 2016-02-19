@@ -47,7 +47,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // Force definitions for peripherals that should be present on every V0.09 board
 // (though may be ignored or not added to the board)
 // to enable safe I/O setup and (eg) avoid bus conflicts.
-//#define USE_MODULE_RFM22RADIOSIMPLE // Always fitted on V0.2 board.
 
 
 // Note 'standard' allocations of (ATmega328P-PU) pins, to be nominally Arduino compatible,
@@ -104,7 +103,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 
 // Digital output for radiator node to call for heat by wire and/or for boiler node to activate boiler.
 // NOT AVAILABLE FOR REV9 (used to drive secondary/green LED).
-#if (V0p2_REV != 9)
+#if (V0p2_REV != 9) || (V0p2_REV != 14)
 #define OUT_HEATCALL 6  // ATMega328P-PU PDIP pin 12, PD6, no usable analogue input.
 #define OUT_GPIO_1 OUT_HEATCALL // Alias for GPIO pin.
 #endif
@@ -112,24 +111,34 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // UI main 'mode' button (active/pulled low by button, pref using weak internal pull-up), digital in.
 // Should always be available where a local TRV is being controlled.
 // NOT AVAILABLE FOR REV10 (used for GSM module TX pin).
-#if (V0p2_REV == 10)	// FIXME might be better to define pins by peripheral
-#define SIM900_TX_PIN 5
+#if (V0p2_REV == 10) || (V0p2_REV == 14)	// FIXME might be better to define pins by peripheral
+#define SOFTSERIAL_RX_PIN 8
+#define SOFTSERIAL_TX_PIN 5
+#define RADIO_POWER_PIN   A2
+#define REGULATOR_POWERUP A3
 #else
 #define BUTTON_MODE_L 5 // ATMega328P-PU PDIP pin 11, PD5, PCINT21, no analogue input.
 #endif
 
-#ifdef LEARN_BUTTON_AVAILABLE
+#ifdef ENABLE_LEARN_BUTTON
 // OPTIONAL UI 'learn' button  (active/pulled low by button, pref using weak internal pull-up), digital in.
 #define BUTTON_LEARN_L 8 // ATMega328P-PU PDIP pin 14, PB0, PCINT0, no analogue input.
 #ifndef ENABLE_VOICE_SENSOR // From REV2 onwards.
 // OPTIONAL SECOND UI 'learn' button  (active/pulled low by button, pref using weak internal pull-up), digital in.
 #define BUTTON_LEARN2_L 3 // ATMega328P-PU PDIP pin 5, PD3, PCINT19, no analogue input.
-#else // ENABLE_OCCUPANCY_DETECTION_FROM_VOICE
-// Voice detect on falling edge.
-#define VOICE_NIRQ 3 // ATMega328P-PU PDIP pin 5, PD3, PCINT19, no analogue input.
-#endif // ENABLE_OCCUPANCY_DETECTION_FROM_VOICE
+#endif // ENABLE_VOICE_SENSOR
 #endif
 
+// Setup voice NIRQ line
+// TODO add check for if BUTTON_LEARN2_L also defined? 
+#ifdef ENABLE_VOICE_SENSOR
+#if (V0p2_REV == 10)
+// Voice detect on falling edge.
+#define VOICE_NIRQ 3 // ATMega328P-PU PDIP pin 5, PD3, PCINT19, no analogue input.
+#elif (V0p2_REV == 14)
+#define VOICE_NIRQ 6 //todo fill this bit in
+#endif // V0p2_REV
+#endif // ENABLE_VOICE_SENSOR
 
 // Pin to power-up I/O devices only intermittently enabled, when high, digital out.
 // Pref connected via 330R+ current limit and 100nF+ decoupling).
@@ -143,7 +152,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // Analogue input from pot.
 #define TEMP_POT_AIN (::OTV0P2BASE::V0p2_PIN_TEMP_POT_AIN) // AI1: ATMega328P-PU PDIP pin 24, PC1.
 // IF DEFINED: reverse the direction of temperature pot polarity.
+#if (V0p2_REV != 7) // For DORM1/REV7 natural direction for temp dial pot is correct.
 #define TEMP_POT_REVERSE
+#endif
 #endif
 
 // RFM23B nIRQ interrupt line; all boards *should* now have it incl REV0 as breadboard; REV0 *PCB* didn't.
@@ -223,7 +234,10 @@ inline void IOSetup()
 #ifdef LED_UI2_L
       case LED_UI2_L: { pinMode(LED_UI2_L, OUTPUT); digitalWrite(LED_UI2_L, HIGH); break; }
 #endif // LED_UI2_L
-
+#ifdef VOICE_NIRQ
+      // Weak pull-up for external activation by pull-down.
+      case VOICE_NIRQ: { pinMode(VOICE_NIRQ, INPUT); break; }
+#endif
 #ifdef PIN_RFM_NIRQ 
       // Set as input to avoid contention current.
       case PIN_RFM_NIRQ: { pinMode(PIN_RFM_NIRQ, INPUT); break; }
@@ -232,14 +246,16 @@ inline void IOSetup()
       // Set as input to avoid contention current or float.
       case PIN_RFM_NIRQ_DUMMY: { pinMode(PIN_RFM_NIRQ_DUMMY, INPUT_PULLUP); break; }
 #endif // PIN_RFM_NIRQ_DUMMY
-
       // Make button pins (and others) inputs with internal weak pull-ups
       // (saving an external resistor in each case if aggressively reducing BOM costs).
 #ifdef BUTTON_MODE_L
       case BUTTON_MODE_L: // Mode button is (usually!) mandatory, at least where a local TRV is being controlled.
 #endif
-#ifdef SIM900_TX_PIN
-      case SIM900_TX_PIN: // When driving SIM900 this pin has external pull-up so should start high.
+#ifdef SOFTSERIAL_TX_PIN
+      case SOFTSERIAL_TX_PIN: // When driving SIM900 this pin has external pull-up so should start high.
+#endif
+#ifdef SOFTSERIAL_RX_PIN
+      case SOFTSERIAL_RX_PIN: // When driving SIM900 this pin has external pull-up so should start high.
 #endif
 #ifdef BUTTON_LEARN_L
       case BUTTON_LEARN_L: // Learn button is optional.
@@ -258,10 +274,6 @@ inline void IOSetup()
 #ifdef PIN_OW_DQ_DATA
       // Weak pull-up to avoid leakage current.
       case PIN_OW_DQ_DATA:
-#endif
-#ifdef VOICE_NIRQ 
-      // Weak pull-up for external activation by pull-down.
-      case VOICE_NIRQ:
 #endif
 #ifdef PIN_SERIAL_RX
       // Weak TX and RX pull-up empirically found to produce lowest leakage current
