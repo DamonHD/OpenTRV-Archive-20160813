@@ -103,7 +103,7 @@ void loopOpenTRV();
 // Prolonged inactivity time deemed to indicate room(s) really unoccupied to trigger full setback (minutes, strictly positive).
 #define SETBACK_FULL_M min(60, max(30, OTV0P2BASE::PseudoSensorOccupancyTracker::OCCUPATION_TIMEOUT_M))
 
-//#ifdef ENABLE_LEARN_BUTTON
+
 // Period in minutes for simple learned on-time; strictly positive (and less than 256).
 #ifndef LEARNED_ON_PERIOD_M
 #define LEARNED_ON_PERIOD_M 60
@@ -114,7 +114,6 @@ void loopOpenTRV();
 #ifndef LEARNED_ON_PERIOD_COMFORT_M
 #define LEARNED_ON_PERIOD_COMFORT_M (min(2*(LEARNED_ON_PERIOD_M),255))
 #endif
-//#endif // ENABLE_LEARN_BUTTON
 
 
 // Forcing the warm mode to the specified state immediately.
@@ -123,11 +122,9 @@ void loopOpenTRV();
 // Should be only be called once 'debounced' if coming from a button press for example.
 // Is safe to call repeatedly from test routines, eg does not cause EEPROM wear.
 void setWarmModeDebounced(const bool warm);
-
 // If true then the unit is in 'warm' (heating) mode, else 'frost' protection mode.
 // This is a 'debounced' value to reduce accidental triggering.
 bool inWarmMode();
-
 // Force to BAKE mode.
 // Should ideally be only be called once 'debounced' if coming from a button press for example.
 // Is safe to call repeatedly from test routines, eg does not cause EEPROM wear.
@@ -246,6 +243,11 @@ class SimpleValveSchedule : public OTV0P2BASE::SimpleValveScheduleBase
             const uint8_t wt = getWARMTargetC();
             if(isEcoTemperature(wt)) { return(LEARNED_ON_PERIOD_M); }
             else if(isComfortTemperature(wt)) { return(LEARNED_ON_PERIOD_COMFORT_M); }
+#if defined(ENABLE_OCCUPANCY_SUPPORT)
+            // If vacant for a long time (>1d) and not at maximum comfort end of scale
+            // then truncate the on period to the minimum to attempt to save energy.
+            else if(Occupancy.longVacant()) { return(LEARNED_ON_PERIOD_M); }
+#endif
             else { return((LEARNED_ON_PERIOD_M + LEARNED_ON_PERIOD_COMFORT_M) / 2); }
 #endif // LEARNED_ON_PERIOD_M == LEARNED_ON_PERIOD_COMFORT_M
             }

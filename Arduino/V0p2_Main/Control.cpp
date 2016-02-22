@@ -857,32 +857,32 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 
 
 
-// Call this to do an I/O poll if needed; returns true if something useful happened.
+// Call this to do an I/O poll if needed; returns true if something useful definitely happened.
 // This call should typically take << 1ms at 1MHz CPU.
 // Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or sleep.
 // Should also do nothing that interacts with Serial.
 // Limits actual poll rate to something like once every 8ms, unless force is true.
 //   * force if true then force full poll on every call (ie do not internally rate-limit)
+// Note that radio poll() can be for TX as well as RX activity.
 // Not thread-safe, eg not to be called from within an ISR.
 bool pollIO(const bool force)
   {
 #ifdef ENABLE_RADIO_PRIMARY_MODULE
-//  if(inHubMode())
-//    {
-    static volatile uint8_t _pO_lastPoll;
-    // Poll RX at most about every ~8ms.
-    const uint8_t sct = OTV0P2BASE::getSubCycleTime();
-    if(force || (sct != _pO_lastPoll))
-      {
-      _pO_lastPoll = sct;
-      // Poll for inbound frames.
-      // The will generally be little time to do this before getting an overrun or dropped frame.
-      PrimaryRadio.poll();
-#ifdef ENABLE_RADIO_SECONDARY_MODULE
-      SecondaryRadio.poll();
-#endif
-      }
-//    }
+  static volatile uint8_t _pO_lastPoll;
+  // Poll RX at most about every ~8ms.
+  const uint8_t sct = OTV0P2BASE::getSubCycleTime();
+  if(force || (sct != _pO_lastPoll))
+    {
+    _pO_lastPoll = sct;
+    // Poll for inbound frames.
+    // If RX is not interrupt-driven then
+    // there will usually be little time to do this
+    // before getting an RX overrun or dropped frame.
+    PrimaryRadio.poll();
+  #ifdef ENABLE_RADIO_SECONDARY_MODULE
+    SecondaryRadio.poll();
+  #endif
+    }
 #endif
   return(false);
   }
@@ -1859,7 +1859,6 @@ void loopOpenTRV()
     if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
 #endif
 
-
 // If missing h/w interrupts for anything that needs rapid response
 // then AVOID the lowest-power long sleep.
 #if defined(ENABLE_CONTINUOUS_RX) && !defined(PIN_RFM_NIRQ)
@@ -2047,19 +2046,15 @@ void loopOpenTRV()
         {
         // Sleep randomly up to 25% of the minor cycle
         // to spread transmissions and thus help avoid collisions.
+        // (Longer than 25%/0.5s could interfere with other ops such as FHT8V TXes.)
         const uint8_t stopBy = 1 + (((OTV0P2BASE::GSCT_MAX >> 2) | 7) & OTV0P2BASE::randRNG8());
         while(OTV0P2BASE::getSubCycleTime() <= stopBy)
           {
+          // Soak up any pending I/O while waiting.
+          if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
           // Sleep a little.
           OTV0P2BASE::nap(WDTO_15MS, true);
-          // Deal with any pending I/O.
-          pollIO(); 
-          handleQueuedMessages(&Serial, true, &PrimaryRadio);
           }
-//        pollIO(); // Deal with any pending I/O.
-//        // Sleep randomly up to 128ms to spread transmissions and thus help avoid collisions.
-//        OTV0P2BASE::sleepLowPowerLessThanMs(1 + (OTV0P2BASE::randRNG8() & 0x7f));
-//        handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
         // Send it!
         // Try for double TX for extra robustness unless:
         //   * this is a speculative 'extra' TX

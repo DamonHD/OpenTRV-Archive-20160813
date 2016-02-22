@@ -348,7 +348,7 @@ if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX bad secure header"); }
     // Look up the full node ID of the sender in the associations table,
     // and if successful then attempt to decode the message.
     const int8_t index = OTV0P2BASE::getNextMatchingNodeID(0, sfh.id, sfh.getIl(), senderNodeID);
-#if 0 && defined(DEBUG)
+#if 1 && defined(DEBUG)
     if(index < 0) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX no assoc"); }
 #endif
     isOK = (index >= 0) &&
@@ -694,24 +694,35 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Stats IDx");
 // This will write any output to the supplied Print object,
 // typically the Serial output (which must be running if so).
 // This will attempt to process messages in such a way
-// as to avoid internal overflows or other resource exhaustion.
+// as to avoid internal overflows or other resource exhaustion,
+// which may mean deferring work at certain times
+// such as the end of minor cycle.
 // The Print object pointer must not be NULL.
 bool handleQueuedMessages(Print *p, bool wakeSerialIfNeeded, OTRadioLink::OTRadioLink *rl)
   {
-  bool workDone = false;
-  bool neededWaking = false; // Set true once this routine wakes Serial.
+  // Avoid starting any potentially-slow processing very late in the minor cycle.
+  // This is to reduce the risk of loop overruns
+  // at the risk of delaying some processing
+  // or even dropping some incoming messages if queues fill up.
+  // Decoding (and printing to serial) a secure 'O' frame takes ~60 ticks (~0.47s).
+  // Allow for up to 0.5s of such processing worst-case,
+  // ie don't start processing anything later that 0.5s before the minor cycle end.
+  const uint8_t sctStart = OTV0P2BASE::getSubCycleTime();
+  if(sctStart >= ((OTV0P2BASE::GSCT_MAX/4)*3)) { return(false); }
 
   // Deal with any I/O that is queued.
-  pollIO(true);
+  bool workDone = pollIO(true);
 
   // Check for activity on the radio link.
   rl->poll();
+
+  bool neededWaking = false; // Set true once this routine wakes Serial.
   const volatile uint8_t *pb;
   if(NULL != (pb = rl->peekRXMsg()))
     {
     if(!neededWaking && wakeSerialIfNeeded && OTV0P2BASE::powerUpSerialIfDisabled<V0P2_UART_BAUD>()) { neededWaking = true; } // FIXME
     // Don't currently regard anything arriving over the air as 'secure'.
-    // FIXME: cast away volatile to process the message content.
+    // FIXME: shouldn't have to cast away volatile to process the message content.
     decodeAndHandleRawRXedMessage(p, false, (const uint8_t *)pb);
     rl->removeRXMsg();
     // Note that some work has been done.
@@ -720,6 +731,17 @@ bool handleQueuedMessages(Print *p, bool wakeSerialIfNeeded, OTRadioLink::OTRadi
 
   // Turn off serial at end, if this routine woke it.
   if(neededWaking) { OTV0P2BASE::flushSerialProductive(); OTV0P2BASE::powerDownSerial(); }
+
+#if 0 && defined(DEBUG)
+  const uint8_t sctEnd = OTV0P2BASE::getSubCycleTime();
+  const uint8_t ticks = sctEnd - sctStart;
+  if(ticks > 1)
+    {
+    OTV0P2BASE::serialPrintAndFlush(ticks);
+    OTV0P2BASE::serialPrintlnAndFlush();
+    }
+#endif
+
   return(workDone);
   }
 #endif // ENABLE_RADIO_RX
