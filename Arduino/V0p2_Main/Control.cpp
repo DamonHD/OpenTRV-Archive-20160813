@@ -1234,10 +1234,15 @@ static void wireComponentsTogether()
   // Typically at most one call would be made on any appropriate pot adjustment.
   TempPot.setWFBCallbacks(setWarmModeFromManualUI, setBakeModeFromManualUI);
 #endif // TEMP_POT_AVAILABLE
+
 #if V0p2_REV == 14
   pinMode(REGULATOR_POWERUP, OUTPUT);
+#ifdef ENABLE_VOICE_SENSOR
   fastDigitalWrite(REGULATOR_POWERUP, HIGH);
-#endif
+#else
+  fastDigitalWrite(REGULATOR_POWERUP, LOW);
+#endif // ENABLE_VOICE_SENSOR
+#endif // V0p2_REV == 14
   }
 
 
@@ -2175,7 +2180,7 @@ void loopOpenTRV()
         // Only continue if temperature appears not to be falling compared to previous hour (TODO-696).
         // No previous temperature will show as a very large number so should fail safe.
         // Note use of compress/expand to try to get round companding granularity issues.
-        if(expandTempC16(compressTempC16(TemperatureC16.get())) >= expandTempC16(OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR, OTV0P2BASE::getPrevHourLT())))
+        if(OTV0P2BASE::expandTempC16(OTV0P2BASE::compressTempC16(TemperatureC16.get())) >= OTV0P2BASE::expandTempC16(OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR, OTV0P2BASE::getPrevHourLT())))
           {
           const uint8_t lastRH = OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR, OTV0P2BASE::getPrevHourLT());
           if((OTV0P2BASE::STATS_UNSET_BYTE != lastRH) &&
