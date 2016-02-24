@@ -857,32 +857,32 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 
 
 
-// Call this to do an I/O poll if needed; returns true if something useful happened.
+// Call this to do an I/O poll if needed; returns true if something useful definitely happened.
 // This call should typically take << 1ms at 1MHz CPU.
 // Does not change CPU clock speeds, mess with interrupts (other than possible brief blocking), or sleep.
 // Should also do nothing that interacts with Serial.
 // Limits actual poll rate to something like once every 8ms, unless force is true.
 //   * force if true then force full poll on every call (ie do not internally rate-limit)
+// Note that radio poll() can be for TX as well as RX activity.
 // Not thread-safe, eg not to be called from within an ISR.
 bool pollIO(const bool force)
   {
 #ifdef ENABLE_RADIO_PRIMARY_MODULE
-//  if(inHubMode())
-//    {
-    static volatile uint8_t _pO_lastPoll;
-    // Poll RX at most about every ~8ms.
-    const uint8_t sct = OTV0P2BASE::getSubCycleTime();
-    if(force || (sct != _pO_lastPoll))
-      {
-      _pO_lastPoll = sct;
-      // Poll for inbound frames.
-      // The will generally be little time to do this before getting an overrun or dropped frame.
-      PrimaryRadio.poll();
-#ifdef ENABLE_RADIO_SECONDARY_MODULE
-      SecondaryRadio.poll();
-#endif
-      }
-//    }
+  static volatile uint8_t _pO_lastPoll;
+  // Poll RX at most about every ~8ms.
+  const uint8_t sct = OTV0P2BASE::getSubCycleTime();
+  if(force || (sct != _pO_lastPoll))
+    {
+    _pO_lastPoll = sct;
+    // Poll for inbound frames.
+    // If RX is not interrupt-driven then
+    // there will usually be little time to do this
+    // before getting an RX overrun or dropped frame.
+    PrimaryRadio.poll();
+  #ifdef ENABLE_RADIO_SECONDARY_MODULE
+    SecondaryRadio.poll();
+  #endif
+    }
 #endif
   return(false);
   }
@@ -1234,10 +1234,15 @@ static void wireComponentsTogether()
   // Typically at most one call would be made on any appropriate pot adjustment.
   TempPot.setWFBCallbacks(setWarmModeFromManualUI, setBakeModeFromManualUI);
 #endif // TEMP_POT_AVAILABLE
+
 #if V0p2_REV == 14
   pinMode(REGULATOR_POWERUP, OUTPUT);
+#ifdef ENABLE_VOICE_SENSOR
   fastDigitalWrite(REGULATOR_POWERUP, HIGH);
-#endif
+#else
+  fastDigitalWrite(REGULATOR_POWERUP, LOW);
+#endif // ENABLE_VOICE_SENSOR
+#endif // V0p2_REV == 14
   }
 
 
@@ -2175,7 +2180,7 @@ void loopOpenTRV()
         // Only continue if temperature appears not to be falling compared to previous hour (TODO-696).
         // No previous temperature will show as a very large number so should fail safe.
         // Note use of compress/expand to try to get round companding granularity issues.
-        if(expandTempC16(compressTempC16(TemperatureC16.get())) >= expandTempC16(OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR, OTV0P2BASE::getPrevHourLT())))
+        if(OTV0P2BASE::expandTempC16(OTV0P2BASE::compressTempC16(TemperatureC16.get())) >= OTV0P2BASE::expandTempC16(OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_TEMP_BY_HOUR, OTV0P2BASE::getPrevHourLT())))
           {
           const uint8_t lastRH = OTV0P2BASE::getByHourStat(V0P2BASE_EE_STATS_SET_RHPC_BY_HOUR, OTV0P2BASE::getPrevHourLT());
           if((OTV0P2BASE::STATS_UNSET_BYTE != lastRH) &&

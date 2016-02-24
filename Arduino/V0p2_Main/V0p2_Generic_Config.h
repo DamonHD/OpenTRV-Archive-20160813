@@ -74,9 +74,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 //#define CONFIG_Trial2013Winter_Round2_CC1HUB // REV2 cut4 as CC1 hub.
 //#define CONFIG_Trial2013Winter_Round2_BHR // REV2 cut4: boiler hub and stats relay.
 //#define CONFIG_Trial2013Winter_Round2_SECURE_NOHUB // REV2 cut4 leaf (valve/sensor) 2015/12 secure protocol.
-#define CONFIG_Trial2013Winter_Round2_SECURE_HUB // REV2 cut4 hub (boiler/stats) 2015/12 secure protocol.
+//#define CONFIG_Trial2013Winter_Round2_SECURE_HUB // REV2 cut4 hub (boiler/stats) 2015/12 secure protocol.
 //#define CONFIG_DHD_TESTLAB_REV4 // REV4 cut2.
-//#define CONFIG_DHD_TESTLAB_REV4_NOHUB // REV4 cut2, no hub.
+#define CONFIG_DHD_TESTLAB_REV4_NOHUB // REV4 cut2, no hub.
 //#define CONFIG_BH_DHW // Bo's hot water.
 //#define CONFIG_BH_TESTLAB // Bo's test environment.
 //#define CONFIG_DORM1_SANS32K // REV7 / DORM1 without working 32768Hz clock.
@@ -93,6 +93,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // TODO //#define CONFIG_REV10_SECURE_BOILERHUB_GSM_SECURE // REV10 PCB boiler hub, relay to GSM, 2015/12 secure protocol.
 //#define CONFIG_REV11_RFM23BTEST // Basic test to see if stats send
 //#define CONFIG_REV14_PROTO  // Prototype REV14 w/ LoRa, TMP, SHT and QM-1
+//#define CONFIG_REV14 // REV14 w/ light sensor, SHT21 and voice sensor Measured current consumption (no QM-1 or mobdet): 100-200 uA when serial shut and not attempting Tx
 //#define CONFIG_BAREBONES // No peripherals / on breadboard.
 
 
@@ -556,28 +557,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #endif
 
 // ------------------------- REV4
-
-#ifdef CONFIG_DHD_TESTLAB_REV4_NOHUB // REV4 board but no listening...
-#define CONFIG_DHD_TESTLAB_REV4
-// IF DEFINED: this unit can act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
-#undef ENABLE_BOILER_HUB
-// IF DEFINED: allow RX of stats frames.
-#undef ENABLE_STATS_RX
-#endif
-
-#ifdef CONFIG_DHD_TESTLAB_REV4 // DHD's test lab with TRV on REV4 (cut2) board.
-// Revision of V0.2 board.
-#define V0p2_REV 4 // REV0 covers DHD's breadboard and first V0.2 PCB.
-// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).
-#define ENABLE_PRIMARY_TEMP_SENSOR_SHT21
-// Using RoHS-compliant phototransistor in place of LDR.
-#define ENABLE_AMBIENT_LIGHT_SENSOR_PHOTOTRANS_TEPT4400
-// Anticipation logic not yet ready for prime-time.
-//#define ENABLE_ANTICIPATION
-// IF UNDEFINED: this unit cannot act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.
-//#undef ENABLE_BOILER_HUB
-#endif
-
+// All-in-one valve unit.
+#include <OTV0p2_CONFIG_REV4.h>
 
 
 // ------------------------- REV8
@@ -735,68 +716,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #endif
 
 // -------------------------
-
-#ifdef CONFIG_REV14_PROTO // Prototype REV14 w/ LoRa, TMP, SHT and QM-1
-
-#define V0p2_REV 14
-// IF DEFINED: basic FROST/WARM temperatures are settable.
-#undef ENABLE_SETTABLE_TARGET_TEMPERATURES
-// IF DEFINED: use active-low LEARN button(s).  Needs ENABLE_SINGLETON_SCHEDULE.  ***
-#undef ENABLE_LEARN_BUTTON // OPTIONAL ON V0.09 PCB1 
-// IF DEFINED: this unit will act as a thermostat controlling a local TRV (and calling for heat from the boiler), else is a sensor/hub unit.
-#undef ENABLE_LOCAL_TRV
-// IF DEFINED: this unit controls a valve, but provides slave valve control only.
-#undef ENABLE_SLAVE_TRV
-// IF DEFINED: this unit *can* act as boiler-control hub listening to remote thermostats, possibly in addition to controlling a local TRV.  ***
-#undef ENABLE_BOILER_HUB
-// IF DEFINED: allow RX of stats frames.
-#undef ENABLE_STATS_RX
-// IF DEFINED: (default) forced always-on radio listen/RX, eg not requiring setup to explicitly enable. ***
-#undef ENABLE_DEFAULT_ALWAYS_RX
-// IF DEFINED: allow TX of stats frames.
-#define ENABLE_STATS_TX
-// IF DEFINED: allow minimal binary format in addition to more generic one: ~400 bytes code cost.
-#undef ENABLE_MINIMAL_STATS_TXRX
-// IF DEFINED: allow binary stats to be TXed.
-#undef ENABLE_BINARY_STATS_TX
-// IF DEFINED: enable support for FS20 carrier for RX of raw FS20 and piggybacked binary (non-JSON) stats.
-#undef ENABLE_FS20_NATIVE_AND_BINARY_STATS_RX
-// IF DEFINED: this unit supports CLI over the USB/serial connection, eg for run-time reconfig.
-#define ENABLE_CLI
-// IF DEFINED: enable a full OpenTRV CLI.
-#define ENABLE_FULL_OT_CLI
-// IF DEFINED: enable a full OpenTRV UI with normal LEDs etc. ***
-#undef ENABLE_FULL_OT_UI
-// IF DEFINED: enable and extended CLI with a longer input buffer for example.
-#undef ENABLE_EXTENDED_CLI
-// IF DEFINED: minimise boot effort and energy eg for intermittently-powered energy-harvesting applications.  ***
-#undef ENABLE_MIN_ENERGY_BOOT
-// IF DEFINED: enable use of on-board SHT21 RH and temp sensor (in lieu of TMP112).   ***
-#undef ENABLE_PRIMARY_TEMP_SENSOR_SHT21
-//#define ENABLE_PRIMARY_TEMP_SENSOR_SHT21
-// IF DEFINED: enable use AVR's 'idle' mode to stop the CPU but leave I/O (eg Serial) running to save power.
-// DHD20150920: CURRENTLY NOT RECOMMENDED AS STILL SEEMS TO CAUSE SOME BOARDS TO CRASH.
-#define ENABLE_USE_OF_AVR_IDLE_MODE
-
-// IF DEFINED: enable a 'null' radio module; without this unit is stand-alone.
-#define ENABLE_RADIO_NULL
-
-// Secondary radio
-#undef ENABLE_RADIO_RFM23B
-#undef ENABLE_RADIO_PRIMARY_RFM23B
-
-// IF DEFINED: enable a secondary (typically WAN-relay) radio module.
-#define ENABLE_RADIO_SECONDARY_MODULE
-#define ENABLE_RADIO_RN2483   // Enable RN2483
-//#define RADIO_PRIMARY_RN2483 // Must be secondary to avoid sending preamble etc
-#define RADIO_SECONDARY_RN2483
-
-// Define voice module
-#define ENABLE_VOICE_SENSOR
-#define ENABLE_OCCUPANCY_DETECTION_FROM_VOICE
-#define ENABLE_VOICE_STATS
-
-#endif // CONFIG_REV14_PROTO
+// REV14 w/ LoRa, TMP, SHT and QM-1.
+#include <OTV0p2_CONFIG_REV14.h>
 
 //___________________________________
 
