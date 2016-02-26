@@ -14,7 +14,7 @@ specific language governing permissions and limitations
 under the Licence.
 
 Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
-                           Deniz Erbilgin 2015--2016
+                           Deniz Erbilgin 2015
 */
 
 /*
@@ -33,9 +33,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #ifdef ALLOW_CC1_SUPPORT
 #include <OTProtocolCC.h>
 #endif
-#if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT) || defined(ENABLE_SECURE_RADIO_BEACON)
-#include <OTAESGCM.h>
-#endif
 
 #include <util/crc16.h>
 #include <avr/eeprom.h>
@@ -50,6 +47,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include <SPI.h>
 #include <Wire.h>
 #include <OTRadioLink.h>
+//#include <OTNullRadioLink.h> // as in separate library to OTRadioLink
 #include <OTSIM900Link.h>
 #include <OTRN2483Link.h>
 #include <OTRadValve.h>
@@ -65,13 +63,9 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 // Tries not to use lots of energy so as to keep distress beacon running for a while.
 void panic()
   {
-#ifdef ENABLE_RADIO_PRIMARY_MODULE
+#ifdef USE_MODULE_RFM22RADIOSIMPLE
   // Reset radio and go into low-power mode.
   PrimaryRadio.panicShutdown();
-#endif
-#ifdef ENABLE_RADIO_SECONDARY_MODULE
-  // Reset radio and go into low-power mode.
-  SecondaryRadio.panicShutdown();
 #endif
   // Power down almost everything else...
   OTV0P2BASE::minimisePowerWithoutSleep();
@@ -158,59 +152,40 @@ static const char _YYYYMmmDD[] =
   '\0'
   };
 // Version (code/board) information printed as one line to serial (with line-end, and flushed); machine- and human- parseable.
-// Format: "board VXXXX REVY; YYYY/Mmm/DD HH:MM:SS".
+// Format: "board VXXXX REVY; code YYYY/Mmm/DD HH:MM:SS".
 void serialPrintlnBuildVersion()
   {
   OTV0P2BASE::serialPrintAndFlush(F("board V0.2 REV"));
   OTV0P2BASE::serialPrintAndFlush(V0p2_REV);
   OTV0P2BASE::serialPrintAndFlush(F(" "));
   OTV0P2BASE::serialPrintAndFlush(_YYYYMmmDD);
-  OTV0P2BASE::serialPrintlnAndFlush(F(" " __TIME__));
+  OTV0P2BASE::serialPrintAndFlush(F(" " __TIME__));
+  OTV0P2BASE::serialPrintlnAndFlush();
   }
 
-
-// Pick an appropriate radio config for RFM23 (if it is the primary radio).
-#ifdef ENABLE_RADIO_PRIMARY_RFM23B
-// OTRadioChannelConfig(const void *_config, bool _isFull, bool _isRX, bool _isTX, bool _isAuth = false, bool _isEnc = false, bool _isUnframed = false)
-#if defined(ALLOW_CC1_SUPPORT)
-// COHEAT: REV2/REV9 talking on fast GFSK channel 0, REV9 TX to FHT8V on slow OOK.
-#define RADIO_CONFIG_NAME "COHEAT DUAL CHANNEL"
+#ifdef ALLOW_CC1_SUPPORT
 static const uint8_t nPrimaryRadioChannels = 2;
-static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChannels] =
+static const OTRadioLink::OTRadioChannelConfig RFMConfigs[nPrimaryRadioChannels] =
   {
-  // GFSK channel 0 full config, RX/TX, not in itself secure.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsGFSK57600, true),
-  // FS20/FHT8V compatible channel 1 full config, used for TX only, not secure, unframed.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsOOK5000, true, false, true, false, false, true),
+  // GFSK channel 0.
+  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::OTRFM23BLinkBase::StandardRegSettingsGFSK, true, true, true),
+  // FS20/FHT8V compatible channel 1.
+  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::OTRFM23BLinkBase::StandardRegSettingsOOK, true, true, true),
   };
-#elif defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
-#define RADIO_CONFIG_NAME "GFSK"
-// Nodes talking on fast GFSK channel 0.
+#else
 static const uint8_t nPrimaryRadioChannels = 1;
-static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChannels] =
+static const OTRadioLink::OTRadioChannelConfig RFMConfigs[nPrimaryRadioChannels] =
   {
-  // GFSK channel 0 full config, RX/TX, not in itself secure.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsGFSK57600, true),
-  };
-#else // !defined(ALLOW_CC1_SUPPORT) && !defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
-#define RADIO_CONFIG_NAME "OOK"
-// Nodes talking (including to to FHT8V) on slow OOK.
-static const uint8_t nPrimaryRadioChannels = 1;
-static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChannels] =
-  {
-  // FS20/FHT8V compatible channel 0 partial/minimal single-channel register config; RX/TX, not secure, unframed.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::FHT8V_RFM23_Reg_Values, false, true, true, false, false, true)
+  // FS20/FHT8V compatible channel 0.
+  OTRadioLink::OTRadioChannelConfig(OTRadValve::FHT8VRadValveBase::FHT8V_RFM23_Reg_Values, true, true, true)
   };
 #endif
-#endif // ENABLE_RADIO_PRIMARY_RFM23B
 
-
-#ifdef ENABLE_RADIO_SECONDARY_SIM900
-static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true);
+#ifdef RADIO_SECONDARY_SIM900
+static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true, true, true);
 #else
-static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true);
-#endif // ENABLE_RADIO_SECONDARY_SIM900
-
+static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true, true, true);
+#endif // RADIO_SECONDARY_SIM900
 
 #if defined(ALLOW_CC1_SUPPORT_RELAY)
 // For a CC1 relay, ignore everything except FTp2_CC1PollAndCmd messages.
@@ -231,7 +206,7 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
   buflen = 8; // Truncate message to correct size for efficiency.
   return(true); // Accept message.
   }
-#elif defined(ENABLE_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+#elif defined(ALLOW_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
 // If using FS20-based non-secured messaging...
 // If a stats hub then be prepared to accept a wide variety of binary and JSON message types.
 // It may yet be good to trim the smaller message types down to size in particular to help queueing.
@@ -290,42 +265,33 @@ void optionalPOST()
 //  posPOST(1, F("about to test radio module"));
 
 // FIXME  This section needs refactoring
-#ifdef ENABLE_RADIO_PRIMARY_RFM23B
+#ifdef USE_MODULE_RFM22RADIOSIMPLE
 // TODO-547: why does nested SPI enable break things?
 //  const bool neededToWakeSPI = OTV0P2BASE::powerUpSPIIfDisabled();
 //  DEBUG_SERIAL_PRINT(neededToWakeSPI);
 //  DEBUG_SERIAL_PRINTLN();
+#if !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("(Using RFM22.)");
+#endif // !defined(RFM22_IS_ACTUALLY_RFM23) && defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
+
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   PrimaryRadio.preinit(NULL);
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
-  // Print out some info on the radio config.
-  DEBUG_SERIAL_PRINT_FLASHSTRING("R1 #chan=");
-  DEBUG_SERIAL_PRINT(nPrimaryRadioChannels);
-  #if defined(ENABLE_CONTINUOUS_RX)
-  DEBUG_SERIAL_PRINT_FLASHSTRING(" contRX"); // Show that continuous RX is enabled (eg battery draining for non-hub nodes).
-  #endif
-  DEBUG_SERIAL_PRINT_FLASHSTRING(" name=");
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING(RADIO_CONFIG_NAME);
-#endif
   // Check that the radio is correctly connected; panic if not...
-  if(!PrimaryRadio.configure(nPrimaryRadioChannels, RFM23BConfigs) || !PrimaryRadio.begin()) { panic(F("r1")); }
+  if(!PrimaryRadio.configure(nPrimaryRadioChannels, RFMConfigs) || !PrimaryRadio.begin()) { panic(F("r1")); }
   // Apply filtering, if any, while we're having fun...
 #ifndef NO_RX_FILTER
   PrimaryRadio.setFilterRXISR(FilterRXISR);
 #endif // NO_RX_FILTER
-#endif // ENABLE_RADIO_PRIMARY_RFM23B
+#endif // USE_MODULE_RFM22RADIOSIMPLE
 
 #ifdef ENABLE_RADIO_SECONDARY_MODULE
 #ifdef ENABLE_RADIO_SIM900
-  // Turn power on for SIM900 with PFET for secondary power control.
-  fastDigitalWrite(A3, 0);
-  pinMode(A3, OUTPUT);
+// Turn power on for SIM900 with PFET for secondary power control.
+fastDigitalWrite(A3, 0);
+pinMode(A3, OUTPUT);
 #endif // ENABLE_RADIO_SIM900
-  // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
+// Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   SecondaryRadio.preinit(NULL);
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING("R2");
-#endif
   // Check that the radio is correctly connected; panic if not...
   if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
   // Assume no RX nor filtering on secondary radio.
@@ -354,12 +320,12 @@ void optionalPOST()
 #endif
 #endif // select user-facing boards.
 
-#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
+#if defined(WAKEUP_32768HZ_XTAL)
   // Check that the 32768Hz async clock is actually running having done significant CPU-intensive work.
   const uint8_t laterSCT = OTV0P2BASE::getSubCycleTime();
   if(laterSCT == earlySCT)
     {
-#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
+#if defined(WAKEUP_32768HZ_XTAL)
     // Allow extra time for 32768Hz crystal to start reliably, see: http://www.atmel.com/Images/doc1259.pdf
 #if 0 && defined(DEBUG)
     DEBUG_SERIAL_PRINTLN_FLASHSTRING("Sleeping to let 32768Hz clock start...");
@@ -416,20 +382,19 @@ void optionalPOST()
       OTV0P2BASE::seedRNG8(count, i, TCNT2);
     }
     // optionally print value to debug
-#if 0 && defined(DEBUG)
+#if 1 && defined(DEBUG)
     DEBUG_SERIAL_PRINT_FLASHSTRING("Xtal freq check: ");
     DEBUG_SERIAL_PRINT(count);
     DEBUG_SERIAL_PRINTLN();
 #endif
   }
 #endif // Probationary Xtal sanity check
-
 #else
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(No xtal.)");
 #endif
 
   // Single POST checkpoint for speed.
-//#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
+//#if defined(WAKEUP_32768HZ_XTAL)
   posPOST(0 /* , F("POST OK") */ );
 //#else
 //  posPOST(0, F("Radio, buttons OK"));
@@ -444,24 +409,24 @@ void setup()
   // Set appropriate low-power states, interrupts, etc, ASAP.
   OTV0P2BASE::powerSetup();
 
-#if defined(ENABLE_MIN_ENERGY_BOOT)
+#if defined(MIN_ENERGY_BOOT)
   nap(WDTO_120MS); // Sleep to let power supply recover a little.
 #endif
 
   // IO setup for safety, and to avoid pins floating.
   IOSetup();
 
-#if defined(ENABLE_MIN_ENERGY_BOOT)
+#if defined(MIN_ENERGY_BOOT)
   nap(WDTO_120MS); // Sleep to let power supply recover a little.
 #endif
 
-#if !defined(ENABLE_MIN_ENERGY_BOOT)
+#if !defined(MIN_ENERGY_BOOT)
   // Restore previous RTC state if available.
   OTV0P2BASE::restoreRTC();
   // TODO: consider code to calibrate the internal RC oscillator against the xtal, eg to keep serial comms happy, eg http://www.avrfreaks.net/index.php?name=PNphpBB2&file=printview&t=36237&start=0
 #endif
 
-#if !defined(ENABLE_MIN_ENERGY_BOOT)
+#if !defined(MIN_ENERGY_BOOT)
 #if defined(LED_UI2_EXISTS) && defined(ENABLE_UI_LED_2_IF_AVAILABLE)
   LED_UI2_ON();
 #endif
@@ -473,17 +438,17 @@ void setup()
 #endif
 #endif
 
-#if !defined(ENABLE_MIN_ENERGY_BOOT)
+#if !defined(MIN_ENERGY_BOOT)
   // Count resets to detect unexpected crashes/restarts.
   const uint8_t oldResetCount = eeprom_read_byte((uint8_t *)V0P2BASE_EE_START_RESET_COUNT);
   eeprom_write_byte((uint8_t *)V0P2BASE_EE_START_RESET_COUNT, 1 + oldResetCount);
 #endif
 
-#if defined(DEBUG) && !defined(ENABLE_MIN_ENERGY_BOOT)
+#if defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("DEBUG");
 #endif
 
-#if defined(DEBUG) && !defined(ENABLE_MIN_ENERGY_BOOT)
+#if defined(DEBUG) && !defined(MIN_ENERGY_BOOT)
   DEBUG_SERIAL_PRINT_FLASHSTRING("Resets: ");
   DEBUG_SERIAL_PRINT(oldResetCount);
   DEBUG_SERIAL_PRINTLN();
@@ -533,6 +498,8 @@ void setup()
   DEBUG_SERIAL_PRINT(light);
   DEBUG_SERIAL_PRINTLN();
 #endif
+//  // Assume 0 or full-scale values unlikely.
+//  if((0 == light) || (light >= 1023)) { panic(F("LDR fault")); }
   const int heat = TemperatureC16.read();
 #if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("T: ");
@@ -576,7 +543,7 @@ void setup()
   DEBUG_SERIAL_PRINTLN();
 #endif
 
-#if !defined(ENABLE_MIN_ENERGY_BOOT)
+#if !defined(MIN_ENERGY_BOOT)
   // Seed PRNG(s) with available environmental values and clock time/jitter for some entropy.
   // Also sweeps over SRAM and EEPROM (see RAMEND and E2END), especially for non-volatile state and uninitialised areas of SRAM.
   // TODO: add better PRNG with entropy pool (eg for crypto).
@@ -610,6 +577,7 @@ void setup()
 #endif
   // TODO: seed other/better PRNGs.
   // Feed in mainly persistent/nonvolatile state explicitly.
+  OTV0P2BASE::addEntropyToPool(oldResetCount ^ eeseed, 0);
   OTV0P2BASE::addEntropyToPool((uint8_t)(eeseed >> 8) + nar1, 0);
   OTV0P2BASE::addEntropyToPool((uint8_t)s16 ^ (uint8_t)(s16 >> 8), 0);
   for(uint8_t i = 0; i < V0P2BASE_EE_LEN_SEED; ++i)
@@ -677,7 +645,7 @@ void setup()
 //  pinMode(LED_HEATCALL, OUTPUT);
   LED_HEATCALL_OFF();
 
-#if defined(ENABLE_CLI) && !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS) && !defined(ENABLE_TRIMMED_MEMORY)
+#if defined(SUPPORT_CLI) && !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS) && !defined(ENABLE_TRIMMED_MEMORY)
   // Help user get to CLI.
   OTV0P2BASE::serialPrintlnAndFlush(F("At CLI > prompt enter ? for help"));
 #endif
