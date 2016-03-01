@@ -99,6 +99,7 @@ public class MqttPayload implements JSONAware {
                     final int pipePos = entryKey.indexOf('|');
                     final String sensorID;
                     final String sensorUnit;
+                    final String processedKey;
                     if(pipePos > 0) {
                         sensorID = entryKey.substring(0, pipePos);
                         sensorUnit = entryKey.substring(pipePos + 1);
@@ -114,6 +115,7 @@ public class MqttPayload implements JSONAware {
                         } catch(final NumberFormatException nfe) {
                             continue;
                         }
+                        processedKey = "sensorID" + "|C";
                     } else {
                         try {
                             value = Integer.parseInt(entryValue);
@@ -124,8 +126,9 @@ public class MqttPayload implements JSONAware {
                                 continue;
                             }
                         }
+                        processedKey = entryKey;
                     }
-                    data.put(entryKey, value);
+                    data.put(processedKey, value);
                 }
             }
         } else {
