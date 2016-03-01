@@ -160,14 +160,13 @@ public final class MqttPublishingHandler implements StatsHandler {
      * Example payload:
      * <pre>
      * {
-     *     "method":"dad_data",
-     *     "ver":"1.1",
-     *     "dad_id":"ED_25",
-     *     "data":[
-     *         {"id":"A45_T","period":"2014-08-23T10:25:12","value":21.75"},
-     *         {"id":"A45_L","period":"2014-08-23T10:25:12","value":35"},
-     *         {"id":"A45_O","period":"2014-08-23T10:25:12","value":1"}
-     *     ]
+     *     "ts": "2014-08-23T10:25:12Z",
+     *     "body": {
+     *          "T|C": 21.75,
+     *          "H|%": 87,
+     *          "L": 35,
+     *          "O", 1
+     *     }
      * }
      * </pre>
      */
