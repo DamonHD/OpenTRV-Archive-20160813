@@ -85,7 +85,7 @@ public class MqttPayload implements JSONAware {
     }
 
     /**
-     * Create a RKDAP payload given a JSON record.
+     * Create a MQTT payload given a JSON record.
      */
     public MqttPayload(final long constructionTime, final JSONObject record) {
         this.timestamp = constructionTime;
