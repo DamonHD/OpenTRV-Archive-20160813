@@ -443,9 +443,6 @@ void ModelledRadValve::recalibrate()
 // TODO: unit tests confirming that it is possible to reach all setback levels other than at highest comfort settings.
 uint8_t ModelledRadValve::computeTargetTemp()
   {
-  // By default, the setback is regarded as zero/off.
-  setbackC = 0;
-
   // In FROST mode.
   if(!inWarmMode())
     {
@@ -553,9 +550,6 @@ uint8_t ModelledRadValve::computeTargetTemp()
       // Target must never be set low enough to create a frost/freeze hazard.
       const uint8_t newTarget = OTV0P2BASE::fnmax((uint8_t)(wt - setback), getFROSTTargetC());
 
-      // Explicitly compute the actual setback for monitoring purposes.
-      if(newTarget < wt) { setbackC = wt - newTarget; }
-
       return(newTarget);
       }
     // Else use WARM target as-is.
@@ -571,6 +565,16 @@ void ModelledRadValve::computeTargetTemperature()
   {
   // Compute basic target temperature statelessly.
   const uint8_t newTarget = computeTargetTemp();
+
+  // Explicitly compute the actual setback when in WARM mode for monitoring purposes.
+  // TODO: also consider showing full setback to FROST when a schedule is set but not on.
+  // By default, the setback is regarded as zero/off.
+  setbackC = 0;
+  if(inWarmMode())
+    {
+    const uint8_t wt = getWARMTargetC();
+    if(newTarget < wt) { setbackC = wt - newTarget; }
+    }
 
   // Set up state for computeRequiredTRVPercentOpen().
   inputState.targetTempC = newTarget;
@@ -867,7 +871,6 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
 #endif
   }
 #endif // ENABLE_FS20_ENCODING_SUPPORT
-
 
 
 // Call this to do an I/O poll if needed; returns true if something useful definitely happened.
@@ -2062,7 +2065,9 @@ void loopOpenTRV()
 #endif
 
       // Stats TX in the minute after all sensors should have been polled (so that readings are fresh).
+#if !defined(ENABLE_FREQUENT_STATS_TX)
       if(minute1From4AfterSensors)
+#endif
         {
         // Sleep randomly up to 25% of the minor cycle
         // to spread transmissions and thus help avoid collisions.
