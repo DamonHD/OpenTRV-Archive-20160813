@@ -37,10 +37,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include <OTAESGCM.h>
 #endif
 
-#include <util/crc16.h>
-#include <avr/eeprom.h>
-#include <avr/pgmspace.h> // for radio config
-
 #include "V0p2_Main.h"
 
 #include "V0p2_Generic_Config.h"
@@ -94,10 +90,9 @@ void panic(const __FlashStringHelper *s)
   {
   OTV0P2BASE::serialPrintlnAndFlush(); // Start new line to highlight error.  // May fail.
   OTV0P2BASE::serialPrintAndFlush('!'); // Indicate error with leading '!' // May fail.
-  OTV0P2BASE::serialPrintlnAndFlush(s); // May fail.
+  OTV0P2BASE::serialPrintlnAndFlush(s); // Print supplied detail text. // May fail.
   panic();
   }
-
 
 
 // Signal position in basic POST sequence as a small positive integer, or zero for done/none.
@@ -207,9 +202,9 @@ static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChanne
 #endif // ENABLE_RADIO_PRIMARY_RFM23B
 
 
-#ifdef ENABLE_RADIO_SECONDARY_SIM900
+#if defined(ENABLE_RADIO_SECONDARY_SIM900)
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true);
-#else
+#elif defined(ENABLE_RADIO_SECONDARY_MODULE)
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true);
 #endif // ENABLE_RADIO_SECONDARY_SIM900
 
@@ -329,7 +324,6 @@ void optionalPOST()
   if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
   // Assume no RX nor filtering on secondary radio.
 #endif // ENABLE_RADIO_SECONDARY_MODULE
-
 
 //  posPOST(1, F("Radio OK, checking buttons/sensors and xtal"));
 
@@ -490,7 +484,6 @@ void setup()
 #endif
 #endif
 
-
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
   // Get current power supply voltage (internal sensor).
   const uint16_t Vcc = Supply_cV.read();
@@ -508,82 +501,10 @@ void setup()
   DEBUG_SERIAL_PRINT(intTempC16);
   DEBUG_SERIAL_PRINTLN();
 #endif
-
 #if !defined(ENABLE_MIN_ENERGY_BOOT)
-  // Seed PRNG(s) with available environmental values and clock time/jitter for some entropy.
-  // Also sweeps over SRAM and EEPROM (see RAMEND and E2END), especially for non-volatile state and uninitialised areas of SRAM.
-  // TODO: add better PRNG with entropy pool (eg for crypto).
-  // TODO: add RFM22B WUT clock jitter, RSSI, temperature and battery voltage measures.
-  const uint16_t srseed = OTV0P2BASE::sramCRC();
-  const uint16_t eeseed = OTV0P2BASE::eeCRC();
-  // DHD20130430: maybe as much as 16 bits of entropy on each reset in seed1, concentrated in the least-significant bits.
-  const uint16_t s16 = (__DATE__[5]) ^
-                       Vcc ^
-                       (intTempC16 << 1) ^
-#if !defined(ALT_MAIN_LOOP)
-                       (heat << 2) ^
-#if defined(TEMP_POT_AVAILABLE)
-                       ((((uint16_t)tempPot) << 3) + tempPot) ^
-#endif
-                       (AmbLight.get() << 4) ^
-#if defined(HUMIDITY_SENSOR_SUPPORT)
-                       ((((uint16_t)rh) << 8) - rh) ^
+  OTV0P2BASE::seedPRNGs();
 #endif
 #endif
-                       (OTV0P2BASE::getMinutesSinceMidnightLT() << 5) ^
-                       (((uint16_t)OTV0P2BASE::getSubCycleTime()) << 6);
-  //const long seed1 = ((((long) clockJitterRTC()) << 13) ^ (((long)clockJitterWDT()) << 21) ^ (((long)(srseed^eeseed)) << 16)) + s16;
-  // Seed simple/fast/small built-in PRNG.  (Smaller and faster than srandom()/random().)
-  const uint8_t nar1 = OTV0P2BASE::noisyADCRead();
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("nar ");
-  DEBUG_SERIAL_PRINTFMT(nar1, BIN);
-  DEBUG_SERIAL_PRINTLN();
-#endif
-  // TODO: seed other/better PRNGs.
-  // Feed in mainly persistent/nonvolatile state explicitly.
-  OTV0P2BASE::addEntropyToPool((uint8_t)(eeseed >> 8) + nar1, 0);
-  OTV0P2BASE::addEntropyToPool((uint8_t)s16 ^ (uint8_t)(s16 >> 8), 0);
-  for(uint8_t i = 0; i < V0P2BASE_EE_LEN_SEED; ++i)
-    { OTV0P2BASE::addEntropyToPool(eeprom_read_byte((uint8_t *)(V0P2BASE_EE_START_SEED + i)), 0); }
-  OTV0P2BASE::addEntropyToPool(OTV0P2BASE::noisyADCRead(), 1); // Conservative first push of noise into pool.
-  // Carry a few bits of entropy over a reset by picking one of the four designated EEPROM bytes at random;
-  // if zero, erase to 0xff, else AND in part of the seed including some of the previous EEPROM hash (and write).
-  // This amounts to about a quarter of an erase/write cycle per reset/restart per byte, or 400k restarts endurance!
-  // These 4 bytes should be picked up as part of the hash/CRC of EEPROM above, next time,
-  // essentially forming a longish-cycle (poor) PRNG even with little new real entropy each time.
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
-  uint8_t *const erp = (uint8_t *)(V0P2BASE_EE_START_SEED + (3&((s16)^((eeseed>>8)+(__TIME__[7]))))); // Use some new and some eeseed bits to choose which byte to updated.
-  const uint8_t erv = eeprom_read_byte(erp);
-  if(0 == erv) { OTV0P2BASE::eeprom_smart_erase_byte(erp); }
-  else
-    {
-    OTV0P2BASE::eeprom_smart_clear_bits(erp,
-#if !defined(NO_clockJitterEntropyByte)
-      ::OTV0P2BASE::clockJitterEntropyByte()
-#else
-      (::OTV0P2BASE::clockJitterWDT() ^ nar1) // Less good fall-back when clockJitterEntropyByte() not available with more actual entropy.
-#endif
-      + ((uint8_t)eeseed)); // Nominally include disjoint set of eeseed bits in choice of which to clear.
-    }
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("srseed ");
-  DEBUG_SERIAL_PRINTFMT(srseed, BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("eeseed ");
-  DEBUG_SERIAL_PRINTFMT(eeseed, BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("RNG8 ");
-  DEBUG_SERIAL_PRINTFMT(randRNG8(), BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("erv ");
-  DEBUG_SERIAL_PRINTFMT(erv, BIN);
-  DEBUG_SERIAL_PRINTLN();
-#endif
-#endif
-#endif
-
 
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
 #if 0 && defined(DEBUG)
@@ -595,7 +516,6 @@ void setup()
 #endif
 #endif
 
-
   // Ensure that the unique node ID is set up (mainly on first use).
   // Have one attempt (don't want to stress an already failing EEPROM) to force-reset if not good, then panic.
   // Needs to have had entropy gathered, etc.
@@ -605,9 +525,7 @@ void setup()
       { panic(F("!Bad ID")); }
     }
 
-
-  // Initialised: turn heatcall UI LED off.
-//  pinMode(LED_HEATCALL, OUTPUT);
+  // Initialised: turn main/heatcall UI LED off.
   LED_HEATCALL_OFF();
 
 #if defined(ENABLE_CLI) && defined(ENABLE_CLI_HELP) && !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS) && !defined(ENABLE_TRIMMED_MEMORY)
@@ -622,12 +540,6 @@ void setup()
   setupOpenTRV();
 #endif
   }
-
-
-
-
-
-
 
 
 //========================================
