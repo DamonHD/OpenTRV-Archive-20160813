@@ -37,10 +37,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include <OTAESGCM.h>
 #endif
 
-#include <util/crc16.h>
-#include <avr/eeprom.h>
-#include <avr/pgmspace.h> // for radio config
-
 #include "V0p2_Main.h"
 
 #include "V0p2_Generic_Config.h"
@@ -92,10 +88,11 @@ void panic()
 // Panic with fixed message.
 void panic(const __FlashStringHelper *s)
   {
-  OTV0P2BASE::serialPrintlnAndFlush(s); // May fail.
+  OTV0P2BASE::serialPrintlnAndFlush(); // Start new line to highlight error.  // May fail.
+  OTV0P2BASE::serialPrintAndFlush('!'); // Indicate error with leading '!' // May fail.
+  OTV0P2BASE::serialPrintlnAndFlush(s); // Print supplied detail text. // May fail.
   panic();
   }
-
 
 
 // Signal position in basic POST sequence as a small positive integer, or zero for done/none.
@@ -146,24 +143,24 @@ static void posPOST(const uint8_t position, const __FlashStringHelper *s = NULL)
   }
 #endif // ALT_MAIN_LOOP
 
-// Rearrange date into sensible most-significant-first order.  (Would like it also to be fully numeric, but whatever...)
-// FIXME: would be better to have this in PROGMEM (Flash) rather than RAM.
+// Rearrange date into sensible most-significant-first order, and make it fully numeric.
+// FIXME: would be better to have this in PROGMEM (Flash) rather than RAM, eg as F() constant.
 static const char _YYYYMmmDD[] =
   {
   __DATE__[7], __DATE__[8], __DATE__[9], __DATE__[10],
   '/',
   __DATE__[0], __DATE__[1], __DATE__[2],
   '/',
-  __DATE__[4], __DATE__[5],
+  ((' ' == __DATE__[4]) ? '0' : __DATE__[4]), __DATE__[5],
   '\0'
   };
 // Version (code/board) information printed as one line to serial (with line-end, and flushed); machine- and human- parseable.
-// Format: "board VXXXX REVY; YYYY/Mmm/DD HH:MM:SS".
+// Format: "board VX.X REVY YYYY/Mmm/DD HH:MM:SS".
 void serialPrintlnBuildVersion()
   {
   OTV0P2BASE::serialPrintAndFlush(F("board V0.2 REV"));
   OTV0P2BASE::serialPrintAndFlush(V0p2_REV);
-  OTV0P2BASE::serialPrintAndFlush(F(" "));
+  OTV0P2BASE::serialPrintAndFlush(' ');
   OTV0P2BASE::serialPrintAndFlush(_YYYYMmmDD);
   OTV0P2BASE::serialPrintlnAndFlush(F(" " __TIME__));
   }
@@ -205,9 +202,9 @@ static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChanne
 #endif // ENABLE_RADIO_PRIMARY_RFM23B
 
 
-#ifdef ENABLE_RADIO_SECONDARY_SIM900
+#if defined(ENABLE_RADIO_SECONDARY_SIM900)
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(&SIM900Config, true);
-#else
+#elif defined(ENABLE_RADIO_SECONDARY_MODULE)
 static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true);
 #endif // ENABLE_RADIO_SECONDARY_SIM900
 
@@ -284,9 +281,6 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
 // Aborts with a call to panic() if a test fails.
 void optionalPOST()
   {
-  // Capture early sub-cycle time to help ensure that the 32768Hz async clock is actually running.
-  const uint8_t earlySCT = OTV0P2BASE::getSubCycleTime();
-
 //  posPOST(1, F("about to test radio module"));
 
 // FIXME  This section needs refactoring
@@ -331,7 +325,6 @@ void optionalPOST()
   // Assume no RX nor filtering on secondary radio.
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
-
 //  posPOST(1, F("Radio OK, checking buttons/sensors and xtal"));
 
 // Buttons should not be activated DURING boot for user-facing boards; an activated button implies a fault.
@@ -352,78 +345,10 @@ void optionalPOST()
 //    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN_L)); DEBUG_SERIAL_PRINTLN();
 //    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN2_L)); DEBUG_SERIAL_PRINTLN(); // AKA WINDOW SWITCH
 #endif
-#endif // select user-facing boards.
+#endif // Select user-facing boards.
 
 #if defined(ENABLE_WAKEUP_32768HZ_XTAL)
-  // Check that the 32768Hz async clock is actually running having done significant CPU-intensive work.
-  const uint8_t laterSCT = OTV0P2BASE::getSubCycleTime();
-  if(laterSCT == earlySCT)
-    {
-#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
-    // Allow extra time for 32768Hz crystal to start reliably, see: http://www.atmel.com/Images/doc1259.pdf
-#if 0 && defined(DEBUG)
-    DEBUG_SERIAL_PRINTLN_FLASHSTRING("Sleeping to let 32768Hz clock start...");
-#endif
-    // Time spent here should not be a whole multiple of basic cycle time to avoid a spuriously-stationary async clock reading!
-    // Allow several seconds to start.
-    // Attempt to capture some entropy while waiting, implicitly from oscillator start-up time if nothing else.
-    for(uint8_t i = 255; (--i > 0) && (earlySCT == OTV0P2BASE::getSubCycleTime()); )
-      {
-      OTV0P2BASE::addEntropyToPool(OTV0P2BASE::clockJitterWDT() ^ OTV0P2BASE::noisyADCRead(), 1); // Conservatively hope for at least 1 bit from combined sources!
-      OTV0P2BASE::nap(WDTO_15MS); // Ensure lower mount of ~3s until loop finishes.
-      OTV0P2BASE::captureEntropy1(); // Have other fun, though likely largely ineffective at this stage.
-      }
-#endif
-    const uint8_t latestSCT = OTV0P2BASE::getSubCycleTime();
-    if(latestSCT == earlySCT)
-      {
-#if 0 && defined(DEBUG)
-      DEBUG_SERIAL_PRINTLN_FLASHSTRING("32768Hz clock may not be running!");
-#endif
-      panic(F("Xtal")); // Async clock not running.
-      }
-    }
-//  posPOST(2, F("slow RTC clock OK"));
-#if 1 // Probationary Xtal sanity check
-  // Test low frequency oscillator vs main clock oscillator.
-  // Tests clock frequency with 15 ms nap in between for up to 30 cycles and panics if not within bounds.
-  // As of 2016-02-16, all working REV7s give count >= 120 and that fail to program via bootloader give count <= 119
-  // REV10 gives 119-120 (only one tested though)
-  {
-    static const uint8_t optimalLFClock = 122; // might be optimal...
-    static const uint8_t errorLFClock = 4; // max drift from allowed value
-    uint8_t count = 0;
-    for(uint8_t i = 0; ; i++) {
-      ::OTV0P2BASE::nap(WDTO_15MS);
-      ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-      // wait for edge on xtal counter
-      // start counting cycles
-      // on next edge, stop
-          const uint8_t t0 = TCNT2;
-          while(t0 == TCNT2) {}
-          const uint8_t t01 = TCNT0;
-          const uint8_t t1 = TCNT2;
-          while(t1 == TCNT2) {}
-          const uint8_t t02 = TCNT0;
-          count = t02-t01;
-      }
-      // Check end conditions
-      if((count < optimalLFClock+errorLFClock) & (count > optimalLFClock-errorLFClock)) { break; }
-      if(i > 30) { panic(F("xtal")); }
-      // Capture some entropy from the (chaotic?) clock wobble, but don't claim any.  (TODO-800)
-      OTV0P2BASE::addEntropyToPool(count, 0);
-//      // Also perturb the PRNG with essentially the same data (which is one reason not to claim entropy above).
-//      OTV0P2BASE::seedRNG8(count, i, TCNT2);
-    }
-    // optionally print value to debug
-#if 0 && defined(DEBUG)
-    DEBUG_SERIAL_PRINT_FLASHSTRING("Xtal freq check: ");
-    DEBUG_SERIAL_PRINT(count);
-    DEBUG_SERIAL_PRINTLN();
-#endif
-  }
-#endif // Probationary Xtal sanity check
-
+  if(!::OTV0P2BASE::HWTEST::check32768HzOsc()) { panic(F("Xtal")); } // Async clock not running correctly.
 #else
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(No xtal.)");
 #endif
@@ -559,7 +484,6 @@ void setup()
 #endif
 #endif
 
-
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
   // Get current power supply voltage (internal sensor).
   const uint16_t Vcc = Supply_cV.read();
@@ -577,82 +501,10 @@ void setup()
   DEBUG_SERIAL_PRINT(intTempC16);
   DEBUG_SERIAL_PRINTLN();
 #endif
-
 #if !defined(ENABLE_MIN_ENERGY_BOOT)
-  // Seed PRNG(s) with available environmental values and clock time/jitter for some entropy.
-  // Also sweeps over SRAM and EEPROM (see RAMEND and E2END), especially for non-volatile state and uninitialised areas of SRAM.
-  // TODO: add better PRNG with entropy pool (eg for crypto).
-  // TODO: add RFM22B WUT clock jitter, RSSI, temperature and battery voltage measures.
-  const uint16_t srseed = OTV0P2BASE::sramCRC();
-  const uint16_t eeseed = OTV0P2BASE::eeCRC();
-  // DHD20130430: maybe as much as 16 bits of entropy on each reset in seed1, concentrated in the least-significant bits.
-  const uint16_t s16 = (__DATE__[5]) ^
-                       Vcc ^
-                       (intTempC16 << 1) ^
-#if !defined(ALT_MAIN_LOOP)
-                       (heat << 2) ^
-#if defined(TEMP_POT_AVAILABLE)
-                       ((((uint16_t)tempPot) << 3) + tempPot) ^
-#endif
-                       (AmbLight.get() << 4) ^
-#if defined(HUMIDITY_SENSOR_SUPPORT)
-                       ((((uint16_t)rh) << 8) - rh) ^
+  OTV0P2BASE::seedPRNGs();
 #endif
 #endif
-                       (OTV0P2BASE::getMinutesSinceMidnightLT() << 5) ^
-                       (((uint16_t)OTV0P2BASE::getSubCycleTime()) << 6);
-  //const long seed1 = ((((long) clockJitterRTC()) << 13) ^ (((long)clockJitterWDT()) << 21) ^ (((long)(srseed^eeseed)) << 16)) + s16;
-  // Seed simple/fast/small built-in PRNG.  (Smaller and faster than srandom()/random().)
-  const uint8_t nar1 = OTV0P2BASE::noisyADCRead();
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("nar ");
-  DEBUG_SERIAL_PRINTFMT(nar1, BIN);
-  DEBUG_SERIAL_PRINTLN();
-#endif
-  // TODO: seed other/better PRNGs.
-  // Feed in mainly persistent/nonvolatile state explicitly.
-  OTV0P2BASE::addEntropyToPool((uint8_t)(eeseed >> 8) + nar1, 0);
-  OTV0P2BASE::addEntropyToPool((uint8_t)s16 ^ (uint8_t)(s16 >> 8), 0);
-  for(uint8_t i = 0; i < V0P2BASE_EE_LEN_SEED; ++i)
-    { OTV0P2BASE::addEntropyToPool(eeprom_read_byte((uint8_t *)(V0P2BASE_EE_START_SEED + i)), 0); }
-  OTV0P2BASE::addEntropyToPool(OTV0P2BASE::noisyADCRead(), 1); // Conservative first push of noise into pool.
-  // Carry a few bits of entropy over a reset by picking one of the four designated EEPROM bytes at random;
-  // if zero, erase to 0xff, else AND in part of the seed including some of the previous EEPROM hash (and write).
-  // This amounts to about a quarter of an erase/write cycle per reset/restart per byte, or 400k restarts endurance!
-  // These 4 bytes should be picked up as part of the hash/CRC of EEPROM above, next time,
-  // essentially forming a longish-cycle (poor) PRNG even with little new real entropy each time.
-  OTV0P2BASE::seedRNG8(nar1 ^ (uint8_t) s16, oldResetCount - (uint8_t)((s16+eeseed) >> 8), ::OTV0P2BASE::clockJitterWDT() ^ (uint8_t)srseed);
-  uint8_t *const erp = (uint8_t *)(V0P2BASE_EE_START_SEED + (3&((s16)^((eeseed>>8)+(__TIME__[7]))))); // Use some new and some eeseed bits to choose which byte to updated.
-  const uint8_t erv = eeprom_read_byte(erp);
-  if(0 == erv) { OTV0P2BASE::eeprom_smart_erase_byte(erp); }
-  else
-    {
-    OTV0P2BASE::eeprom_smart_clear_bits(erp,
-#if !defined(NO_clockJitterEntropyByte)
-      ::OTV0P2BASE::clockJitterEntropyByte()
-#else
-      (::OTV0P2BASE::clockJitterWDT() ^ nar1) // Less good fall-back when clockJitterEntropyByte() not available with more actual entropy.
-#endif
-      + ((uint8_t)eeseed)); // Nominally include disjoint set of eeseed bits in choice of which to clear.
-    }
-#if 0 && defined(DEBUG)
-  DEBUG_SERIAL_PRINT_FLASHSTRING("srseed ");
-  DEBUG_SERIAL_PRINTFMT(srseed, BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("eeseed ");
-  DEBUG_SERIAL_PRINTFMT(eeseed, BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("RNG8 ");
-  DEBUG_SERIAL_PRINTFMT(randRNG8(), BIN);
-  DEBUG_SERIAL_PRINTLN();
-  DEBUG_SERIAL_PRINT_FLASHSTRING("erv ");
-  DEBUG_SERIAL_PRINTFMT(erv, BIN);
-  DEBUG_SERIAL_PRINTLN();
-#endif
-#endif
-#endif
-
 
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
 #if 0 && defined(DEBUG)
@@ -664,7 +516,6 @@ void setup()
 #endif
 #endif
 
-
   // Ensure that the unique node ID is set up (mainly on first use).
   // Have one attempt (don't want to stress an already failing EEPROM) to force-reset if not good, then panic.
   // Needs to have had entropy gathered, etc.
@@ -674,9 +525,7 @@ void setup()
       { panic(F("!Bad ID")); }
     }
 
-
-  // Initialised: turn heatcall UI LED off.
-//  pinMode(LED_HEATCALL, OUTPUT);
+  // Initialised: turn main/heatcall UI LED off.
   LED_HEATCALL_OFF();
 
 #if defined(ENABLE_CLI) && defined(ENABLE_CLI_HELP) && !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS) && !defined(ENABLE_TRIMMED_MEMORY)
@@ -691,12 +540,6 @@ void setup()
   setupOpenTRV();
 #endif
   }
-
-
-
-
-
-
 
 
 //========================================
