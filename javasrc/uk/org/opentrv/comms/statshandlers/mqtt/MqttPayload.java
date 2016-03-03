@@ -115,7 +115,7 @@ public class MqttPayload implements JSONAware {
                         } catch(final NumberFormatException nfe) {
                             continue;
                         }
-                        processedKey = "sensorID" + "|C";
+                        processedKey = sensorID + "|C";
                     } else {
                         try {
                             value = Integer.parseInt(entryValue);
