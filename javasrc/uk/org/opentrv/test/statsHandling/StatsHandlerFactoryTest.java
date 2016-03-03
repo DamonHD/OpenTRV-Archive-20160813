@@ -48,6 +48,7 @@ import uk.org.opentrv.comms.statshandlers.builtin.SimpleFileLoggingStatsHandler;
 import uk.org.opentrv.comms.statshandlers.builtin.twitter.SingleTwitterChannelTemperature;
 import uk.org.opentrv.comms.statshandlers.filter.SimpleStaticFilterStatsHandlerWrapper;
 import uk.org.opentrv.comms.statshandlers.builtin.openemon.OpenEnergyMonitorPostSimple;
+import uk.org.opentrv.comms.statshandlers.mqtt.MqttPublishingHandler;
 import uk.org.opentrv.comms.http.RkdapHandler;
 
 public class StatsHandlerFactoryTest {
@@ -276,6 +277,32 @@ public class StatsHandlerFactoryTest {
         StatsHandler handler2 = handlers.get(1);
         assertNotNull("Returned handler is null", handler2);
         assertTrue("Unexpected class for handler", handler2 instanceof RkdapHandler);
+    }
+
+    /**
+     * Test creating a new handler list from DHD configuration.
+     */
+    @Test
+    public void testNewHandlerListMQTT() throws ConfigException {
+        StatsHandlerFactory factory = StatsHandlerFactory.getInstance();
+        Reader config = new InputStreamReader(
+            StatsHandlerFactoryTest.class.getResourceAsStream("ConfigMQTT.json")
+        );
+        List<StatsHandler> handlers = factory.newHandlerList(config);
+        assertNotNull("Handler list is null",  handlers);
+        assertEquals("Unexpected length of list", 2, handlers.size());
+        StatsHandler handler1 = handlers.get(0);
+        assertNotNull("Returned handler is null", handler1);
+        assertTrue("Unexpected class for handler", handler1 instanceof MqttPublishingHandler);
+        MqttPublishingHandler handler1mqtt = (MqttPublishingHandler)handler1;
+        assertEquals("Unexpected broker URL 1", "tcp://localhost:1883", handler1mqtt.getBrokerURL());
+        assertEquals("Unexpected QOS 1", 0, handler1mqtt.getQOS());
+        StatsHandler handler2 = handlers.get(1);
+        assertNotNull("Returned handler is null", handler2);
+        assertTrue("Unexpected class for handler", handler2 instanceof MqttPublishingHandler);
+        MqttPublishingHandler handler2mqtt = (MqttPublishingHandler)handler2;
+        assertEquals("Unexpected broker URL 2", "tcp://localhost:9000", handler2mqtt.getBrokerURL());
+        assertEquals("Unexpected QOS 2", 1, handler2mqtt.getQOS());
     }
 
     /**
