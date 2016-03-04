@@ -19,6 +19,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2015--2016
 
 RECENT/SIGNIFICANT REVISIONS
 
+V0.1.20160304: outlining defence against initial replay attack when new association made.
 V0.1.20160215: adjusting 'O' frame flags meanings, primarily to include frost indicator.
 V0.1.20160207: fixing encrypted example to enforce seqNum == message count & 0xf.
 V0.1.20160205: adding ASCII-art frame diagrams.
@@ -383,6 +384,15 @@ the bit must be forced to zero (0).  This allows the same key to be used
 for the back-channel and the IVs/nonces will be unique.  This changed bit
 is not transmitted, even if more bytes of ID are sent, ie the correct
 ID prefix is always transmitted but the IV calculation is adjusted.
+
+*Note3: to avoid replay attacks at the point of association of an
+existing node with a new receiver, as well as setting the node ID and key,
+it may be desirable to set the most-significant (persistent/restart)
+RX counter bytes to one hugher than the current value used by the transmitter
+(with all zero ephemeral LSBs), and then force a restart of the transmitter
+to force its TX MSB persistent reboot/restart count to increment,
+thus ensuring that the receiver will not accept a replay of any of its
+previous transmissions but can accept any of its new ones.
 
 
 EXAMPLE FRAMES
