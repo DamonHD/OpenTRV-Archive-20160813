@@ -281,14 +281,15 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
 // Aborts with a call to panic() if a test fails.
 void optionalPOST()
   {
-  // Try to have 32678Hz clock stable or at least running before going any further.
+  // Have 32678Hz clock at least running before going any further.
 #if defined(ENABLE_WAKEUP_32768HZ_XTAL)
   if(!::OTV0P2BASE::HWTEST::check32768HzOsc()) { panic(F("xtal")); } // Async clock not running correctly.
 #else
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("(No xtal.)");
 #endif
 
-//  posPOST(1, F("about to test radio module"));
+  // Signal that xtal is running AND give it time to settle.
+  posPOST(0 /*, F("about to test radio module") */);
 
 // FIXME  This section needs refactoring
 #ifdef ENABLE_RADIO_PRIMARY_RFM23B
@@ -354,12 +355,8 @@ void optionalPOST()
 #endif
 #endif // Select user-facing boards.
 
-  // Single POST checkpoint for speed.
-//#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
-  posPOST(0 /* , F("POST OK") */ );
-//#else
-//  posPOST(0, F("Radio, buttons OK"));
-//#endif
+  // Single/main POST checkpoint for speed.
+  posPOST(1 /* , F("POST OK") */ );
   }
 
 
