@@ -480,6 +480,11 @@ uint8_t ModelledRadValve::computeTargetTemp()
     {
     const uint8_t wt = getWARMTargetC();
 
+#if defined(ENABLE_SETBACK_LOCKOUT_COUNTDOWN)
+    // If smart setbacks are locked out then return WARM temperature as-is.  (TODO-786)
+    if(0xff != eeprom_read_byte((uint8_t *)OTV0P2BASE::V0P2BASE_EE_START_SETBACK_LOCKOUT_COUNTDOWN_H_INV)) { return(wt); }
+#endif
+
     // Set back target the temperature a little if the room seems to have been vacant for a long time (TODO-107)
     // or it is too dark for anyone to be active or the room is not likely occupied at this time
     // or the room was apparently not occupied at thus time yesterday (and is not now).
@@ -586,16 +591,15 @@ void ModelledRadValve::computeTargetTemperature()
   // Request a fast response from the valve if user is manually adjusting controls.
   const bool veryRecentUIUse = veryRecentUIControlUse();
   inputState.fastResponseRequired = veryRecentUIUse;
-  // Widen the allowed deadband significantly in an unlit/quiet/vacant room (TODO-383, TODO-593)
+  // Widen the allowed deadband significantly in an unlit/quiet/vacant room (TODO-383, TODO-593, TODO-786)
   // (or in FROST mode, or if temperature is jittery eg changing fast and filtering has been engaged)
   // to attempt to reduce the total number and size of adjustments and thus reduce noise/disturbance (and battery drain).
   // The wider deadband (less good temperature regulation) might be noticeable/annoying to sensitive occupants.
   // With a wider deadband may also simply suppress any movement/noise on some/most minutes while close to target temperature.
   // For responsiveness, don't widen the deadband immediately after manual controls have been used (TODO-593).
-  // Note: use !AmbLight.isRoomLight() in case unit is getting poor ambient light readings to keep noise and battery use down.
   //
   // Minimum number of hours vacant to force wider deadband in ECO mode, else a full day ('long vacant') is the threshold.
-  // May still have to back off this if only automatic occupancy input is ambient light and day >> 6h, ie other than deep winter.
+  // May still have to back this off if only automatic occupancy input is ambient light and day >> 6h, ie other than deep winter.
   const uint8_t minVacancyHoursForWideningECO = 3;
   inputState.widenDeadband = (!veryRecentUIUse) &&
       (retainedState.isFiltering ||
@@ -1132,8 +1136,8 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
       if(!OTV0P2BASE::getPrimaryBuilding16ByteSecretKey(key))
         {
         sendingJSONFailed = true;
-#if 0 && defined(DEBUG)
-        DEBUG_SERIAL_PRINTLN_FLASHSTRING("!failed (no key)");
+#if 1 // && defined(DEBUG)
+        OTV0P2BASE::serialPrintlnAndFlush(F("!TX key")); // Know why TX failed.
 #endif
         }
 #else
@@ -1146,7 +1150,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
     if(!sendingJSONFailed && doEnc)
       {
 #if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT)
-      const OTRadioLink::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
+      const OTRadioLink::SimpleSecureFrame32or0BodyTXBase::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
       const uint8_t txIDLen = OTRadioLink::ENC_BODY_DEFAULT_ID_BYTES;
       // When sending on a channel with framing, do not explicitly send the frame length byte.
       const uint8_t offset = framed ? 1 : 0;
@@ -1158,7 +1162,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
       // Distinguished 'invalid' valve position; never mistaken for a real valve.
       const uint8_t valvePC = 0x7f;
 #endif // defined(ENABLE_NOMINAL_RAD_VALVE)
-      const uint8_t bodylen = OTRadioLink::generateSecureOFrameRawForTX(
+      const uint8_t bodylen = OTRadioLink::SimpleSecureFrame32or0BodyTXV0p2::getInstance().generateSecureOFrameRawForTX(
             realTXFrameStart - offset, sizeof(buf) - (realTXFrameStart-buf) + offset,
             txIDLen, valvePC, (const char *)bufJSON, e, NULL, key);
       sendingJSONFailed = (0 == bodylen);
@@ -1273,7 +1277,7 @@ static void wireComponentsTogether()
 
 
 // Initialise sensors with stats info where needed.
-// Should be called at least hourly,
+// Should be called at least hourly after all stats have been updatedß,
 // but can be called whenever user adjusts settings for example.
 static void updateSensorsFromStats()
   {
@@ -1289,6 +1293,15 @@ static void updateSensorsFromStats()
 #endif // ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT
   }
 
+// Run tasks needed at the end of each hour.
+// Should be run once at a fixed slot in the last minute of each hour.
+// Will be run after all stats for the current hour have been updated.
+static void endOfHourTasks()
+  {
+#if defined(ENABLE_SETBACK_LOCKOUT_COUNTDOWN)
+// TODO: count down the lockout if not finished...  (TODO-786)
+#endif
+  }
 
 // Controller's view of Least Significiant Digits of the current (local) time, in this case whole seconds.
 // See PICAXE V0.1/V0.09/DHD201302L0 code.
@@ -1801,7 +1814,6 @@ static void processCallsForHeat(const bool second0)
   }
 
 
-
 // Main loop for OpenTRV radiator control.
 // Note: exiting and re-entering can take a little while, handling Arduino background tasks such as serial.
 void loopOpenTRV()
@@ -2050,6 +2062,8 @@ void loopOpenTRV()
       checkUserSchedule(); // Force to user's programmed settings, if any, at the correct time.
       // Ensure that the RTC has been persisted promptly when necessary.
       OTV0P2BASE::persistRTC();
+      // Run hourly tasks at the end of the hour.
+      if(59 == OTV0P2BASE::getMinutesLT()) { endOfHourTasks(); }
       break;
       }
 
@@ -2062,55 +2076,66 @@ void loopOpenTRV()
     // Periodic transmission of stats if NOT driving a local valve (else stats can be piggybacked onto that).
     // Randomised somewhat between slots and also within the slot to help avoid collisions.
     static uint8_t txTick;
-    case 6: { txTick = OTV0P2BASE::randRNG8() & 3; break; } // Pick which of the 4 slots to use.
-    case 8: case 10: case 12: case 14: if(0 != txTick--) { break; } // Only the slot where onSec is zero is used.
+    case 6: { txTick = OTV0P2BASE::randRNG8() & 7; break; } // Pick which of the 8 slots to use.
+    case 8: case 10: case 12: case 14: case 16: case 18: case 20: case 22:
       {
-      if(!enableTrailingStatsPayload()) { break; } // Not allowed to send stats.
+      // Only the slot where txTick is zero is used.
+      if(0 != txTick--) { break; }
+
 #if defined(ENABLE_FHT8VSIMPLE)
       // Avoid transmit conflict with FS20; just drop the slot.
       // We should possibly choose between this and piggybacking stats to avoid busting duty-cycle rules.
-      if(localFHT8VTRVEnabled() && useExtraFHT8VTXSlots) { break; }
+      if(useExtraFHT8VTXSlots && localFHT8VTRVEnabled()) { break; }
 #endif
 
+#if !defined(ENABLE_FREQUENT_STATS_TX) // If ENABLE_FREQUENT_STATS_TX then send every minute regardless.
       // Stats TX in the minute after all sensors should have been polled (so that readings are fresh).
-#if !defined(ENABLE_FREQUENT_STATS_TX)
-      if(minute1From4AfterSensors)
+      // Usually send one frame every 4 minutes, else abort,
+      // but occasionally send otherwise to make (secure) traffic analysis harder,
+      // though not enough to make a significant difference to bandwidth.
+      // Send very slightly more often when changed stats pending to send upstream.
+      // TODO: send immediately with 100% valve payload when user puts system into BAKE mode for fast response.
+      if(!minute1From4AfterSensors && (OTV0P2BASE::randRNG8() > (ss1.changedValue() ? 13 : 11))) { break; }
 #endif
+
+      // Abort if not allowed to send stats at all.
+      // FIXME: fix this to send bare calls for heat / valve % instead from valves for secure non-FHT8V comms.
+      if(!enableTrailingStatsPayload()) { break; }
+
+      // Sleep randomly up to ~25% of the minor cycle
+      // to spread transmissions and thus help avoid collisions.
+      // (Longer than 25%/0.5s could interfere with other ops such as FHT8V TXes.)
+      const uint8_t stopBy = 1 + (((OTV0P2BASE::GSCT_MAX >> 2) | 7) & OTV0P2BASE::randRNG8());
+      while(OTV0P2BASE::getSubCycleTime() <= stopBy)
         {
-        // Sleep randomly up to 25% of the minor cycle
-        // to spread transmissions and thus help avoid collisions.
-        // (Longer than 25%/0.5s could interfere with other ops such as FHT8V TXes.)
-        const uint8_t stopBy = 1 + (((OTV0P2BASE::GSCT_MAX >> 2) | 7) & OTV0P2BASE::randRNG8());
-        while(OTV0P2BASE::getSubCycleTime() <= stopBy)
-          {
-          // Soak up any pending I/O while waiting.
-          if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
-          // Sleep a little.
-          OTV0P2BASE::nap(WDTO_15MS, true);
-          }
-        // Send it!
-        // Try for double TX for extra robustness unless:
-        //   * this is a speculative 'extra' TX
-        //   * battery is low
-        //   * this node is a hub so needs to listen as much as possible
-        // This doesn't generally/always need to send binary/both formats
-        // if this is controlling a local FHT8V on which the binary stats can be piggybacked.
-        // Ie, if doesn't have a local TRV then it must send binary some of the time.
-        // Any recently-changed stats value is a hint that a strong transmission might be a good idea.
-#if defined(ENABLE_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
-        const bool doBinary = !localFHT8VTRVEnabled() && OTV0P2BASE::randRNG8NextBoolean();
-#else
-        const bool doBinary = false;
-#endif
-        bareStatsTX(!batteryLow && !inHubMode() && ss1.changedValue(), doBinary);
+        // Handle any pending I/O while waiting.
+        if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
+        // Sleep a little.
+        OTV0P2BASE::nap(WDTO_15MS, true);
         }
+
+      // Send stats!
+      // Try for double TX for extra robustness unless:
+      //   * this is a speculative 'extra' TX
+      //   * battery is low
+      //   * this node is a hub so needs to listen as much as possible
+      // This doesn't generally/always need to send binary/both formats
+      // if this is controlling a local FHT8V on which the binary stats can be piggybacked.
+      // Ie, if doesn't have a local TRV then it must send binary some of the time.
+      // Any recently-changed stats value is a hint that a strong transmission might be a good idea.
+#if defined(ENABLE_BINARY_STATS_TX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+      const bool doBinary = !localFHT8VTRVEnabled() && OTV0P2BASE::randRNG8NextBoolean();
+#else
+      const bool doBinary = false;
+#endif
+      bareStatsTX(!batteryLow && !inHubMode() && ss1.changedValue(), doBinary);
       break;
       }
 #endif // defined(ENABLE_STATS_TX)
 
 #if defined(ENABLE_SECURE_RADIO_BEACON)
-    // Send a small secure radio beacon "I'm alive!" message regularly.
-    case 16:
+    // Send a small secure radio beacon "I'm alive!" message regularly if configured.
+    case 30:
       {
 #if 1 && defined(DEBUG)
       DEBUG_SERIAL_PRINT_FLASHSTRING("Beacon TX... ");
