@@ -50,10 +50,12 @@ class Subscriber(object):
         t = opentrv.data.Topic(topic)
         if payload[0] == "{":
             pm = json.loads(payload)
+            body = pm["body"]
+            # TODO handle timestamp
             r = [
                 opentrv.data.Record(sk[0], v, sk[1] if len(sk) > 1 else None, t)
                 for (sk, v) in [
-                    (k.split('|'), v) for (k, v) in payload.iteritems()
+                    (k.split('|'), v) for (k, v) in body.iteritems()
                 ]
             ]
         else:

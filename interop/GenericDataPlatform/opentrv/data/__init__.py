@@ -1,5 +1,6 @@
 class Record(object):
     def __init__(self, name, value, unit=None, topic=None):
+        # TODO: add timestamp
         self.name = name
         self.value = value
         self.unit = unit
