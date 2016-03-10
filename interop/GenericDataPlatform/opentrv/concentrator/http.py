@@ -23,6 +23,9 @@ class Client(object):
         self.message_url = c_resp.message_url
 
     def on_message(self, records):
-        self.logger.debug("Message: "+str(records))
-        payload = self.serializer.format(records)
-        r = requests.post(self.message_url, data=payload)
+        if records is not None:
+            self.logger.debug("Records: "+str(records))
+            payload = self.serializer.format(records)
+            r = requests.post(self.message_url, data=payload)
+        else:
+            self.logger.debug("Empty record set")

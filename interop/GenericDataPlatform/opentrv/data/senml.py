@@ -1,4 +1,4 @@
-class Serializer(object)
+class Serializer(object):
 
     def __init__(self):
         pass

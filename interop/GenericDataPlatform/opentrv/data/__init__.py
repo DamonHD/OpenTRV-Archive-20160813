@@ -1,7 +1,7 @@
 class Record(object):
-    def __init__(self, name, value, unit=None, topic=None):
-        # TODO: add timestamp
+    def __init__(self, name, ts, value, unit=None, topic=None):
         self.name = name
+        self.timestamp = ts
         self.value = value
         self.unit = unit
         self.topic = topic

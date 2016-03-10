@@ -1,4 +1,5 @@
 import json
+import datetime
 import logging
 import mosquitto
 
@@ -30,20 +31,20 @@ class Subscriber(object):
             rc = mqttc.loop()
         self.logger.debug("Stopping MQTT subscriber : "+rc)
 
-    def on_connect(obj, rc):
+    def on_connect(self, rc):
         self.logger.debug("Connected: "+rc)
 
-    def on_message(obj, msg):
+    def on_message(self, msg):
         self.logger.debug("Message: "+msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        sink.on_message(parse(msg.topic, msg.payload)
+        sink.on_message(parse(msg.topic, msg.payload))
 
-    def on_publish(obj, mid):
+    def on_publish(self, mid):
         self.logger.debug("Published: "+str(mid))
 
-    def on_subscribe(obj, mid, granted_qos):
+    def on_subscribe(self, mid, granted_qos):
         self.logger.debug("Subscribed: "+str(mid)+" "+str(granted_qos))
 
-    def on_log(obj, level, string):
+    def on_log(self, level, string):
         self.logger.log(level, string)
 
     def parse(self, topic, payload):
@@ -51,11 +52,12 @@ class Subscriber(object):
         if payload[0] == "{":
             pm = json.loads(payload)
             body = pm["body"]
-            # TODO handle timestamp
+            tss = pm["ts"]
+            ts = datetime.datetime.strptime(tss, "%Y-%m-%dT%H:%M:%SZ")
             r = [
-                opentrv.data.Record(sk[0], v, sk[1] if len(sk) > 1 else None, t)
+                opentrv.data.Record(sk[0], ts, v, sk[1] if len(sk) > 1 else None, t)
                 for (sk, v) in [
-                    (k.split('|'), v) for (k, v) in body.iteritems()
+                    (k.split('|'), v) for (k, v) in body.items()
                 ]
             ]
         else:
