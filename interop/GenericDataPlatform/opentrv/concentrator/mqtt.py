@@ -1,5 +1,8 @@
+import json
 import logging
 import mosquitto
+
+import opentrv.data
 
 class Subscriber(object):
 
@@ -25,13 +28,14 @@ class Subscriber(object):
         rc = 0
         while rc == 0:
             rc = mqttc.loop()
+        self.logger.debug("Stopping MQTT subscriber : "+rc)
 
     def on_connect(obj, rc):
         self.logger.debug("Connected: "+rc)
 
     def on_message(obj, msg):
         self.logger.debug("Message: "+msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        sink.on_message(msg)
+        sink.on_message(parse(msg.topic, msg.payload)
 
     def on_publish(obj, mid):
         self.logger.debug("Published: "+str(mid))
@@ -41,3 +45,18 @@ class Subscriber(object):
 
     def on_log(obj, level, string):
         self.logger.log(level, string)
+
+    def parse(self, topic, payload):
+        t = opentrv.data.Topic(topic)
+        if payload[0] == "{":
+            pm = json.loads(payload)
+            r = [
+                opentrv.data.Record(sk[0], v, sk[1] if len(sk) > 1 else None, t)
+                for (sk, v) in [
+                    (k.split('|'), v) for (k, v) in payload.iteritems()
+                ]
+            ]
+        else:
+            self.logger.error("Cannot parse payload: "+payload+" ["+topic+"]")
+            r = None
+        return r
