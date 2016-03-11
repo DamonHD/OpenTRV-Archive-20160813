@@ -7,12 +7,13 @@ import opentrv.data
 
 class Subscriber(object):
 
-    def __init__(self, sink):
+    def __init__(self, sink, url, topic, client):
         self.logger = logging.getLogger(__name__)
-        self.logger.debug("Initialising MQTT subscriber")
-        self.client = ""
-        self.server = ""
-        self.topic = ""
+        self.logger.debug("Initialising MQTT subscriber to: {0}/{1} [{2}]".format(
+            url, topic, client))
+        self.client = client
+        self.server = url
+        self.topic = "{0}/#".format(topic)
         self.sink = sink
 
     def start(self):

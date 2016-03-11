@@ -4,10 +4,10 @@ import requests
 import opentrv.data.senml
 
 class Client(object):
-    def __init__(self):
+    def __init__(self, url):
         self.logger = logging.getLogger(__name__)
-        self.logger.debug("Initialising HTTP client")
-        self.platform_url = ""
+        self.logger.debug("Initialising HTTP client to: "+str(url))
+        self.platform_url = url
         self.message_url = ""
         self.serializer = opentrv.data.senml.Serializer()
 
