@@ -14,7 +14,8 @@ class TestMqttSubscriber(unittest.TestCase):
                 "O": 2
             }
         }"""
-        m = opentrv.concentrator.mqtt.Subscriber(None)
+        m = opentrv.concentrator.mqtt.Subscriber(
+            None, url="", client="", topic="")
         r = m.parse("topic", payload)
         expected_keys = ["T", "O"]
         expected = {

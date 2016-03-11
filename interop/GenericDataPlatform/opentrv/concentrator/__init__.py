@@ -17,7 +17,7 @@ class Core(object):
             **self.options["http"])
         http_client.commission()
         mqtt_subscriber =  opentrv.concentrator.mqtt.Subscriber(
-            **self.options["mqtt"], sink=http_client)
+            sink=http_client, **self.options["mqtt"])
         mqtt_subscriber.start()
 
 class OptionParser(object):
