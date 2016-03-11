@@ -345,20 +345,26 @@ if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX bad secure header"); }
   uint8_t senderNodeID[OTV0P2BASE::OpenTRV_Node_ID_Bytes];
   if(secureFrame && isOK)
     {
-    // Look up the full node ID of the sender in the associations table,
-    // and if successful then attempt to decode the message.
-    const int8_t index = OTV0P2BASE::getNextMatchingNodeID(0, sfh.id, sfh.getIl(), senderNodeID);
-#if 1 && defined(DEBUG)
-    if(index < 0) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX no assoc"); }
-#endif
-    isOK = (index >= 0) &&
-           (0 != OTRadioLink::decodeSecureSmallFrameFromID(&sfh, msg-1, msglen+1,
-                              OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleDec_DEFAULT_STATELESS,
-                              senderNodeID, sizeof(senderNodeID),
-                              NULL, key,
-                              secBodyBuf, sizeof(secBodyBuf), decryptedBodyOutSize));
-#if 1 && defined(DEBUG)
-    if(!isOK) { DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX assoc/auth"); }
+    // Look up full ID in associations table,
+    // validate RX message counter,
+    // authenticate and decrypt,
+    // update RX message counter.
+    isOK = (0 != OTRadioLink::SimpleSecureFrame32or0BodyRXV0p2::getInstance().decodeSecureSmallFrameSafely(&sfh, msg-1, msglen+1,
+                                            OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleDec_DEFAULT_STATELESS,
+                                            NULL, key,
+                                            secBodyBuf, sizeof(secBodyBuf), decryptedBodyOutSize,
+                                            senderNodeID,
+                                            true));
+#if 1 // && defined(DEBUG)
+    if(!isOK)
+      {
+      // Useful brief network diagnostics: a couple of bytes of the claimed ID of rejected frames.
+      // Warnings rather than errors because there may legitimately be multiple disjoint networks.
+      OTV0P2BASE::serialPrintAndFlush(F("?RX auth")); // Missing association or failed auth.
+      if(sfh.getIl() > 0) { OTV0P2BASE::serialPrintAndFlush(' '); OTV0P2BASE::serialPrintAndFlush(sfh.id[0], HEX); }
+      if(sfh.getIl() > 1) { OTV0P2BASE::serialPrintAndFlush(' '); OTV0P2BASE::serialPrintAndFlush(sfh.id[1], HEX); }
+      OTV0P2BASE::serialPrintlnAndFlush();
+      }
 #endif
     }
 
@@ -378,7 +384,7 @@ DEBUG_SERIAL_PRINTLN();
     // Beacon / Alive frame, non-secure.
     case OTRadioLink::FTS_ALIVE:
       {
-#if 1 && defined(DEBUG)
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon nonsecure");
 #endif
       // Ignores any body data.
@@ -388,13 +394,13 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon nonsecure");
     // Beacon / Alive frame, secure.
     case OTRadioLink::FTS_ALIVE | 0x80:
       {
-#if 1 && defined(DEBUG)
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINTLN_FLASHSTRING("Beacon");
 #endif
       // Does not expect any body data.
       if(decryptedBodyOutSize != 0)
         {
-#if 1 && defined(DEBUG)
+#if 0 && defined(DEBUG)
 DEBUG_SERIAL_PRINT_FLASHSTRING("!Beacon data ");
 DEBUG_SERIAL_PRINT(decryptedBodyOutSize);
 DEBUG_SERIAL_PRINTLN();
@@ -679,7 +685,7 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Stats IDx");
 #endif // ENABLE_FS20_ENCODING_SUPPORT
 
   // Unparseable frame: drop it; possibly log it as an error.
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+#if 0 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
   p->print(F("!RX bad msg, len+prefix: ")); OTRadioLink::printRXMsg(p, msg-1, min(msglen+1, 8));
 #endif
   return;

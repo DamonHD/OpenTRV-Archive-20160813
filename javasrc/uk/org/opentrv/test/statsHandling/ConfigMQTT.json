@@ -1,0 +1,19 @@
+{
+    "serialPort": "/dev/serial/by-id/usb-FTDI_TTL232R-3V3_FTH0BYR3-if00-port0",
+    "handlers": [
+        {
+            "name": "Default MQTT publisher",
+            "type": "uk.org.opentrv.comms.statshandlers.mqtt.MqttPublishingHandler"
+        },
+        {
+            "name": "Custom MQTT publisher",
+            "type": "uk.org.opentrv.comms.statshandlers.mqtt.MqttPublishingHandler",
+            "options": {
+                "brokerUrl": "tcp://localhost:9000",
+                "rootTopic": "Custom/OEM",
+                "qos": 1,
+                "clientId": "Custom"
+            }
+        }
+    ]
+}

@@ -244,13 +244,13 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
     {
     case OTRadioLink::FTp2_FullStatsIDL: case OTRadioLink::FTp2_FullStatsIDH:
       {
-      // Maxmimum size is 8 including trailing CRC; fall through for possible further zeros trim.
+      // Maximum size is 8 including trailing CRC; fall through for possible further zeros trim.
       buflen = min(initialBuflen, 8); // OTRadioLink::V0P2_MESSAGING_LEADING_FULL_STATS_MAX_BYTES_ON_WIRE);
       break;
       }
     case OTRadioLink::FTp2_JSONRaw:
       {
-      // Maxmimum size is 56 including trailing CRC; fall through for possible further zeros trim.
+      // Maximum size is 56 including trailing CRC; fall through for possible further zeros trim.
       buflen = min(initialBuflen, OTV0P2BASE::MSG_JSON_ABS_MAX_LENGTH + 1);
       break;
       }
@@ -281,7 +281,15 @@ static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
 // Aborts with a call to panic() if a test fails.
 void optionalPOST()
   {
-//  posPOST(1, F("about to test radio module"));
+  // Have 32678Hz clock at least running before going any further.
+#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
+  if(!::OTV0P2BASE::HWTEST::check32768HzOsc()) { panic(F("xtal")); } // Async clock not running correctly.
+#else
+  DEBUG_SERIAL_PRINTLN_FLASHSTRING("(No xtal.)");
+#endif
+
+  // Signal that xtal is running AND give it time to settle.
+  posPOST(0 /*, F("about to test radio module") */);
 
 // FIXME  This section needs refactoring
 #ifdef ENABLE_RADIO_PRIMARY_RFM23B
@@ -339,7 +347,7 @@ void optionalPOST()
      || (fastDigitalRead(BUTTON_LEARN2_L) == LOW)
 #endif
     )
-    { panic(F("button")); }
+    { panic(F("b")); }
 //#else
 //    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_MODE_L)); DEBUG_SERIAL_PRINTLN(); // Should be BOOSTSWITCH_L for REV9.
 //    DEBUG_SERIAL_PRINT(fastDigitalRead(BUTTON_LEARN_L)); DEBUG_SERIAL_PRINTLN();
@@ -347,18 +355,9 @@ void optionalPOST()
 #endif
 #endif // Select user-facing boards.
 
-#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
-  if(!::OTV0P2BASE::HWTEST::check32768HzOsc()) { panic(F("Xtal")); } // Async clock not running correctly.
-#else
-  DEBUG_SERIAL_PRINTLN_FLASHSTRING("(No xtal.)");
-#endif
-
-  // Single POST checkpoint for speed.
-//#if defined(ENABLE_WAKEUP_32768HZ_XTAL)
-  posPOST(0 /* , F("POST OK") */ );
-//#else
-//  posPOST(0, F("Radio, buttons OK"));
-//#endif
+// Save space (and time) by avoiding the second POST sequence; LED will be turned off anyway.
+//  // Single/main POST checkpoint for speed.
+//  posPOST(1 /* , F("POST OK") */ );
   }
 
 
@@ -369,16 +368,16 @@ void setup()
   // Set appropriate low-power states, interrupts, etc, ASAP.
   OTV0P2BASE::powerSetup();
 
-#if defined(ENABLE_MIN_ENERGY_BOOT)
-  nap(WDTO_120MS); // Sleep to let power supply recover a little.
-#endif
+//#if defined(ENABLE_MIN_ENERGY_BOOT)
+//  nap(WDTO_120MS); // Sleep to let power supply recover a little.
+//#endif
 
   // IO setup for safety, and to avoid pins floating.
   IOSetup();
 
-#if defined(ENABLE_MIN_ENERGY_BOOT)
-  nap(WDTO_120MS); // Sleep to let power supply recover a little.
-#endif
+//#if defined(ENABLE_MIN_ENERGY_BOOT)
+//  nap(WDTO_120MS); // Sleep to let power supply recover a little.
+//#endif
 
 #if !defined(ENABLE_MIN_ENERGY_BOOT)
   // Restore previous RTC state if available.
@@ -445,7 +444,7 @@ void setup()
   optionalPOST();
 #endif
 
-  // Collect full set of environmental values before entering loop().
+  // Collect full set of environmental values before entering loop() in normal mode.
   // This should also help ensure that sensors are properly initialised.
 
   // No external sensors are *assumed* present if running alt main loop.
@@ -485,16 +484,16 @@ void setup()
 #endif
 
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
-  // Get current power supply voltage (internal sensor).
   const uint16_t Vcc = Supply_cV.read();
 #if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+  // Get current power supply voltage (internal sensor).
   DEBUG_SERIAL_PRINT_FLASHSTRING("Vcc: ");
   DEBUG_SERIAL_PRINT(Vcc);
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("cV");
 #endif
+#if 0 && defined(DEBUG)
   // Get internal temperature measurement (internal sensor).
   const int intTempC16 = OTV0P2BASE::readInternalTemperatureC16();
-#if 0 && defined(DEBUG)
   DEBUG_SERIAL_PRINT_FLASHSTRING("Int temp: ");
   DEBUG_SERIAL_PRINT((intTempC16 + 8) >> 4);
   DEBUG_SERIAL_PRINT_FLASHSTRING("C / ");
@@ -522,7 +521,7 @@ void setup()
   if(!OTV0P2BASE::ensureIDCreated())
     {
     if(!OTV0P2BASE::ensureIDCreated(true)) // Force reset.
-      { panic(F("!Bad ID")); }
+      { panic(F("ID")); }
     }
 
   // Initialised: turn main/heatcall UI LED off.
@@ -534,8 +533,10 @@ void setup()
 #endif
 
 #if !defined(ALT_MAIN_LOOP) && !defined(UNIT_TESTS)
+#if !defined(ENABLE_TRIMMED_MEMORY)
   // Report initial status.
   serialStatusReport();
+#endif
   // Do OpenTRV-specific (late) setup.
   setupOpenTRV();
 #endif
