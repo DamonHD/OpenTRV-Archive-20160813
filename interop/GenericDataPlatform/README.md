@@ -9,3 +9,10 @@ with a generic data platform. It comes in two parts:
 2. An interop component that would be deployed on the OpenTRV concentrator
    and would send data to the data platform in a way that this platform can
    understand.
+
+## Run the tests
+
+You can run all unit tests by calling the following command in the same
+directory as this file:
+
+    PYTHONPATH=$PYTHONPATH:. python3 -m unittest discover
