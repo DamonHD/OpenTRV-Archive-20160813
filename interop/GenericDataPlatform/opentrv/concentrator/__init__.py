@@ -36,10 +36,10 @@ class OptionParser(object):
             '-m', '--mqtt_url', default="tcp://localhost:1883",
             help='''URL of the MQTT server.''')
         parser.add_argument(
-            '-t', '--mqtt_topic', default='OpenTRV/Default',
+            '-t', '--mqtt_topic', default='OpenTRV/Local',
             help='''Root MQTT topic.''')
         parser.add_argument(
-            '-c', '--mqtt_client', default='OpenTRV',
+            '-c', '--mqtt_client', default='OpenTRV Bridge',
             help='''MQTT client ID.''')
         args = parser.parse_args()
         options["http"] = {
