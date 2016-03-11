@@ -4,6 +4,10 @@ import datetime
 import opentrv.data
 
 class Serializer(object):
+    """
+    SenML serializer that transforms from data record to SenML JSON payload and
+    vice versa.
+    """
 
     def __init__(self):
         pass

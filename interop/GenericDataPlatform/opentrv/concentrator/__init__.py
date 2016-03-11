@@ -5,13 +5,25 @@ import opentrv.concentrator.http
 import opentrv.concentrator.mqtt
 
 class Core(object):
+    """
+    The core of the concentrator code, where the MQTT source and HTTP sink
+    components are created and connected and where the main loop is run.
+    """
+
     def __init__(self, options):
+        """
+        Initialise the core of the system.
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
         self.logger.debug("Initialising core with options: "+str(options))
         self.options = options
 
     def run(self):
+        """
+        Run the main loop. This loop relies on the MQTT subscriber loop and
+        exits when that loop exits.
+        """
         logger.debug("Starting core")
         http_client =  opentrv.concentrator.http.Client(
             **self.options["http"])
@@ -20,7 +32,13 @@ class Core(object):
             sink=http_client, **self.options["mqtt"])
         mqtt_subscriber.start()
 
+
 class OptionParser(object):
+    """
+    Object responsible for parsing command line options and presenting them
+    in a structure that the core understands.
+    """
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 

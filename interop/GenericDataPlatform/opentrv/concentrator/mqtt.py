@@ -6,8 +6,15 @@ import mosquitto
 import opentrv.data
 
 class Subscriber(object):
+    """
+    MQTT Subscriber that listens to a given root topic, parses all messages
+    received and forwards them to a given sink component.
+    """
 
     def __init__(self, sink, url, topic, client):
+        """
+        Initialise the MQTT subscriber with the given parameters.
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initialising MQTT subscriber to: {0}/{1} [{2}]".format(
             url, topic, client))
@@ -17,6 +24,10 @@ class Subscriber(object):
         self.sink = sink
 
     def start(self):
+        """
+        Start the MQTT subscriber main loop by connecting to the server and
+        running the client loop until the return code is non-zero.
+        """
         self.logger.debug("Starting MQTT subscriber")
         mqttc = mosquitto.Mosquitto(self.client)
         mqttc.on_message = on_message
@@ -49,6 +60,10 @@ class Subscriber(object):
         self.logger.log(level, string)
 
     def parse(self, topic, payload):
+        """
+        Parse the payload of a received MQTT message. If the message starts
+        with the "{" character, it treats it as a OpenTRV frame.
+        """
         t = opentrv.data.Topic(topic)
         if payload[0] == "{":
             pm = json.loads(payload)

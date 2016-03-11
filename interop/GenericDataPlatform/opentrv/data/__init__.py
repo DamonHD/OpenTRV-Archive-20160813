@@ -4,6 +4,9 @@ import datetime
 DEFAULT_SEPARATOR = '/'
 
 class Record(object):
+    """
+    Sensor record with name, timestamp, value, optional unit and topic.
+    """
     def __init__(self, name, ts, value, unit=None, topic=None):
         self.name = name
         self.timestamp = ts
@@ -21,6 +24,9 @@ class Record(object):
             )
 
 class Topic(object):
+    """
+    Hierarchical topic.
+    """
     def __init__(self, name, parent=None, sep=DEFAULT_SEPARATOR):
         while name[0] == sep:
             name = name[1:]
