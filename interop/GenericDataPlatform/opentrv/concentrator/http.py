@@ -25,7 +25,7 @@ class Client(object):
     def on_message(self, records):
         if records is not None:
             self.logger.debug("Records: "+str(records))
-            payload = self.serializer.format(records)
+            payload = self.serializer.to_json(records)
             r = requests.post(self.message_url, data=payload)
         else:
             self.logger.debug("Empty record set")
