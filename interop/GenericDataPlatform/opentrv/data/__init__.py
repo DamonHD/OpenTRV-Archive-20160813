@@ -13,7 +13,7 @@ class Record(object):
 
     def __str__(self):
         return "[{0}] {1}@{2} {3}{4}".format(
-            "" if self.topic is None else self.topic,
+            "" if self.topic is None else str(self.topic),
             self.name,
             int((self.timestamp - datetime.datetime.utcfromtimestamp(0)).total_seconds()),
             self.value,

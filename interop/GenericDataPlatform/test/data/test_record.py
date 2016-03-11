@@ -25,6 +25,14 @@ class TestRecord(unittest.TestCase):
         r = opentrv.data.Record("t", ts, 10, "W", opentrv.data.Topic("topic"))
         self.assertEqual("[topic] t@"+ts_str+" 10 W", str(r))
 
+    def test_str_nested_topic(self):
+        ts = datetime.datetime.now()
+        ts_str = str(int((ts - datetime.datetime.utcfromtimestamp(0)).total_seconds()))
+        r = opentrv.data.Record(
+            "t", ts, 10, "W", opentrv.data.Topic(
+                "topic", opentrv.data.Topic("my")))
+        self.assertEqual("[my/topic] t@"+ts_str+" 10 W", str(r))
+
 class TestTopic(unittest.TestCase):
     def test_init(self):
         t = opentrv.data.Topic("mytopic")
