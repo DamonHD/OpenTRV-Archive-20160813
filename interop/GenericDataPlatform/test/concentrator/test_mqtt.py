@@ -5,6 +5,19 @@ import datetime
 import opentrv.data
 import opentrv.concentrator.mqtt
 
+class MockMqttMessage(object):
+    def __init__(self, topic, qos, payload):
+        self.topic = topic
+        self.qos = qos
+        self.payload = payload
+
+class MockMqttSink(object):
+    def __init__(self):
+        self.records = None
+
+    def on_message(self, records):
+        self.records = records
+
 class TestMqttSubscriber(unittest.TestCase):
     def test_parse(self):
         payload = """{
@@ -39,6 +52,21 @@ class TestMqttSubscriber(unittest.TestCase):
             self.assertEqual(expected[n].value, r[i].value)
             self.assertEqual(expected[n].unit, r[i].unit)
             self.assertEqual(expected[n].topic, r[i].topic.path())
+
+    def test_on_message(self):
+        t = "topic"
+        p = "".join(["{\"ts\":\"2016-03-12T20:38:00Z\",",
+            "\"body\":{\"T|C\":20}}"])
+        m = MockMqttMessage(t, 0, p)
+        snk = MockMqttSink()
+        sub = opentrv.concentrator.mqtt.Subscriber(
+            snk, url="", client="", topic="")
+        sub.on_message(m)
+        self.assertIsNotNone(snk.records)
+        self.assertEqual(1, len(snk.records))
+        self.assertEqual("topic", snk.records[0].topic.path())
+        self.assertEqual("T", snk.records[0].name)
+        self.assertEqual("C", snk.records[0].unit)
 
 if __name__ == '__main__':
     unittest.main()

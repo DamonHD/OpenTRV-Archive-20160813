@@ -48,7 +48,7 @@ class Subscriber(object):
 
     def on_message(self, msg):
         self.logger.debug("Message: "+msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        sink.on_message(parse(msg.topic, msg.payload))
+        self.sink.on_message(self.parse(msg.topic, msg.payload))
 
     def on_publish(self, mid):
         self.logger.debug("Published: "+str(mid))
