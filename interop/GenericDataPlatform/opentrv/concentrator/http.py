@@ -1,6 +1,8 @@
 import logging
 import requests
 import json
+import uuid
+from urllib.parse import urljoin
 
 import opentrv.data.senml
 
@@ -44,10 +46,19 @@ class Client(object):
         except ValueError:
             self.logger.error("Payload is not JSON, aborting")
             raise
-        comm_url = i_resp.commission
-        r = requests.post(comm_url, data={'uuid': ''})
+        comm_url = urljoin(self.platform_url, i_resp["commissioning_url"])
+        r = requests.post(
+            comm_url,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            data=json.dumps({'uuid': hex(uuid.getnode())})
+        )
+        print(r.request.headers)
         c_resp = json.loads(r.text)
-        self.message_url = c_resp.message_url
+        print(c_resp)
+        self.message_url = urljoin(self.platform_url, c_resp["message_url"])
 
     def on_message(self, records):
         """
@@ -58,6 +69,13 @@ class Client(object):
         if records is not None:
             self.logger.debug("Records: "+str(records))
             payload = self.serializer.to_json(records)
-            r = requests.post(self.message_url, data=payload)
+            r = requests.post(
+                self.message_url,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                data=payload
+            )
         else:
             self.logger.debug("Empty record set")
