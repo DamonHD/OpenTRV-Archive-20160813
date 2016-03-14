@@ -31,10 +31,19 @@ class Client(object):
         was already commissioned.
         """
         self.logger.debug("Commissioning HTTP client")
-        r = requests.get(self.platform_url)
+        try:
+            r = requests.get(self.platform_url)
+        except:
+            self.logger.error("Could not connect to URL {0}, aborting".format(self.platform_url))
+            raise
         if r.status_code != 200:
-            return
-        i_resp = json.loads(r.text)
+            self.logger.error("Commissioning URL {0} returned code {1}, aborting".format(self.platform_url, r.status_code))
+            raise Exception("Invalid URL: {0} returned {1}")
+        try:
+            i_resp = json.loads(r.text)
+        except ValueError:
+            self.logger.error("Payload is not JSON, aborting")
+            raise
         comm_url = i_resp.commission
         r = requests.post(comm_url, data={'uuid': ''})
         c_resp = json.loads(r.text)

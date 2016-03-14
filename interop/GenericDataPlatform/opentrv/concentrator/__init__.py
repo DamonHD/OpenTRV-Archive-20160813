@@ -27,7 +27,11 @@ class Core(object):
         self.logger.debug("Starting core")
         http_client =  opentrv.concentrator.http.Client(
             **self.options["http"])
-        http_client.commission()
+        try:
+            http_client.commission()
+        except (Exception, ValueError) as e:
+            self.logger.critical("Could not commission HTTP client, aborting:" + str(e))
+            return
         mqtt_subscriber =  opentrv.concentrator.mqtt.Subscriber(
             sink=http_client, **self.options["mqtt"])
         mqtt_subscriber.start()
