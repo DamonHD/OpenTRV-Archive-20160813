@@ -13,6 +13,9 @@ Vagrant.configure(2) do |config|
     # Bootstrap the machine
     config.vm.provision "shell", :path => "vm/bootstrap.sh"
 
+    # Install necessary software packages
+    config.vm.provision "shell", :path => "vm/install.sh"
+
     config.vm.provider "virtualbox" do |vb, override|
         # Give VM 1/3 system memory & access to all cpu cores on the host
         host = RbConfig::CONFIG['host_os']
