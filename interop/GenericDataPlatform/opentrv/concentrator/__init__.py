@@ -24,7 +24,7 @@ class Core(object):
         Run the main loop. This loop relies on the MQTT subscriber loop and
         exits when that loop exits.
         """
-        logger.debug("Starting core")
+        self.logger.debug("Starting core")
         http_client =  opentrv.concentrator.http.Client(
             **self.options["http"])
         http_client.commission()
@@ -43,7 +43,7 @@ class OptionParser(object):
         self.logger = logging.getLogger(__name__)
 
     def parse(self, argv):
-        logger.debug("Parsing command line options")
+        self.logger.debug("Parsing command line options")
         options = {}
         parser = argparse.ArgumentParser(
             description='''OpenTRV MQTT subscriber''')
