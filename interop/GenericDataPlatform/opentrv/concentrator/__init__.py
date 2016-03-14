@@ -52,7 +52,7 @@ class OptionParser(object):
         parser = argparse.ArgumentParser(
             description='''OpenTRV MQTT subscriber''')
         parser.add_argument(
-            '-p', '--platform_url', default="http://localhost:8000",
+            '-p', '--platform_url', default="http://localhost:5000",
             help="URL of the data platform.")
         parser.add_argument(
             '-m', '--mqtt_url', default="tcp://localhost:1883",
