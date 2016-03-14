@@ -10,11 +10,8 @@ Vagrant.configure(2) do |config|
     # Set Timezone for VM
     config.timezone.value = "UTC" if Vagrant.has_plugin?("vagrant-timezone")
 
-    # Bootstrap the machine by performing a minimal puppet install
-    #config.vm.provision "shell", :path => "vagrant/dev/bootstrap.sh"
-
-    # Workaround to set the hostname without vagrant overriding /etc/hosts
-    #config.vm.provision "shell", :inline => "hostname #{vm_hostname}"
+    # Bootstrap the machine
+    config.vm.provision "shell", :path => "vm/bootstrap.sh"
 
     config.vm.provider "virtualbox" do |vb, override|
         # Give VM 1/3 system memory & access to all cpu cores on the host
