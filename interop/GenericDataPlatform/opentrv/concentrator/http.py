@@ -6,6 +6,11 @@ from urllib.parse import urljoin
 
 import opentrv.data.senml
 
+REQUEST_HEADERS = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+}
+
 class Client(object):
     """
     HTTP POST client. This object acts as a sink for a messge generator and
@@ -22,6 +27,51 @@ class Client(object):
         self.message_url = ""
         self.serializer = opentrv.data.senml.Serializer()
 
+    # Utility methods
+
+    def get(self, url):
+        """
+        Perform a GET request against the given URL and handle error conditions
+        """
+        try:
+            furl = urljoin(self.platform_url, url)
+            r = requests.get(furl, headers=REQUEST_HEADERS)
+        except:
+            self.logger.error("Could not connect to URL {0}".format(furl))
+            raise
+        if r.status_code != 200:
+            self.logger.error("URL {0} returned code {1}".format(furl, r.status_code))
+            raise Exception("URL {0} returned code {1}".format(furl, r.status_code))
+        try:
+            g_resp = json.loads(r.text)
+        except ValueError:
+            self.logger.error("URL {0} returned non-JSON payload: {1}".format(furl, r.text))
+            raise
+        return g_resp
+
+    def post(self, url, data):
+        """
+        Perform a POST request against the given URL with the given data payload
+        and handle error conditions
+        """
+        try:
+            furl = urljoin(self.platform_url, url)
+            r = requests.post(furl, headers=REQUEST_HEADERS, data=data)
+        except:
+            self.logger.error("Could not connect to URL {0}".format(furl))
+            raise
+        if r.status_code not in [200, 201, 202]:
+            self.logger.error("URL {0} returned code {1}".format(furl, r.status_code))
+            raise Exception("URL {0} returned code {1}".format(furl, r.status_code))
+        try:
+            p_resp = json.loads(r.text)
+        except ValueError:
+            self.logger.error("URL {0} returned non-JSON payload: {1}".format(furl, r.text))
+            raise
+        return p_resp
+
+    # Life-cycle methods
+
     def commission(self):
         """
         Commission the client by sending a GET request to the given URL.
@@ -33,32 +83,10 @@ class Client(object):
         was already commissioned.
         """
         self.logger.debug("Commissioning HTTP client")
-        try:
-            r = requests.get(self.platform_url)
-        except:
-            self.logger.error("Could not connect to URL {0}, aborting".format(self.platform_url))
-            raise
-        if r.status_code != 200:
-            self.logger.error("Commissioning URL {0} returned code {1}, aborting".format(self.platform_url, r.status_code))
-            raise Exception("Invalid URL: {0} returned {1}")
-        try:
-            i_resp = json.loads(r.text)
-        except ValueError:
-            self.logger.error("Payload is not JSON, aborting")
-            raise
-        comm_url = urljoin(self.platform_url, i_resp["commissioning_url"])
-        r = requests.post(
-            comm_url,
-            headers={
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            data=json.dumps({'uuid': hex(uuid.getnode())})
-        )
-        print(r.request.headers)
-        c_resp = json.loads(r.text)
-        print(c_resp)
-        self.message_url = urljoin(self.platform_url, c_resp["message_url"])
+        i_resp = self.get(self.platform_url)
+        comm_url = i_resp["commissioning_url"]
+        c_resp = self.post(comm_url, data=json.dumps({'uuid': hex(uuid.getnode())}))
+        self.message_url = c_resp["message_url"]
 
     def on_message(self, records):
         """
@@ -69,13 +97,6 @@ class Client(object):
         if records is not None:
             self.logger.debug("Records: "+str(records))
             payload = self.serializer.to_json(records)
-            r = requests.post(
-                self.message_url,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                data=payload
-            )
+            self.post(self.message_url, payload)
         else:
             self.logger.debug("Empty record set")
