@@ -1,3 +1,7 @@
+# Compiled python files and cache
 __pycache__
 *.pyo
 *.pyc
+
+# Vagrant work files
+.vagrant
