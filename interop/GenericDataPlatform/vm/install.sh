@@ -11,5 +11,8 @@ echo "Installing PIP and Mosquitto"
 apt-get update -qqy
 apt-get install -qy python3-pip mosquitto
 
+echo "Installing Mosquitto clients for testing"
+apt-get install -qy mosquitto-clients
+
 echo "Installing python packages"
 pip3 install -r /vagrant/vm/requirements.txt
