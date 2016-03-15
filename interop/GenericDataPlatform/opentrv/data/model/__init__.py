@@ -46,6 +46,7 @@ class Model(object):
         i = len(self.data)
         self.data.append(record)
         self._index(i, record)
+        return record
 
     def normalise(self, record):
         if record is None or record == TOMBSTONE:

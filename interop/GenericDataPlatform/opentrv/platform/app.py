@@ -3,7 +3,8 @@ import string
 import logging
 from flask import Flask, jsonify, abort, make_response, url_for, request
 
-from opentrv.platform.model import Concentrators
+import opentrv.data.senml
+from opentrv.platform.model import Concentrators, Devices
 
 app = Flask(__name__)
 
@@ -55,6 +56,17 @@ def post_message(mkey):
     if c is None:
         abbort(404)
     app.logger.debug(request.json)
+    devices = Devices(c)
+    senml_ser = opentrv.data.senml.Serializer()
+    records = senml_ser.from_json_object(request.json)
+    for r in records:
+        d = devices.find_by_topic(r.topic)
+        if d is None:
+            d = devices.add_topic(r.topic)
+            app.logger.debug("Adding device {0}/{1}".format(d["mkey"], d["bn"]))
+        else:
+            app.logger.debug("Retrieving device {0}/{1}".format(d["mkey"], d["bn"]))
+    devices.save()
     return jsonify({'ok': True}), 201
 
 @app.errorhandler(404)

@@ -38,4 +38,4 @@ class Devices(Model):
         return self.find_by_bn(topic.path(sep=DEVICES_TOPIC_SEP))
 
     def add_topic(self, topic):
-        self.add({"mkey": self.mkey, "bn": topic.path(sep=DEVICES_TOPIC_SEP)})
+        return self.add({"mkey": self.mkey, "bn": topic.path(sep=DEVICES_TOPIC_SEP)})
