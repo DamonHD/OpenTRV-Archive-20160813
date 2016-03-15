@@ -1,12 +1,12 @@
 import unittest
 
-from opentrv.platform.model import Devices
+from opentrv.platform.model import Concentrators
 
-class TestDevices(unittest.TestCase):
+class TestConcentrators(unittest.TestCase):
     def test_find_by_uuid(self):
-        devices = Devices()
-        devices.add({"uuid": "test_uuid", "mkey": "test_mkey"})
-        d = devices.find_by_uuid("test_uuid")
-        self.assertIsNotNone(d)
-        self.assertEqual("test_uuid", d["uuid"])
-        self.assertEqual("test_mkey", d["mkey"])
+        concs = Concentrators()
+        concs.add({"uuid": "test_uuid", "mkey": "test_mkey"})
+        c = concs.find_by_uuid("test_uuid")
+        self.assertIsNotNone(c)
+        self.assertEqual("test_uuid", c["uuid"])
+        self.assertEqual("test_mkey", c["mkey"])
