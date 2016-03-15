@@ -3,9 +3,9 @@ import string
 import logging
 from flask import Flask, jsonify, abort, make_response, url_for, request
 
-app = Flask(__name__)
+from opentrv.platform.model import Devices
 
-devices = {}
+app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -23,17 +23,30 @@ def commission_device():
         app.logger.error("Unexpected request content: "+str(request.json))
         abort(400)
     uuid = request.json['uuid']
-    device_msg_key = ''.join(random.SystemRandom().choice(
-        string.ascii_letters + string.digits
-        ) for _ in range(16))
-    app.logger.info("Commissioning device {0} with key {1}".format(uuid, device_msg_key))
-    # Associate a device UUID to a message key
-    # TODO: ensure a given device can't be commissioned twice
-    devices[uuid] = device_msg_key
-    return jsonify({
-        "message_key": device_msg_key,
-        "message_url": url_for('post_message', device_key=device_msg_key)
-        })
+    devices = Devices()
+    d = devices.find_by_uuid(uuid)
+    if d is None:
+        device_msg_key = ''.join(random.SystemRandom().choice(
+            string.ascii_letters + string.digits
+            ) for _ in range(16))
+        app.logger.info("Commissioning device {0} with key {1}".format(uuid, device_msg_key))
+        # Associate a device UUID to a message key
+        # TODO: ensure a given device can't be commissioned twice
+        d = {
+            "uuid": uuid,
+            "mkey": device_msg_key,
+            "message_url": url_for('post_message', device_key=device_msg_key)
+        }
+        devices.add(d)
+        devices.save()
+    else:
+        app.logger.info("Retrieving device {0} with key {1}".format(d["uuid"], d["mkey"]))
+    return jsonify(d)
+    # For now, we let a client re-commission but we will want to prevent
+    # that later
+    #    return jsonify(d)
+    #else:
+    #    abort(403)
 
 @app.route('/data/<string:device_key>', methods=['POST'])
 def post_message(device_key):
@@ -49,3 +62,7 @@ def not_found(error):
 @app.errorhandler(400)
 def bad_request(error):
     return make_response(jsonify({'error': 'Bad request'}), 400)
+
+@app.errorhandler(403)
+def bad_request(error):
+    return make_response(jsonify({'error': 'Forbidden'}), 403)
