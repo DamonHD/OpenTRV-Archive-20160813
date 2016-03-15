@@ -12,7 +12,7 @@ class Subscriber(object):
     received and forwards them to a given sink component.
     """
 
-    def __init__(self, sink, server, port, topic, client):
+    def __init__(self, sink, server, port, topic, client, truncate_topic=True):
         """
         Initialise the MQTT subscriber with the given parameters.
         """
@@ -22,8 +22,10 @@ class Subscriber(object):
         self.client = client
         self.server = server
         self.port = port
-        self.topic = "{0}/#".format(topic)
+        self.root_topic = topic
+        self.sub_topic = "{0}/#".format(topic)
         self.sink = sink
+        self.truncate_topic = truncate_topic
 
     def start(self):
         """
@@ -38,7 +40,7 @@ class Subscriber(object):
         mqttc.on_subscribe = self.on_subscribe
         mqttc.on_log = self.on_log
         mqttc.connect(self.server, self.port)
-        mqttc.subscribe(self.topic, 0)
+        mqttc.subscribe(self.sub_topic, 0)
 
         rc = 0
         while rc == 0:
@@ -67,6 +69,8 @@ class Subscriber(object):
         with the "{" character, it treats it as a OpenTRV frame.
         """
         t = opentrv.data.Topic(topic)
+        if self.truncate_topic:
+            t = t.relative_to(opentrv.data.Topic(self.root_topic))
         if payload[0] == "{":
             pm = json.loads(payload)
             body = pm["body"]

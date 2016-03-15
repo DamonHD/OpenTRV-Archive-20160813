@@ -124,5 +124,15 @@ class TestTopic(unittest.TestCase):
         t = opentrv.data.Topic("topic", opentrv.data.Topic("parent"))
         self.assertEqual(t.path(), str(t))
 
+    def test_as_list(self):
+        t = opentrv.data.Topic("my/long/topic")
+        l = t.as_list()
+        self.assertListEqual(["my","long","topic"], l)
+
+    def test_relative_to(self):
+        t = opentrv.data.Topic("my/long/topic")
+        r = opentrv.data.Topic("my/long")
+        self.assertEqual("topic", t.relative_to(r).path())
+
 if __name__ == '__main__':
     unittest.main()

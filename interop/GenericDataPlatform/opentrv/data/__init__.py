@@ -46,6 +46,29 @@ class Topic(object):
         else:
             return sep.join([self.parent.path(), self.name])
 
+    def as_list(self):
+        if self.parent is None:
+            return [ self.name ]
+        else:
+            plist = self.parent.as_list()
+            plist.append(self.name)
+            return plist
+
+    def relative_to(self, reference):
+        """
+        Return the part of the current topic that is relative to the reference.
+        """
+        slist = self.as_list()
+        rlist = reference.as_list()
+        i = 0
+        for item in slist:
+            if i >= len(rlist):
+                break
+            if item != rlist[i]:
+                break
+            i = i + 1
+        return Topic(DEFAULT_SEPARATOR.join(slist[i:]))
+
     def __eq__(self, other):
         return (
             self.name == other.name and
