@@ -1,6 +1,6 @@
 import unittest
 
-from opentrv.platform.model import Concentrators, Devices
+from opentrv.platform.model import Concentrators, Devices, Sensors
 import opentrv.data
 
 class TestConcentrators(unittest.TestCase):
@@ -34,3 +34,30 @@ class TestDevices(unittest.TestCase):
         self.assertIsNotNone(d)
         self.assertEqual(mkey, d["mkey"])
         self.assertEqual("my_topic", d["bn"])
+
+class TestSensors(unittest.TestCase):
+    def test_find_by_n(self):
+        mkey = "test_mkey"
+        bn = "mytopic"
+        n = "t"
+        d = {"mkey": mkey, "bn": bn}
+        sensors = Sensors(d)
+        sensors.add({"mkey": mkey, "bn": bn, "n": n})
+        s = sensors.find_by_n("t")
+        self.assertIsNotNone(s)
+        self.assertEqual(mkey, s["mkey"])
+        self.assertEqual(bn, s["bn"])
+        self.assertEqual(n, s["n"])
+
+    def test_find_by_record(self):
+        mkey = "test_mkey"
+        bn = "mytopic"
+        d = {"mkey": mkey, "bn": bn}
+        r = opentrv.data.Record("t", 0, 10)
+        sensors = Sensors(d)
+        sensors.add_record(r)
+        s = sensors.find_by_record(r)
+        self.assertIsNotNone(s)
+        self.assertEqual(mkey, s["mkey"])
+        self.assertEqual(bn, s["bn"])
+        self.assertEqual("t", s["n"])
