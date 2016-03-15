@@ -28,8 +28,8 @@ class TestMqttSubscriber(unittest.TestCase):
             }
         }"""
         m = opentrv.concentrator.mqtt.Subscriber(
-            None, server="", port=0, client="", topic="")
-        r = m.parse("topic", payload)
+            None, server="", port=0, client="", topic="OpenTRV/Local")
+        r = m.parse("OpenTRV/Local/topic", payload)
         expected_keys = ["T", "O"]
         expected = {
             "T": opentrv.data.Record(
@@ -54,13 +54,13 @@ class TestMqttSubscriber(unittest.TestCase):
             self.assertEqual(expected[n].topic, r[i].topic.path())
 
     def test_on_message(self):
-        t = "topic"
+        t = "OpenTRV/Local/topic"
         p = "".join(["{\"ts\":\"2016-03-12T20:38:00Z\",",
             "\"body\":{\"T|C\":20}}"])
         m = MockMqttMessage(t, 0, p)
         snk = MockMqttSink()
         sub = opentrv.concentrator.mqtt.Subscriber(
-            snk, server="", port=0, client="", topic="")
+            snk, server="", port=0, client="", topic="OpenTRV/Local")
         sub.on_message(None, None, m)
         self.assertIsNotNone(snk.records)
         self.assertEqual(1, len(snk.records))
