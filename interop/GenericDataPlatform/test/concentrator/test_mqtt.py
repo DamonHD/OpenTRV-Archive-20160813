@@ -9,7 +9,7 @@ class MockMqttMessage(object):
     def __init__(self, topic, qos, payload):
         self.topic = topic
         self.qos = qos
-        self.payload = payload
+        self.payload = payload.encode("utf-8")
 
 class MockMqttSink(object):
     def __init__(self):
@@ -28,7 +28,7 @@ class TestMqttSubscriber(unittest.TestCase):
             }
         }"""
         m = opentrv.concentrator.mqtt.Subscriber(
-            None, url="", client="", topic="")
+            None, server="", port=0, client="", topic="")
         r = m.parse("topic", payload)
         expected_keys = ["T", "O"]
         expected = {
@@ -60,8 +60,8 @@ class TestMqttSubscriber(unittest.TestCase):
         m = MockMqttMessage(t, 0, p)
         snk = MockMqttSink()
         sub = opentrv.concentrator.mqtt.Subscriber(
-            snk, url="", client="", topic="")
-        sub.on_message(m)
+            snk, server="", port=0, client="", topic="")
+        sub.on_message(None, None, m)
         self.assertIsNotNone(snk.records)
         self.assertEqual(1, len(snk.records))
         self.assertEqual("topic", snk.records[0].topic.path())
