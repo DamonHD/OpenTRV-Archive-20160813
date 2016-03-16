@@ -4,7 +4,7 @@ import logging
 from flask import Flask, jsonify, abort, make_response, url_for, request
 
 import opentrv.data.senml
-from opentrv.platform.model import Concentrators, Devices, Sensors
+from opentrv.platform.model import Concentrators, Devices, Sensors, Series
 
 app = Flask(__name__)
 
@@ -42,11 +42,6 @@ def commission():
     else:
         app.logger.info("Retrieving concentrator {0} with key {1}".format(c["uuid"], c["mkey"]))
     return jsonify(c)
-    # For now, we let a client re-commission but we will want to prevent
-    # that later
-    #    return jsonify(c)
-    #else:
-    #    abort(403)
 
 @app.route('/data/<string:mkey>', methods=['POST'])
 def post_message(mkey):
@@ -74,6 +69,9 @@ def post_message(mkey):
         else:
             app.logger.debug("Retrieving sensor {0}/{1}/{2}".format(s["mkey"], s["bn"], s["n"]))
         sensors.save()
+        ts = Series(s)
+        ts.add_record(r)
+        ts.save()
     devices.save()
     return jsonify({'ok': True}), 201
 

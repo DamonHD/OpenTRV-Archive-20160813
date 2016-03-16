@@ -1,4 +1,5 @@
 import os.path
+import datetime
 
 from opentrv.data.model import Model
 
@@ -14,6 +15,7 @@ DEVICES_TOPIC_SEP = "_"
 
 SENSORS_MODEL_NAME = "sensors"
 SENSORS_KEY_N = "n"
+SENSORS_KEY_U = "u"
 
 class Concentrators(Model):
     def __init__(self):
@@ -63,5 +65,25 @@ class Sensors(Model):
     def add_record(self, record):
         s = {"mkey": self.mkey, "bn": self.bn, "n": record.name}
         if record.unit is not None:
-            s["u"] = record.unit
+            s[SENSORS_KEY_U] = record.unit
         return self.add(s)
+
+class Series(Model):
+    def __init__(self, sensor):
+        self.mkey = sensor[CONC_KEY_MKEY]
+        self.bn = sensor[DEVICES_KEY_BN]
+        self.n = sensor[SENSORS_KEY_N]
+        if SENSORS_KEY_U in sensor:
+            self.u = sensor[SENSORS_KEY_U]
+        else:
+            self.u = None
+        super(Series, self).__init__(
+            os.path.join(DOMAIN, self.mkey, self.bn), "series_{0}".format(self.n)
+            )
+
+    def add_record(self, record):
+        r = {
+            "t": int((record.timestamp - datetime.datetime.utcfromtimestamp(0)).total_seconds()),
+            "v": record.value
+        }
+        return self.add(r)

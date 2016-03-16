@@ -1,6 +1,7 @@
 import unittest
+import datetime
 
-from opentrv.platform.model import Concentrators, Devices, Sensors
+from opentrv.platform.model import Concentrators, Devices, Sensors, Series
 import opentrv.data
 
 class TestConcentrators(unittest.TestCase):
@@ -53,7 +54,7 @@ class TestSensors(unittest.TestCase):
         mkey = "test_mkey"
         bn = "mytopic"
         d = {"mkey": mkey, "bn": bn}
-        r = opentrv.data.Record("t", 0, 10)
+        r = opentrv.data.Record("t", datetime.datetime.utcnow(), 10)
         sensors = Sensors(d)
         sensors.add_record(r)
         s = sensors.find_by_record(r)
@@ -61,3 +62,26 @@ class TestSensors(unittest.TestCase):
         self.assertEqual(mkey, s["mkey"])
         self.assertEqual(bn, s["bn"])
         self.assertEqual("t", s["n"])
+
+class TestSeries(unittest.TestCase):
+    def test_init(self):
+        mkey = "test_mkey"
+        bn = "mytopic"
+        n = "t"
+        s = {"mkey": mkey, "bn": bn, "n": n}
+        ts = Series(s)
+        self.assertIsNotNone(ts)
+        self.assertEqual("series_{0}".format(n), ts.name)
+
+    def test_add_record(self):
+        mkey = "test_mkey"
+        bn = "mytopic"
+        n = "t"
+        s = {"mkey": mkey, "bn": bn, "n": n}
+        tnow = datetime.datetime.utcnow()
+        tsnow = int((tnow - datetime.datetime.utcfromtimestamp(0)).total_seconds())
+        ts = Series(s)
+        r = opentrv.data.Record("t", tnow, 10)
+        ts.add_record(r)
+        rlist = ts.find_all()
+        self.assertListEqual([{"t":tsnow, "v":10}], rlist)
