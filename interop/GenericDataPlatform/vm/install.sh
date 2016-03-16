@@ -15,4 +15,8 @@ echo "Installing Mosquitto clients for testing"
 apt-get install -qy mosquitto-clients
 
 echo "Installing python packages"
-pip3 install -r /vagrant/vm/requirements.txt
+if [ -d /vagrant ]; then
+    pip3 install -r /vagrant/vm/requirements.txt
+else
+    pip2 install -r ./requirements.txt
+fi
