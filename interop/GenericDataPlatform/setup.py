@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(
-    name="Generic data platform interop",
+    name="opentrv-interop",
     version="0.1",
     description="Interoperability tools and generic data platform reference implementation",
     author="Bruno Girin, OpenTRV",
