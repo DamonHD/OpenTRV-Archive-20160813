@@ -1,3 +1,5 @@
+import os.path
+
 from opentrv.data.model import Model
 
 DOMAIN = "platform"
@@ -30,7 +32,7 @@ class Devices(Model):
     def __init__(self, concentrator):
         self.mkey = concentrator[CONC_KEY_MKEY]
         super(Devices, self).__init__(
-            DOMAIN, "_".join([self.mkey, DEVICES_MODEL_NAME]),
+            os.path.join(DOMAIN, self.mkey), DEVICES_MODEL_NAME,
             [DEVICES_KEY_BN]
             )
 
@@ -48,7 +50,7 @@ class Sensors(Model):
         self.mkey = device[CONC_KEY_MKEY]
         self.bn = device[DEVICES_KEY_BN]
         super(Sensors, self).__init__(
-            DOMAIN, "_".join([self.mkey, self.bn, SENSORS_MODEL_NAME]),
+            os.path.join(DOMAIN, self.mkey, self.bn), SENSORS_MODEL_NAME,
             [SENSORS_KEY_N]
             )
 
