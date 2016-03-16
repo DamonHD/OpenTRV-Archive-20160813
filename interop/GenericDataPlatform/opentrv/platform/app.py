@@ -1,3 +1,4 @@
+import json
 import random
 import string
 import logging
@@ -74,6 +75,79 @@ def post_message(mkey):
         ts.save()
     devices.save()
     return jsonify({'ok': True}), 201
+
+@app.route('/c', methods=['GET'])
+def get_concentrators():
+    return json.dumps(concs.find_all())
+
+@app.route('/c/<string:mkey>', methods=['GET'])
+def get_concentrator(mkey):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    return json.dumps(c)
+
+@app.route('/c/<string:mkey>/d', methods=['GET'])
+def get_devices(mkey):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    devices = Devices(c)
+    return json.dumps(devices.find_all())
+
+@app.route('/c/<string:mkey>/d/<string:bn>', methods=['GET'])
+def get_device(mkey, bn):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    devices = Devices(c)
+    d = devices.find_by_bn(bn)
+    if d is None:
+        abort(404)
+    return json.dumps(d)
+
+@app.route('/c/<string:mkey>/d/<string:bn>/s', methods=['GET'])
+def get_sensors(mkey, bn):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    devices = Devices(c)
+    d = devices.find_by_bn(bn)
+    if d is None:
+        abort(404)
+    sensors = Sensors(d)
+    return json.dumps(sensors.find_all())
+
+@app.route('/c/<string:mkey>/d/<string:bn>/s/<string:n>', methods=['GET'])
+def get_sensor(mkey, bn, n):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    devices = Devices(c)
+    d = devices.find_by_bn(bn)
+    if d is None:
+        abort(404)
+    sensors = Sensors(d)
+    s = sensors.find_by_n(n)
+    if s is None:
+        abort(404)
+    return json.dumps(s)
+
+@app.route('/c/<string:mkey>/d/<string:bn>/s/<string:n>/data', methods=['GET'])
+def get_series(mkey, bn, n):
+    c = concs.find_by_mkey(mkey)
+    if c is None:
+        abort(404)
+    devices = Devices(c)
+    d = devices.find_by_bn(bn)
+    if d is None:
+        abort(404)
+    sensors = Sensors(d)
+    s = sensors.find_by_n(n)
+    if s is None:
+        abort(404)
+    ts = Series(s)
+    return json.dumps(ts.find_all())
 
 @app.errorhandler(404)
 def not_found(error):
