@@ -19,17 +19,24 @@ class Serializer(object):
 
     def from_json_object(self, payload):
         r = []
+        bn = None
+        bt = None
+        bu = None
+        t = None
         for o in payload:
-            t = opentrv.data.Topic(o["bn"])
-            bt = o["bt"]
-            for e in o["e"]:
+            if "bn" in o:
+                bn = o["bn"]
+                bt = o["bt"] if "bt" in o else None
+                bu = o["bu"] if "bu" in o else None
+                t = opentrv.data.Topic(bn)
+            else:
                 r.append(opentrv.data.Record(
-                    e["n"],
+                    o["n"],
                     datetime.datetime.utcfromtimestamp(
-                        bt + e["t"] if "t" in e else bt
+                        bt + o["t"] if ("t" in o and bt is not None) else (o["t"] if "t" in o else bt)
                         ),
-                    e["v"],
-                    e["u"] if "u" in e else None,
+                    o["v"],
+                    o["u"] if "u" in o else bu,
                     t
                     ))
         return r
@@ -39,21 +46,18 @@ class Serializer(object):
 
     def to_json_object(self, records):
         ja = []
-        bo = None
         bn = None
         bt = None
         for r in records:
-            t = r.topic
+            t = r.topic.path()
             ts = int((r.timestamp - datetime.datetime.utcfromtimestamp(0)).total_seconds())
             if bn is None or t != bn:
                 bn = t
                 bt = ts
-                bo = {
-                    "bn": bn.path(),
-                    "bt": bt,
-                    "e": []
-                }
-                ja.append(bo)
+                e = {"bn": bn, "bt": ts}
+                if len(ja) == 0:
+                    e["ver"] = 3
+                ja.append(e)
             # handle individual item
             e = {
                 "n": r.name,
@@ -64,7 +68,7 @@ class Serializer(object):
             dt = ts - bt
             if dt != 0:
                 e["t"] = dt
-            bo["e"].append(e)
+            ja.append(e)
         return ja
 
 

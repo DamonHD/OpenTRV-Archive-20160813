@@ -21,14 +21,21 @@ class TestSenmlSerializer(unittest.TestCase):
         ]
         serializer = opentrv.data.senml.Serializer()
         o = serializer.to_json_object(r)
-        self.assertEqual(2, len(o))
+        self.assertEqual(9, len(o))
         bt = int((ts - datetime.datetime.utcfromtimestamp(0)).total_seconds())
+        # initial base record
         self.assertEqual(t1.path(), o[0]["bn"])
         self.assertEqual(bt, o[0]["bt"])
-        self.assertEqual(4, len(o[0]["e"]))
-        self.assertEqual("t", o[0]["e"][0]["n"])
-        self.assertEqual(10, o[0]["e"][0]["v"])
-        self.assertEqual(t2.path(), o[1]["bn"])
+        # first actual record
+        self.assertEqual("t", o[1]["n"])
+        self.assertEqual(10, o[1]["v"])
+        self.assertEqual("C", o[1]["u"])
+        # second base record
+        self.assertEqual(t2.path(), o[5]["bn"])
+        self.assertEqual(bt, o[5]["bt"])
+        # first t2 record
+        self.assertEqual("t", o[6]["n"])
+        self.assertEqual(20, o[6]["v"])
 
     def test_to_json(self):
         t1 = opentrv.data.Topic("dummy")
@@ -46,35 +53,33 @@ class TestSenmlSerializer(unittest.TestCase):
         serializer = opentrv.data.senml.Serializer()
         j = serializer.to_json(r)
         o = json.loads(j)
-        self.assertEqual(2, len(o))
+        self.assertEqual(9, len(o))
         bt = int((ts - datetime.datetime.utcfromtimestamp(0)).total_seconds())
+        # initial base record
         self.assertEqual(t1.path(), o[0]["bn"])
         self.assertEqual(bt, o[0]["bt"])
-        self.assertEqual(4, len(o[0]["e"]))
-        self.assertEqual("t", o[0]["e"][0]["n"])
-        self.assertEqual(10, o[0]["e"][0]["v"])
-        self.assertEqual(t2.path(), o[1]["bn"])
+        self.assertEqual(3, o[0]["ver"])
+        # first actual record
+        self.assertEqual("t", o[1]["n"])
+        self.assertEqual(10, o[1]["v"])
+        self.assertEqual("C", o[1]["u"])
+        # second base record
+        self.assertEqual(t2.path(), o[5]["bn"])
+        self.assertEqual(bt, o[5]["bt"])
+        # first t2 record
+        self.assertEqual("t", o[6]["n"])
+        self.assertEqual(20, o[6]["v"])
 
     def test_from_json_object(self):
         ts = datetime.datetime.utcnow()
         bt = int((ts - datetime.datetime.utcfromtimestamp(0)).total_seconds())
         o = [
-            {
-                "bt": bt,
-                "bn": "opentrv/local",
-                "e": [
-                    {"n": "t", "v": 10, "u": "C"},
-                    {"n": "t", "v": 15, "t": 60}
-                ]
-            },
-            {
-                "bt": bt,
-                "bn": "opentrv/remote",
-                "e": [
-                    {"n": "t", "v": 20, "u": "C"},
-                    {"n": "t", "v": 25, "t": 60}
-                ]
-            }
+            {"bt": bt, "bn": "opentrv/local"},
+            {"n": "t", "v": 10, "u": "C"},
+            {"n": "t", "v": 15, "t": 60},
+            {"bt": bt, "bn": "opentrv/remote"},
+            {"n": "t", "v": 20, "u": "C"},
+            {"n": "t", "v": 25, "t": 60}
         ]
         serializer = opentrv.data.senml.Serializer()
         r = serializer.from_json_object(o)
@@ -90,14 +95,13 @@ class TestSenmlSerializer(unittest.TestCase):
         ts = datetime.datetime.utcnow()
         bt = int((ts - datetime.datetime.utcfromtimestamp(0)).total_seconds())
         j = "".join([
-            "[{\"bt\":",str(bt),",\"bn\":\"opentrv/local\",\"e\":[",
+            "[{\"bt\":",str(bt),",\"bn\":\"opentrv/local\"},",
             "{\"n\": \"t\", \"v\": 10, \"u\": \"C\"},",
-            "{\"n\": \"t\", \"v\": 15, \"t\": 60}",
-            "]},",
-            "{\"bt\":",str(bt),",\"bn\":\"opentrv/remote\",\"e\": [",
+            "{\"n\": \"t\", \"v\": 15, \"t\": 60},",
+            "{\"bt\":",str(bt),",\"bn\":\"opentrv/remote\"},",
             "{\"n\": \"t\", \"v\": 20, \"u\": \"C\"},",
-            "{\"n\": \"t\", \"v\": 25, \"t\": 60}",
-            "]}]"])
+            "{\"n\": \"t\", \"v\": 25, \"t\": 60}]"
+            ])
         serializer = opentrv.data.senml.Serializer()
         r = serializer.from_json(j)
         self.assertEqual(4, len(r))
