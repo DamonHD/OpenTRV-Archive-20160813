@@ -3,6 +3,8 @@ import datetime
 
 import opentrv.data
 
+MIME_TYPE="application/senml+json"
+
 class Serializer(object):
     """
     SenML serializer that transforms from data record to SenML JSON payload and
