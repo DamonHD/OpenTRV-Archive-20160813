@@ -5,6 +5,15 @@ import opentrv.data
 
 MIME_TYPE="application/senml+json"
 
+KEY_BASE_NAME = "bn"
+KEY_BASE_TIME = "bt"
+KEY_BASE_UNIT = "bu"
+KEY_NAME      = "n"
+KEY_TIME      = "t"
+KEY_UNIT      = "u"
+KEY_VALUE     = "v"
+KEY_VERSION   = "ver"
+
 class Serializer(object):
     """
     SenML serializer that transforms from data record to SenML JSON payload and
@@ -24,19 +33,22 @@ class Serializer(object):
         bu = None
         t = None
         for o in payload:
-            if "bn" in o:
-                bn = o["bn"]
-                bt = o["bt"] if "bt" in o else None
-                bu = o["bu"] if "bu" in o else None
+            if KEY_BASE_NAME in o:
+                bn = o[KEY_BASE_NAME]
+                bt = o[KEY_BASE_TIME] if KEY_BASE_TIME in o else None
+                bu = o[KEY_BASE_UNIT] if KEY_BASE_UNIT in o else None
                 t = opentrv.data.Topic(bn)
             else:
                 r.append(opentrv.data.Record(
-                    o["n"],
+                    o[KEY_NAME],
                     datetime.datetime.utcfromtimestamp(
-                        bt + o["t"] if ("t" in o and bt is not None) else (o["t"] if "t" in o else bt)
+                        bt + o[KEY_TIME] if (
+                            KEY_TIME in o and bt is not None
+                            ) else (
+                            o[KEY_TIME] if KEY_TIME in o else bt)
                         ),
-                    o["v"],
-                    o["u"] if "u" in o else bu,
+                    o[KEY_VALUE],
+                    o[KEY_UNIT] if KEY_UNIT in o else bu,
                     t
                     ))
         return r
@@ -54,20 +66,20 @@ class Serializer(object):
             if bn is None or t != bn:
                 bn = t
                 bt = ts
-                e = {"bn": bn, "bt": ts}
+                e = {KEY_BASE_NAME: bn, KEY_BASE_TIME: ts}
                 if len(ja) == 0:
-                    e["ver"] = 3
+                    e[KEY_VERSION] = 3
                 ja.append(e)
             # handle individual item
             e = {
-                "n": r.name,
-                "v": r.value
+                KEY_NAME:  r.name,
+                KEY_VALUE: r.value
             }
             if r.unit is not None:
-                e["u"] = r.unit
+                e[KEY_UNIT] = r.unit
             dt = ts - bt
             if dt != 0:
-                e["t"] = dt
+                e[KEY_TIME] = dt
             ja.append(e)
         return ja
 
