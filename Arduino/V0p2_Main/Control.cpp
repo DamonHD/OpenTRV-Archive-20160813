@@ -482,7 +482,11 @@ uint8_t ModelledRadValve::computeTargetTemp()
 
 #if defined(ENABLE_SETBACK_LOCKOUT_COUNTDOWN)
     // If smart setbacks are locked out then return WARM temperature as-is.  (TODO-786)
-    if(0xff != eeprom_read_byte((uint8_t *)OTV0P2BASE::V0P2BASE_EE_START_SETBACK_LOCKOUT_COUNTDOWN_H_INV)) { return(wt); }
+    if(0xff != eeprom_read_byte((uint8_t *)OTV0P2BASE::V0P2BASE_EE_START_SETBACK_LOCKOUT_COUNTDOWN_H_INV))
+      {
+      OTV0P2BASE::serialPrintlnAndFlush("?SLO");
+      return(wt);
+      }
 #endif
 
     // Set back target the temperature a little if the room seems to have been vacant for a long time (TODO-107)
@@ -998,9 +1002,15 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     // Where to write the real frame content.
     uint8_t *const realTXFrameStart = bptr;
 
-    // If forcing encryption then suppress the "@" ID field entirely,
+    // If forcing encryption or if unconditionally suppressed
+    // then suppress the "@" ID field entirely,
     // assuming that the encrypted commands will carry the ID, ie in the 'envelope'.
-    if(doEnc) { static const char nul[1] = {}; ss1.setID(nul); }
+#if defined(ENABLE_JSON_SUPPRESSED_ID)
+    if(true)
+#else
+    if(doEnc)
+#endif // defined(ENABLE_JSON_SUPPRESSED_ID)
+        { static const char nul[1] = {}; ss1.setID(nul); }
     else
       {
 #if defined(ENABLE_FHT8VSIMPLE)
@@ -1023,14 +1033,23 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
       }
 
     // Managed JSON stats.
-    const bool maximise = true; // Make best use of available bandwidth...
-    if(ss1.isEmpty())
-      {
-      // Enable "+" count field for diagnostic purposes, eg while TX is lossy,
-      // if the primary radio channel does not include a sequence number itself.
-      // Assume that an encrypted channel will provide its own (visible) sequence counter.
-      ss1.enableCount(!doEnc); 
-      }
+#if defined(ENABLE_JSON_FRAME_MINIMISED)
+    // Minimise frame size (eg for noisy radio links)...
+    const bool maximise = false;
+    // Suppress "+" count field, accepting loss of diagnostics.
+    ss1.enableCount(false); 
+#else
+    // Make best use of available bandwidth...
+    const bool maximise = true;
+    // Enable "+" count field for diagnostic purposes, eg while TX is lossy,
+    // if the primary radio channel does not include a sequence number itself.
+    // Assume that an encrypted channel will provide its own (visible) sequence counter.
+    ss1.enableCount(!doEnc); 
+#endif // defined(ENABLE_JSON_FRAME_MINIMISED)
+//    if(ss1.isEmpty())
+//      {
+//      // Perform run-once operations...
+//      }
     ss1.put(TemperatureC16);
 #if defined(HUMIDITY_SENSOR_SUPPORT)
     ss1.put(RelHumidity);
@@ -1180,7 +1199,9 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
     if(!sendingJSONFailed)
       {
       // Write out unadjusted JSON or encrypted frame on secondary radio.
-      SecondaryRadio.queueToSend(realTXFrameStart, doEnc ? (bptr - realTXFrameStart) : wrote);
+//      SecondaryRadio.queueToSend(realTXFrameStart, doEnc ? (bptr - realTXFrameStart) : wrote);
+      // Assumes that framing (or not) of primary and secondary radios is the same (usually: both framed).
+      SecondaryRadio.queueToSend(realTXFrameStart, wrote);
       }
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
@@ -1641,7 +1662,7 @@ void remoteCallForHeatRX(const uint16_t id, const uint8_t percentOpen)
 
 #if defined(ENABLE_RADIO_RX)
 // Returns true if continuous background RX has been set up.
-static bool setUpContinuousRX(const bool second0)
+static bool setUpContinuousRX()
   {
   // Possible paranoia...
   // Periodically (every few hours) force radio off or at least to be not listening.
@@ -1873,7 +1894,7 @@ void loopOpenTRV()
 //  if(getSubCycleTime() >= nearOverrunThreshold) { tooNearOverrun = true; }
 
 #if defined(ENABLE_CONTINUOUS_RX)
-  const bool needsToListen = setUpContinuousRX(second0);
+  const bool needsToListen = setUpContinuousRX();
 #endif
 
 #if defined(ENABLE_BOILER_HUB)
@@ -2100,7 +2121,7 @@ void loopOpenTRV()
       // though not enough to make a significant difference to bandwidth.
       // Send very slightly more often when changed stats pending to send upstream.
       // TODO: send immediately with 100% valve payload when user puts system into BAKE mode for fast response.
-      if(!minute1From4AfterSensors && (OTV0P2BASE::randRNG8() > (ss1.changedValue() ? 13 : 11))) { break; }
+      if(!minute1From4AfterSensors && (OTV0P2BASE::randRNG8() > (ss1.changedValue() ? 4 : 3))) { break; }
 #endif
 
       // Abort if not allowed to send stats at all.

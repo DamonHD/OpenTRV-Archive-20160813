@@ -40,7 +40,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include "V0p2_Main.h"
 
 #include "V0p2_Generic_Config.h"
-#include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
+#include <OTV0p2_Board_IO_Config.h> // I/O pin allocation and setup: include ahead of I/O module headers.
 
 // Arduino libraries imported here (even for use in other .cpp files).
 #include <SPI.h>
@@ -325,11 +325,11 @@ void optionalPOST()
 #endif // ENABLE_RADIO_SIM900
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   SecondaryRadio.preinit(NULL);
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+#if 0 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("R2");
 #endif
   // Check that the radio is correctly connected; panic if not...
-  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
+  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(F("r2")); }
   // Assume no RX nor filtering on secondary radio.
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
@@ -373,7 +373,7 @@ void setup()
 //#endif
 
   // IO setup for safety, and to avoid pins floating.
-  IOSetup();
+  OTV0P2BASE::IOSetup();
 
 //#if defined(ENABLE_MIN_ENERGY_BOOT)
 //  nap(WDTO_120MS); // Sleep to let power supply recover a little.
