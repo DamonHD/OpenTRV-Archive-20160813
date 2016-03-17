@@ -85,3 +85,23 @@ class TestSeries(unittest.TestCase):
         ts.add_record(r)
         rlist = ts.find_all()
         self.assertListEqual([{"t":tsnow, "v":10}], rlist)
+
+    def test_find_all_records(self):
+        mkey = "test_mkey"
+        bn = "mytopic"
+        n = "t"
+        s = {"mkey": mkey, "bn": bn, "n": n}
+        tnow = datetime.datetime.utcnow()
+        tsnow = (tnow - datetime.datetime.utcfromtimestamp(0)).total_seconds()
+        ts = Series(s)
+        ts.add({'t':tsnow, 'v': 10})
+        ts.add({'t':tsnow+30, 'v': 10.5})
+        ts.add({'t':tsnow+60, 'v': 11})
+        rlist = ts.find_all_records()
+        self.assertEqual(3, len(rlist))
+        self.assertEqual("test_mkey/mytopic", rlist[0].topic.path())
+        self.assertEqual("t", rlist[0].name)
+        self.assertEqual(tnow, rlist[0].timestamp)
+        self.assertEqual(10, rlist[0].value)
+        self.assertEqual(10.5, rlist[1].value)
+        self.assertEqual(11, rlist[2].value)

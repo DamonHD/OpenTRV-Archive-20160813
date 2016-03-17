@@ -2,6 +2,7 @@ import os.path
 import datetime
 
 from opentrv.data.model import Model
+from opentrv.data import Record, Topic
 
 DOMAIN = "platform"
 
@@ -87,3 +88,15 @@ class Series(Model):
             "v": record.value
         }
         return self.add(r)
+
+    def to_record(self, item):
+        return Record(
+            self.n,
+            datetime.datetime.utcfromtimestamp(item['t']),
+            item['v'],
+            self.u,
+            Topic(self.bn, Topic(self.mkey))
+            )
+
+    def find_all_records(self):
+        return [self.to_record(item) for item in self.find_all()]

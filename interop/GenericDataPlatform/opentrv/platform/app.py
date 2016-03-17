@@ -5,6 +5,7 @@ import logging
 from flask import Flask, jsonify, abort, make_response, url_for, request
 
 import opentrv.data.senml
+import opentrv.data.hypercat
 from opentrv.platform.model import Concentrators, Devices, Sensors, Series
 
 app = Flask(__name__)
@@ -44,7 +45,7 @@ def commission():
         app.logger.info("Retrieving concentrator {0} with key {1}".format(c["uuid"], c["mkey"]))
     return jsonify(c)
 
-@app.route('/data/<string:mkey>', methods=['POST'])
+@app.route('/d/<string:mkey>', methods=['POST'])
 def post_message(mkey):
     if not request.json:
         abort(400)
@@ -76,26 +77,33 @@ def post_message(mkey):
     devices.save()
     return jsonify({'ok': True}), 201
 
-@app.route('/c', methods=['GET'])
+@app.route('/cat', methods=['GET'])
 def get_concentrators():
-    return json.dumps(concs.find_all())
+    cat = opentrv.data.hypercat.Catalogue(
+        [opentrv.data.hypercat.CatalogueItem(
+            url_for('get_concentrator', mkey=c['mkey']),
+            "Concentrator {0}".format(c['mkey']),
+            payload = c
+            ) for c in concs.find_all()]
+        )
+    return opentrv.data.hypercat.Serializer().to_json(cat)
 
-@app.route('/c/<string:mkey>', methods=['GET'])
+@app.route('/d/<string:mkey>', methods=['GET'])
 def get_concentrator(mkey):
     c = concs.find_by_mkey(mkey)
     if c is None:
         abort(404)
-    return json.dumps(c)
-
-@app.route('/c/<string:mkey>/d', methods=['GET'])
-def get_devices(mkey):
-    c = concs.find_by_mkey(mkey)
-    if c is None:
-        abort(404)
     devices = Devices(c)
-    return json.dumps(devices.find_all())
+    cat = opentrv.data.hypercat.Catalogue(
+        [opentrv.data.hypercat.CatalogueItem(
+            url_for('get_device', mkey=d['mkey'], bn=d['bn']),
+            "Device {0}/{1}".format(d['mkey'], d['bn']),
+            payload = d
+            ) for d in devices.find_all()]
+        )
+    return opentrv.data.hypercat.Serializer().to_json(cat)
 
-@app.route('/c/<string:mkey>/d/<string:bn>', methods=['GET'])
+@app.route('/d/<string:mkey>/<string:bn>', methods=['GET'])
 def get_device(mkey, bn):
     c = concs.find_by_mkey(mkey)
     if c is None:
@@ -104,21 +112,18 @@ def get_device(mkey, bn):
     d = devices.find_by_bn(bn)
     if d is None:
         abort(404)
-    return json.dumps(d)
-
-@app.route('/c/<string:mkey>/d/<string:bn>/s', methods=['GET'])
-def get_sensors(mkey, bn):
-    c = concs.find_by_mkey(mkey)
-    if c is None:
-        abort(404)
-    devices = Devices(c)
-    d = devices.find_by_bn(bn)
-    if d is None:
-        abort(404)
     sensors = Sensors(d)
-    return json.dumps(sensors.find_all())
+    cat = opentrv.data.hypercat.Catalogue(
+        [opentrv.data.hypercat.CatalogueItem(
+            url_for('get_sensor', mkey=s['mkey'], bn=s['bn'], n=s['n']),
+            "Sensor {0}/{1}/{2}".format(s['mkey'], s['bn'], s['n']),
+            content_type = opentrv.data.senml.MIME_TYPE,
+            payload = s
+            ) for s in sensors.find_all()]
+        )
+    return opentrv.data.hypercat.Serializer().to_json(cat)
 
-@app.route('/c/<string:mkey>/d/<string:bn>/s/<string:n>', methods=['GET'])
+@app.route('/d/<string:mkey>/<string:bn>/<string:n>', methods=['GET'])
 def get_sensor(mkey, bn, n):
     c = concs.find_by_mkey(mkey)
     if c is None:
@@ -131,23 +136,8 @@ def get_sensor(mkey, bn, n):
     s = sensors.find_by_n(n)
     if s is None:
         abort(404)
-    return json.dumps(s)
-
-@app.route('/c/<string:mkey>/d/<string:bn>/s/<string:n>/data', methods=['GET'])
-def get_series(mkey, bn, n):
-    c = concs.find_by_mkey(mkey)
-    if c is None:
-        abort(404)
-    devices = Devices(c)
-    d = devices.find_by_bn(bn)
-    if d is None:
-        abort(404)
-    sensors = Sensors(d)
-    s = sensors.find_by_n(n)
-    if s is None:
-        abort(404)
     ts = Series(s)
-    return json.dumps(ts.find_all())
+    return opentrv.data.senml.Serializer().to_json(ts.find_all_records())
 
 @app.errorhandler(404)
 def not_found(error):
