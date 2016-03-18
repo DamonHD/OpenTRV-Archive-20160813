@@ -67,7 +67,7 @@ def post_message(mkey):
         abort(400)
     c = concs.find_by_mkey(mkey)
     if c is None:
-        abbort(404)
+        abort(404)
     app.logger.debug(request.json)
     devices = Devices(c)
     senml_ser = opentrv.data.senml.Serializer()
@@ -164,5 +164,5 @@ def bad_request(error):
     return make_response(jsonify({'error': 'Bad request'}), 400)
 
 @app.errorhandler(403)
-def bad_request(error):
+def forbidden(error):
     return make_response(jsonify({'error': 'Forbidden'}), 403)
