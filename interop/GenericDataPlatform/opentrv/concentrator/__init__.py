@@ -66,6 +66,7 @@ class OptionParser(object):
         self.logger.debug("Parsing command line options")
         options = {}
         parser = argparse.ArgumentParser(
+            prog = self.__module__,
             description='''OpenTRV MQTT subscriber''')
         parser.add_argument(
             '-u', '--platform_url', default="http://localhost:5000",
