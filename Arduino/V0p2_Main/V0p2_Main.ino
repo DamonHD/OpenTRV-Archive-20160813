@@ -30,9 +30,6 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
   Basic AVR power consumption ticking an (empty) control loop at ~0.5Hz should be ~1uA.
  */
 
-#ifdef ALLOW_CC1_SUPPORT
-#include <OTProtocolCC.h>
-#endif
 #if defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT) || defined(ENABLE_SECURE_RADIO_BEACON)
 #include <OTAESGCM.h>
 #endif
@@ -40,7 +37,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2013--2016
 #include "V0p2_Main.h"
 
 #include "V0p2_Generic_Config.h"
-#include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
+#include <OTV0p2_Board_IO_Config.h> // I/O pin allocation and setup: include ahead of I/O module headers.
 
 // Arduino libraries imported here (even for use in other .cpp files).
 #include <SPI.h>
@@ -169,18 +166,7 @@ void serialPrintlnBuildVersion()
 // Pick an appropriate radio config for RFM23 (if it is the primary radio).
 #ifdef ENABLE_RADIO_PRIMARY_RFM23B
 // OTRadioChannelConfig(const void *_config, bool _isFull, bool _isRX, bool _isTX, bool _isAuth = false, bool _isEnc = false, bool _isUnframed = false)
-#if defined(ALLOW_CC1_SUPPORT)
-// COHEAT: REV2/REV9 talking on fast GFSK channel 0, REV9 TX to FHT8V on slow OOK.
-#define RADIO_CONFIG_NAME "COHEAT DUAL CHANNEL"
-static const uint8_t nPrimaryRadioChannels = 2;
-static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChannels] =
-  {
-  // GFSK channel 0 full config, RX/TX, not in itself secure.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsGFSK57600, true),
-  // FS20/FHT8V compatible channel 1 full config, used for TX only, not secure, unframed.
-  OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsOOK5000, true, false, true, false, false, true),
-  };
-#elif defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
+#if defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
 #define RADIO_CONFIG_NAME "GFSK"
 // Nodes talking on fast GFSK channel 0.
 static const uint8_t nPrimaryRadioChannels = 1;
@@ -189,7 +175,7 @@ static const OTRadioLink::OTRadioChannelConfig RFM23BConfigs[nPrimaryRadioChanne
   // GFSK channel 0 full config, RX/TX, not in itself secure.
   OTRadioLink::OTRadioChannelConfig(OTRFM23BLink::StandardRegSettingsGFSK57600, true),
   };
-#else // !defined(ALLOW_CC1_SUPPORT) && !defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
+#else // !defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
 #define RADIO_CONFIG_NAME "OOK"
 // Nodes talking (including to to FHT8V) on slow OOK.
 static const uint8_t nPrimaryRadioChannels = 1;
@@ -209,26 +195,7 @@ static const OTRadioLink::OTRadioChannelConfig SecondaryRadioConfig(NULL, true);
 #endif // ENABLE_RADIO_SECONDARY_SIM900
 
 
-#if defined(ALLOW_CC1_SUPPORT_RELAY)
-// For a CC1 relay, ignore everything except FTp2_CC1PollAndCmd messages.
-// With care (not accessing EEPROM for example) this could also reject anything with wrong house code.
-static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
-  {
-  if((buflen < 8) || (OTRadioLink::FTp2_CC1PollAndCmd != buf[0])) { return(false); }
-  buflen = 8; // Truncate message to correct size for efficiency.
-  return(true); // Accept message.
-  }
-#elif defined(ALLOW_CC1_SUPPORT_HUB)
-// For a CC1 hub, ignore everything except FTp2_CC1Alert and FTp2_CC1PollResponse messages.
-static bool FilterRXISR(const volatile uint8_t *buf, volatile uint8_t &buflen)
-  {
-  if(buflen < 8) { return(false); }
-  const uint8_t t = buf[0];
-  if((OTRadioLink::FTp2_CC1Alert != t) && (OTRadioLink::FTp2_CC1PollResponse != t)) { return(false); }
-  buflen = 8; // Truncate message to correct size for efficiency.
-  return(true); // Accept message.
-  }
-#elif defined(ENABLE_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
+#if defined(ENABLE_STATS_RX) && defined(ENABLE_FS20_ENCODING_SUPPORT)
 // If using FS20-based non-secured messaging...
 // If a stats hub then be prepared to accept a wide variety of binary and JSON message types.
 // It may yet be good to trim the smaller message types down to size in particular to help queueing.
@@ -325,11 +292,11 @@ void optionalPOST()
 #endif // ENABLE_RADIO_SIM900
   // Initialise the radio, if configured, ASAP because it can suck a lot of power until properly initialised.
   SecondaryRadio.preinit(NULL);
-#if 1 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
+#if 0 && defined(DEBUG) && !defined(ENABLE_TRIMMED_MEMORY)
   DEBUG_SERIAL_PRINTLN_FLASHSTRING("R2");
 #endif
   // Check that the radio is correctly connected; panic if not...
-  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(); }
+  if(!SecondaryRadio.configure(1, &SecondaryRadioConfig) || !SecondaryRadio.begin()) { panic(F("r2")); }
   // Assume no RX nor filtering on secondary radio.
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
@@ -373,7 +340,7 @@ void setup()
 //#endif
 
   // IO setup for safety, and to avoid pins floating.
-  IOSetup();
+  OTV0P2BASE::IOSetup();
 
 //#if defined(ENABLE_MIN_ENERGY_BOOT)
 //  nap(WDTO_120MS); // Sleep to let power supply recover a little.

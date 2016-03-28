@@ -124,7 +124,7 @@ HEADER SECTION (all included in authentication if frame secure, length hl=4+il)
         Never 0 nor 0xff, so the type is never 0 nor 0x7f.
 
  1      frame sequence number mod 16 [0,15] (bits 4 to 7)
-        and ID length [0,15] (bits 0-3)
+        and ID length [0,15] (bits 0 to 3)
 
         Sequence number (seqNum) increments from 0, wraps at 15;
         increment is skipped for multiple TX used for noise immunity.

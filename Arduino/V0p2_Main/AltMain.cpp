@@ -26,13 +26,10 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2016
 #include "V0p2_Main.h"
 
 #include "V0p2_Generic_Config.h"
-#include "V0p2_Board_IO_Config.h" // I/O pin allocation: include ahead of I/O module headers.
+#include <OTV0p2_Board_IO_Config.h> // I/O pin allocation and setup: include ahead of I/O module headers.
 
 // Arduino libraries.
 //#include <Wire.h>
-#ifdef ALLOW_CC1_SUPPORT
-#include <OTProtocolCC.h>
-#endif
 #include <OTV0p2Base.h>
 #include <OTRadioLink.h>
 

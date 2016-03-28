@@ -855,8 +855,8 @@ void populateCoreStats(OTV0P2BASE::FullStatsMessageCore_t *const content)
   if(localFHT8VTRVEnabled())
     {
     // Use FHT8V house codes if available.
-    content->id0 = FHT8VGetHC1();
-    content->id1 = FHT8VGetHC2();
+    content->id0 = FHT8V.nvGetHC1();
+    content->id1 = FHT8V.nvGetHC2();
     }
   else
     {
@@ -1002,9 +1002,15 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
     // Where to write the real frame content.
     uint8_t *const realTXFrameStart = bptr;
 
-    // If forcing encryption then suppress the "@" ID field entirely,
+    // If forcing encryption or if unconditionally suppressed
+    // then suppress the "@" ID field entirely,
     // assuming that the encrypted commands will carry the ID, ie in the 'envelope'.
-    if(doEnc) { static const char nul[1] = {}; ss1.setID(nul); }
+#if defined(ENABLE_JSON_SUPPRESSED_ID)
+    if(true)
+#else
+    if(doEnc)
+#endif // defined(ENABLE_JSON_SUPPRESSED_ID)
+        { static const char nul[1] = {}; ss1.setID(nul); }
     else
       {
 #if defined(ENABLE_FHT8VSIMPLE)
@@ -1013,8 +1019,8 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
       static char idBuf[5]; // Static so as to have lifetime no shorter than ss1.
       if(localFHT8VTRVEnabled())
         {
-        const uint8_t hc1 = FHT8VGetHC1();
-        const uint8_t hc2 = FHT8VGetHC2();
+        const uint8_t hc1 = FHT8V.nvGetHC1();
+        const uint8_t hc2 = FHT8V.nvGetHC2();
         idBuf[0] = OTV0P2BASE::hexDigit(hc1 >> 4);
         idBuf[1] = OTV0P2BASE::hexDigit(hc1);
         idBuf[2] = OTV0P2BASE::hexDigit(hc2 >> 4);
@@ -1027,14 +1033,23 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("Bin gen err!");
       }
 
     // Managed JSON stats.
-    const bool maximise = true; // Make best use of available bandwidth...
-    if(ss1.isEmpty())
-      {
-      // Enable "+" count field for diagnostic purposes, eg while TX is lossy,
-      // if the primary radio channel does not include a sequence number itself.
-      // Assume that an encrypted channel will provide its own (visible) sequence counter.
-      ss1.enableCount(!doEnc); 
-      }
+#if defined(ENABLE_JSON_FRAME_MINIMISED)
+    // Minimise frame size (eg for noisy radio links)...
+    const bool maximise = false;
+    // Suppress "+" count field, accepting loss of diagnostics.
+    ss1.enableCount(false); 
+#else
+    // Make best use of available bandwidth...
+    const bool maximise = true;
+    // Enable "+" count field for diagnostic purposes, eg while TX is lossy,
+    // if the primary radio channel does not include a sequence number itself.
+    // Assume that an encrypted channel will provide its own (visible) sequence counter.
+    ss1.enableCount(!doEnc); 
+#endif // defined(ENABLE_JSON_FRAME_MINIMISED)
+//    if(ss1.isEmpty())
+//      {
+//      // Perform run-once operations...
+//      }
     ss1.put(TemperatureC16);
 #if defined(HUMIDITY_SENSOR_SUPPORT)
     ss1.put(RelHumidity);
@@ -1184,7 +1199,9 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
     if(!sendingJSONFailed)
       {
       // Write out unadjusted JSON or encrypted frame on secondary radio.
-      SecondaryRadio.queueToSend(realTXFrameStart, doEnc ? (bptr - realTXFrameStart) : wrote);
+//      SecondaryRadio.queueToSend(realTXFrameStart, doEnc ? (bptr - realTXFrameStart) : wrote);
+      // Assumes that framing (or not) of primary and secondary radios is the same (usually: both framed).
+      SecondaryRadio.queueToSend(realTXFrameStart, wrote);
       }
 #endif // ENABLE_RADIO_SECONDARY_MODULE
 
@@ -1240,13 +1257,10 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("JSON gen err!");
 static void wireComponentsTogether()
   {
 #ifdef ENABLE_FHT8VSIMPLE
-  // Set up radio.
+  // Set up radio with FHT8V.
   FHT8V.setRadio(&PrimaryRadio);
   // Load EEPROM house codes into primary FHT8V instance at start.
-  FHT8VLoadHCFromEEPROM();
-#ifdef ALLOW_CC1_SUPPORT
-  FHT8V.setChannelTX(1);
-#endif // ALLOW_CC1_SUPPORT
+  FHT8V.nvLoadHC();
 #endif // ENABLE_FHT8VSIMPLE
 
 #if defined(ENABLE_OCCUPANCY_SUPPORT) && defined(ENABLE_OCCUPANCY_DETECTION_FROM_AMBLIGHT)
@@ -1645,7 +1659,7 @@ void remoteCallForHeatRX(const uint16_t id, const uint8_t percentOpen)
 
 #if defined(ENABLE_RADIO_RX)
 // Returns true if continuous background RX has been set up.
-static bool setUpContinuousRX(const bool second0)
+static bool setUpContinuousRX()
   {
   // Possible paranoia...
   // Periodically (every few hours) force radio off or at least to be not listening.
@@ -1877,7 +1891,7 @@ void loopOpenTRV()
 //  if(getSubCycleTime() >= nearOverrunThreshold) { tooNearOverrun = true; }
 
 #if defined(ENABLE_CONTINUOUS_RX)
-  const bool needsToListen = setUpContinuousRX(second0);
+  const bool needsToListen = setUpContinuousRX();
 #endif
 
 #if defined(ENABLE_BOILER_HUB)
@@ -1907,7 +1921,7 @@ void loopOpenTRV()
     // eg work was accrued during the previous major slow/outer loop
     // or the in a previous orbit of this loop sleep or nap was terminated by an I/O interrupt.
     // May generate output to host on Serial.
-    // Come back and have another go if work was done, until the next tick at most.
+    // Come back and have another go immediately until no work remaining.
     if(handleQueuedMessages(&Serial, true, &PrimaryRadio)) { continue; }
 #endif
 
@@ -1928,7 +1942,7 @@ void loopOpenTRV()
     else
       {
       // Normal long minimal-power sleep until wake-up interrupt.
-      // Rely on interrupt to force quick loop round to I/O poll().
+      // Rely on interrupt to force quick loop round to I/O poll.
       ::OTV0P2BASE::sleepUntilInt();
       }
 //    DEBUG_SERIAL_PRINTLN_FLASHSTRING("w"); // Wakeup.
@@ -2012,14 +2026,6 @@ void loopOpenTRV()
       {
       showStatus = true;
       recompute = true;
-      }
-#endif
-  // Alternative UI tickers...
-#ifdef ALLOW_CC1_SUPPORT_RELAY_IO // REV9 CC1 relay...
-    // Run the CC1 relay UI.
-    if(tickUICO(TIME_LSD))
-      {
-      showStatus = true;
       }
 #endif
     }
@@ -2158,7 +2164,7 @@ void loopOpenTRV()
 #endif
         break;
         }
-      const OTRadioLink::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
+      const OTRadioLink::SimpleSecureFrame32or0BodyTXBase::fixed32BTextSize12BNonce16BTagSimpleEnc_ptr_t e = OTAESGCM::fixed32BTextSize12BNonce16BTagSimpleEnc_DEFAULT_STATELESS;
       const uint8_t txIDLen = OTRadioLink::ENC_BODY_DEFAULT_ID_BYTES;
       uint8_t buf[OTRadioLink::generateSecureBeaconMaxBufSize];
       const uint8_t bodylen = OTRadioLink::generateSecureBeaconRawForTX(buf, sizeof(buf), txIDLen, e, NULL, key);
@@ -2277,7 +2283,7 @@ void loopOpenTRV()
 #if defined(ENABLE_BOILER_HUB)
       // Feed in the local valve position when calling for heat just as if over the air.
       // (Does not arrive with the normal FHT8V timing of 2-minute gaps so boiler may turn off out of sync.)
-      if(FHT8V.isControlledValveReallyOpen()) { remoteCallForHeatRX(FHT8VGetHC(), FHT8V.get()); }
+      if(FHT8V.isControlledValveReallyOpen()) { remoteCallForHeatRX(FHT8V.nvGetHC(), FHT8V.get()); }
 #endif // defined(ENABLE_BOILER_HUB)
 #elif defined(ENABLE_NOMINAL_RAD_VALVE) && defined(ENABLE_LOCAL_TRV) // Other local valve types, simulate a remote call for heat with a fake ID.
 #if defined(ENABLE_BOILER_HUB)
@@ -2353,6 +2359,9 @@ void loopOpenTRV()
     }
 #endif
 
+  // End-of-loop processing, that may be slow.
+  // Ensure progress on queued messages ahead of slow work.  (TODO-867)
+  handleQueuedMessages(&Serial, true, &PrimaryRadio); // Deal with any pending I/O.
 
 #if defined(HAS_DORM1_VALVE_DRIVE) && defined(ENABLE_LOCAL_TRV)
   // Handle local direct-drive valve, eg DORM1.
@@ -2384,7 +2393,6 @@ void loopOpenTRV()
     { ValveDirect.read(); }
 #endif
 
-
   // Command-Line Interface (CLI) polling.
   // If a reasonable chunk of the minor cycle remains after all other work is done
   // AND the CLI is / should be active OR a status line has just been output
@@ -2392,17 +2400,12 @@ void loopOpenTRV()
   // using a timeout which should safely avoid overrun, ie missing the next basic tick,
   // and which should also allow some energy-saving sleep.
 #if 1 && defined(ENABLE_CLI)
-  const bool humanCLIUse = isCLIActive(); // Keeping CLI active for human interaction rather than for automated interaction.
-  if(showStatus || humanCLIUse)
+  if(isCLIActive())
     {
     const uint8_t sct = OTV0P2BASE::getSubCycleTime();
-    const uint8_t listenTime = max(OTV0P2BASE::GSCT_MAX/16, CLI_POLL_MIN_SCT);
-    const uint8_t stopBy = nearOverrunThreshold - 1 - listenTime;
-    if(sct < (stopBy - 1 - listenTime))
-      // Don't listen beyond the last 16th of the cycle,
-      // or a minimal time if only prodding for interaction with automated front-end,
-      // as listening for UART RX uses lots of power.
-      { pollCLI(humanCLIUse ? stopBy : (sct+CLI_POLL_MIN_SCT), 0 == TIME_LSD); }
+    const uint8_t listenTime = OTV0P2BASE::CLI::MIN_CLI_POLL_SCT;
+    const uint8_t stopBy = nearOverrunThreshold - 1;
+    pollCLI(stopBy, 0 == TIME_LSD);
     }
 #endif
 
