@@ -14,10 +14,10 @@ with a generic data platform. It comes in thee parts:
 The platform and bridge implement a simple provisioning protocol that works as
 follows, where:
 
-- `init` is a well known URL on the platform
+- `init` is a well known URL on the platform;
 - `uuid` is the unique identifier of the bridge / concentrator, can typically
-  be the MAC address
-- `data` is sensor data in SenML format
+  be the MAC address;
+- `data` is sensor data in SenML format.
 
 The current interaction doesn't include the ability to exchange configuration
 options between the bridge and the platform.
@@ -64,11 +64,16 @@ first bridge. To prevent this, we could add the following extensions:
 - exchange security keys on steps 3 and 4 to enable data signing for step 5,
   if connection is over HTTPS
 
-From a functional perspective, a useful extension of this mechanism would be to
-allow the bridge to query configuration parameter changes at a regular basis or
-to notify the platform of local configuration changes. More information, such
-as the Hypercat and configuration URLs could be included in the initialisation
-response.
+From a functional perspective, useful extensions of this mechanism would be:
+
+- Include in the response to the `init` call all the generic platform options,
+  including a pointer to the Hypercat root catalogue;
+- Include in the response to the `comm` call all device specific options
+  including initial configuration, device update processes (e.g. Ubuntu Snappy
+  store), etc;
+- Add a set of configuration exchange processes modelled on TR-069 to enable
+  the device or the platform to exchange configuration options and make it
+  possible for the platform to request a configuration change.
 
 ## Run the tests
 
