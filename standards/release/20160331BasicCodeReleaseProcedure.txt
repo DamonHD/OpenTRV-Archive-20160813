@@ -11,6 +11,9 @@ Release procedure:
 * Update version numbers in top-level header files.
 * Check unit tests work, and update unit tests' version dependencies.
 * Check compilation and run unit tests
+* Update .zip file(s) for Arduino library releases.
 * Tag as prerelease x.x.x-RC1 (eg 1.0.0-RC1).  No leading "V" or "v".
+    - release title should be the same as the tag.
+    - release description should include what the release is and why.
 * Once all libs are prereleased and tested, new release of OpenTRV main repo can be made against them.
 * Retag all libs as x.x.x and create x.x.x-production-branch in each library and OpenTRV repo.
