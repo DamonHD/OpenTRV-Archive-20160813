@@ -27,8 +27,8 @@ Release procedure:
 
 
 
-A sample of typical release notes follows, typically in in a plain text file called
-RELEASES_<LIBNAME>.txt:
+A sample of typical release notes follows,
+typically maintained in a plain text file called RELEASES_<LIBNAME>.txt:
 
 
 
