@@ -1,0 +1,16 @@
+Basic OpenTRV release numbering and procedure
+=============================================
+DHD20160331
+
+Library version numbering is 'semantic' of general form major.minor.micro, see: http://semver.org/
+
+Release procedure:
+* Update release notes:
+    - Make new entry with today's date and other fields filled.
+    - Check pending changes all correct and present.
+* Update version numbers in top-level header files.
+* Check unit tests work, and update unit tests' version dependencies.
+* Check compilation and run unit tests
+* Tag as prerelease x.x.x-RC1 (eg 1.0.0-RC1).  No leading "V" or "v".
+* Once all libs are prereleased and tested, new release of OpenTRV main repo can be made against them.
+* Retag all libs as x.x.x and create x.x.x-production-branch in each library and OpenTRV repo.
