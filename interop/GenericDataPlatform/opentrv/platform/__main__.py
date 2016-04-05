@@ -1,0 +1,27 @@
+# The OpenTRV project licenses this file to you
+# under the Apache Licence, Version 2.0 (the "Licence");
+# you may not use this file except in compliance
+# with the Licence. You may obtain a copy of the Licence at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the Licence is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the Licence for the
+# specific language governing permissions and limitations
+# under the Licence.
+#
+# Author(s) / Copyright (s): Bruno Girin 2016
+
+import sys
+import logging
+import opentrv.platform.app
+
+# Main entry into the system. This code is called when the platform
+# module is run from the command line using the python -m option.
+if __name__ == "__main__":
+    logger = logging.getLogger(__name__)
+    logger.info("Starting platform")
+    app = opentrv.platform.app.app
+    app.run(debug=True)

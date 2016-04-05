@@ -1,0 +1,8 @@
+# Compiled python files and cache
+__pycache__
+*.pyo
+*.pyc
+*.egg-info
+
+# Vagrant work files
+.vagrant
