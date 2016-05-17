@@ -27,7 +27,8 @@ import java.util.TreeMap;
 
 
 /**Extracts energy meter readings from an ASCII CSV reader/stream.
- * This expects an input where the first column is (or starts with) a YYYY-MM-DD date
+ * This expects an input where the first column is (or starts with)
+ * a YYYY-MM-DD or YYYY/MM/DD date
  * and the second column is an (ascending) meter reading.
  * Everything else is ignored.
  * <p>
@@ -41,7 +42,7 @@ import java.util.TreeMap;
  * and in particular:
  * <ul>will attempt to quietly ignore any time element in the date field/column</li>
  * <li>will ignore unparseable lines (eg header lines)</li>
- * <li>will attempt to ignore all but the (leading) date in a
+ * <li>will attempt to ignore all but the (leading) date in a date/time field (eg a trailing 00:00:00)</li>
  * <li>does not expect values for every days</li>
  * <li>will accept out-of-order values</li>
  * </ul>
@@ -65,6 +66,16 @@ DATE,VALUE,USETARIFF,COST
 2009-06-22,636
 2009-06-29,639
 2009-07-06,643
+</pre>
+ * <p>
+ * And another:
+<pre>
+Time,Gas (kWh)
+2016/03/01 00:00:00,18.88
+2016/03/02 00:00:00,16.99
+2016/03/03 00:00:00,14.33
+2016/03/04 00:00:00,16.88
+2016/03/05 00:00:00,17.77
 </pre>
  */
 public final class MeterReadingsExtractor

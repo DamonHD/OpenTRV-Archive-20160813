@@ -32,7 +32,10 @@ import org.junit.Test;
 
 import uk.org.opentrv.hdd.MeterReadingsExtractor;
 
-/**Test handling of meter readings input data. */
+/**Test handling of meter readings (daily) input data.
+ * Dates are of the form YYYY-MM-DD or YYYY/MM/DD with optional trailing data (eg " 00:00:00").
+ * There may be a leading non-numeric header line.
+ */
 public class MeterReadingsExtractorTest
     {
     /**Sample 1 of meter heading data. */
@@ -51,6 +54,14 @@ public class MeterReadingsExtractorTest
             "2014-04-20,5897.0,1,\n" +
             "2014-03-30,5886.0,1,\n" +
             "2014-03-23,5878.0,1,\n";
+
+//    /**Sample 3 of meter heading data with Excel style midnight date, eg as used by Loop. */
+//    public static final String sample3 =
+//            "Time,Gas (kWh)\n" +
+//            "2016/03/01 00:00:00,18.88\n" +
+//            "2016/03/02 00:00:00,16.99\n" +
+//            "2016/03/03 00:00:00,14.33\n" +
+//            "2016/03/04 00:00:00,16.88\n";
 
     /**Test parsing of readings CSV. */
     @Test public void testReadingsExtract() throws Exception
@@ -76,6 +87,17 @@ public class MeterReadingsExtractorTest
             assertEquals(5878.0, readings2.get(20140323).doubleValue(), 0.001);
             assertEquals(5899.0, readings2.get(20140427).doubleValue(), 0.001);
             }
+
+//        try(final Reader r = new StringReader(sample3))
+//            {
+//            final SortedMap<Integer, Double> readings1 = MeterReadingsExtractor.extractMeterReadings(r);
+//            assertNotNull(readings1);
+//            assertEquals(6, readings1.size());
+//            assertEquals(Integer.valueOf(20160301), readings1.firstKey());
+//            assertEquals(Integer.valueOf(20160304), readings1.lastKey());
+//            assertEquals(18.88d, readings1.get(20160301).doubleValue(), 0.001);
+//            assertEquals(16.88d, readings1.get(20160304).doubleValue(), 0.001);
+//            }
         }
 
     /**Return a stream for the large (ASCII) sample meter data in EGLL; never null. */
