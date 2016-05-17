@@ -17,12 +17,11 @@ Author(s) / Copyright (s): Bruno Girin 2016 */
 
 package uk.org.opentrv.comms.statshandlers.mqtt;
 
-import static uk.org.opentrv.comms.cfg.ConfigUtil.getAsString;
 import static uk.org.opentrv.comms.cfg.ConfigUtil.getAsNumber;
+import static uk.org.opentrv.comms.cfg.ConfigUtil.getAsString;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.Map;
 
 import org.eclipse.paho.client.mqttv3.MqttClient;
@@ -31,16 +30,15 @@ import org.eclipse.paho.client.mqttv3.MqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttTopic;
-
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
+import uk.org.opentrv.comms.cfg.ConfigException;
 import uk.org.opentrv.comms.statshandlers.StatsHandler;
 import uk.org.opentrv.comms.statshandlers.StatsMessageWithMetadata;
 import uk.org.opentrv.comms.util.CommonSensorLabels;
 import uk.org.opentrv.comms.util.ParsedRemoteBinaryStatsRecord;
-import uk.org.opentrv.comms.cfg.ConfigException;
 
 /**
  * Stats handler that sends data over MQTT. The payload is a JSON frame with minimal
@@ -78,7 +76,7 @@ public final class MqttPublishingHandler implements StatsHandler {
         this.clientId = clientId;
         this.rootTopic = rootTopic;
         this.qos = qos;
-        
+
         // Construct the object that contains connection parameters
         // such as cleansession and LWAT
         conOpt = new MqttConnectOptions();
@@ -90,7 +88,7 @@ public final class MqttPublishingHandler implements StatsHandler {
 
     /**
      * Create a new MqttPublishingHandler from a configuration map that contains a
-     * URL, root toic and QOS.
+     * URL, root topic and QOS.
      *
      * @param config the configuration map
      * @throws MalformedURLException
