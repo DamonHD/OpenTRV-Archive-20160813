@@ -26,7 +26,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 
-/**Extracts energy meter readings from an ASCII CSV reader/stream.
+/**Extracts energy meter readings as cumulative use from an ASCII CSV reader/stream.
  * This expects an input where the first column is (or starts with)
  * a YYYY-MM-DD or YYYY/MM/DD date
  * and the second column is an (ascending) meter reading.
@@ -34,7 +34,9 @@ import java.util.TreeMap;
  * <p>
  * This will reject input where values go down at any point,
  * unless given specific instructions how to handle such elements,
- * eg due to meter roll-over or meter replacement.
+ * eg due to meter roll-over or meter replacement,
+ * or given non-cumulative style inputs eg per interval readings
+ * in which case a cumulative output will be generated.
  * <p>
  * This does not attempt to interpret units.
  * <p>
