@@ -23,6 +23,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.StringReader;
 import java.util.Calendar;
 import java.util.Collection;
@@ -200,6 +204,24 @@ public class CalcTest
             }
         assertTrue("must be able to fit enough at small window size, got "+goodSmallWindows+"/"+availableSmallWindows, goodSmallWindows >= (availableSmallWindows/2));
         }
+
+    /**Return a stream for the ETV (ASCII) simple HDD data for EGLL; never null. */
+    public static InputStream getETVEGLLHDDCSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("201603-ETV-16WW-sample-HDD15p5-DegreeDaysNet-EGLL.csv")); }
+    /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
+    public static Reader getETVEGLLHDDCSVReader() throws IOException
+        { return(new InputStreamReader(getETVEGLLHDDCSVStream(), "ASCII7")); }
+
+
+//    /**Compute test vector for ETV samples. */
+//    @Test
+//    public void testCombineMeterReadingsWithHDDForETV() throws Exception
+//        {
+//        final Collection<ConsumptionHDDTuple> ds1eve = Util.combineMeterReadingsWithHDD(
+//                MeterReadingsExtractor.extractMeterReadings(XXX, true),
+//                DDNExtractor.extractForBaseTemperature(getETVEGLLHDDCSVReader(), 15.5f),
+//                true);
+//        }
 
     /**Test some date arithmetic. */
     @Test

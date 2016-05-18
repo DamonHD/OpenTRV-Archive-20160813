@@ -131,4 +131,22 @@ public class DDNExtractorTest
         assertEquals(4, i2.get(Calendar.MONTH));
         assertEquals(25, i2.get(Calendar.DATE));
         }
+
+    /**Return a stream for the ETV (ASCII) simple HDD data for EGLL; never null. */
+    public static InputStream getETVEGLLHDDCSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("201603-ETV-16WW-sample-HDD15p5-DegreeDaysNet-EGLL.csv")); }
+    /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
+    public static Reader getETVEGLLHDDCSVReader() throws IOException
+        { return(new InputStreamReader(getETVEGLLHDDCSVStream(), "ASCII7")); }
+
+
+    /**Test extraction from a simple (single HDD base temperature) file. */
+    @Test public void testDDNExtractSimple() throws Exception
+        {
+        try(final Reader r = getETVEGLLHDDCSVReader())
+            {
+
+            }
+        }
+
     }
