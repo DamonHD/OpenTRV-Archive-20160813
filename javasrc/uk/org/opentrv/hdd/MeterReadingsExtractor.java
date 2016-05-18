@@ -41,14 +41,14 @@ import java.util.TreeMap;
  * <p>
  * This rejects all negative meter values.
  * <p>
- * This does not attempt to interpret units.
+ * This does not attempt to interpret or convert units.
  * <p>
  * This attempts to be generous in what it accepts,
  * and in particular:
  * <ul>will attempt to quietly ignore any time element in the date field/column</li>
- * <li>will ignore unparseable lines (eg header lines)</li>
+ * <li>will ignore unparseable lines (eg header lines) in cumulative-format inputs</li>
  * <li>will attempt to ignore all but the (leading) date in a date/time field (eg a trailing 00:00:00)</li>
- * <li>does not expect values for every days</li>
+ * <li>does not expect values for every day</li>
  * <li>will accept out-of-order values</li>
  * </ul>
  * <p>
@@ -99,6 +99,11 @@ public final class MeterReadingsExtractor
         throws IOException
         { return(extractMeterReadings(r, false)); }
 
+    /**Returns true iff the character is an allowed data separator between YYYY MM and DD sections. */
+    private static boolean isAllowedDateSeparator(final char c)
+        {
+        return(('-' == c) || ('/' == c));
+        }
 
     /**Extract meter readings from CSV as map from YYYYMMDD date key to reading as supplied; never null.
      * @param nonCumulativeInput if false rejects data where readings go down over time,
@@ -136,13 +141,13 @@ public final class MeterReadingsExtractor
             final Double rawReading;
 
             // Parse date.
-            if((10 > d.length()) || ('-' != d.charAt(4)) || ('-' != d.charAt(7)))
+            if((10 > d.length()) || !isAllowedDateSeparator(d.charAt(4)) || !isAllowedDateSeparator(d.charAt(7)))
                 { continue; }
             try
                 {
                 year = Integer.parseInt(d.substring(0, 4), 10);
                 month = Integer.parseInt(d.substring(5, 7), 10);
-                day = Integer.parseInt(d.substring(8), 10);
+                day = Integer.parseInt(d.substring(8, 10), 10);
                 rawReading = Double.parseDouble(fields[1]);
                 }
             catch(final NumberFormatException e)
@@ -178,7 +183,7 @@ public final class MeterReadingsExtractor
         // Ensure that values increase monotonically with date,
         // though not strictly since successive values can be the same.
         Double prev = null;
-        for(final Double v : m.values())
+        for(final Double v : mCumulative.values())
             {
             if((null != prev) && (v.doubleValue() < prev))
                 { throw new IOException("meter reading goes backwards after " + prev); }
