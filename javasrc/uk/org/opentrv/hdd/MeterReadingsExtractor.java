@@ -41,14 +41,14 @@ import java.util.TreeMap;
  * <p>
  * This rejects all negative meter values.
  * <p>
- * This does not attempt to interpret units.
+ * This does not attempt to interpret or convert units.
  * <p>
  * This attempts to be generous in what it accepts,
  * and in particular:
  * <ul>will attempt to quietly ignore any time element in the date field/column</li>
- * <li>will ignore unparseable lines (eg header lines)</li>
+ * <li>will ignore unparseable lines (eg header lines) in cumulative-format inputs</li>
  * <li>will attempt to ignore all but the (leading) date in a date/time field (eg a trailing 00:00:00)</li>
- * <li>does not expect values for every days</li>
+ * <li>does not expect values for every day</li>
  * <li>will accept out-of-order values</li>
  * </ul>
  * <p>
