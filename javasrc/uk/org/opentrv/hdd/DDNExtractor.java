@@ -48,6 +48,16 @@ Date,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,% Estimated
 2011-05-01,0.3,0.5,0.7,1,1.3,1.5,1.8,2.2,2.5,2.9,3.3,3.8,4.2,1
 2011-05-02,1.7,2,2.3,2.7,3,3.4,3.9,4.3,4.8,5.3,5.8,6.3,6.8,0
 </pre>
+ * <p>
+ * Also supports parsing a simpler form with a known/implicit base temperature
+ * (only first two columns used):
+<pre>
+Date,HDD,% Estimated
+2016-03-01,6.6,0
+2016-03-02,10.1,0
+2016-03-03,9.2,0
+2016-03-04,10.6,0
+</pre>
  */
 public final class DDNExtractor
     {
@@ -109,98 +119,6 @@ public final class DDNExtractor
         if(Math.abs(baseTemperature - hdd.getBaseTemperatureAsFloat()) > BASE_TEMP_EPSILON) { throw new IOException("close enough base temperature not found in data"); }
         return(hdd);
         }
-
-//    /**Extract HDD for specified base temperature from DDN-style multi-base-temperature CSV; never null.
-//     * Does NOT close the Reader.
-//     * @param r ASCII CSV file in degreedays.net-like format (Date line followed by HDD values); never null
-//     * @throws IOException in case of parse error or missing data
-//     */
-//    public static ContinuousDailyHDD extractForBaseTemperature(final Reader r, final float baseTemperature)
-//        throws IOException
-//        {
-//        if(null == r) { throw new IllegalArgumentException(); }
-//
-//        // Wrap in BufferedReader if required.
-//        final BufferedReader br = (r instanceof BufferedReader) ? ((BufferedReader) r) : new BufferedReader(r);
-//
-//        // Discard header lines until encountering the first one starting with "Date" as its first field.
-//        // Remaining fields on that line are base temperatures,
-//        // form which the one (or close) to that requested has to be selected.
-//        String line;
-//        int col = -1; // Data column to use.
-//        float bt = -1; // Actual base temperature.
-//        findcol: while(null != (line = br.readLine()))
-//            {
-//            if(!line.startsWith("Date,")) { continue; }
-//            final String fields[] = Util.splitCSVLine(line);
-//            if((fields.length > 0) && "Date".equals(fields[0]))
-//                {
-//                for(int i = 1; i < fields.length; ++i)
-//                    {
-//                    final float f;
-//                    try { f = Float.parseFloat(fields[i]); }
-//                    catch(final NumberFormatException e) { continue; } // Ignore non-numbers.
-//                    if(Float.isNaN(f) || Float.isInfinite(f)) { continue; } // Ignore non-numbers.
-//                    if(Math.abs(baseTemperature - f) < BASE_TEMP_EPSILON)
-//                        {
-//                        col = i;
-//                        bt = f;
-//                        break findcol;
-//                        }
-//                    }
-//                throw new IOException("requested base temperature not found: " + baseTemperature + " in " + line);
-//                }
-//            }
-//        // Exception in common 'bad' case, eg wrong sort of file.
-//        if(null == line) { throw new EOFException("no data found"); }
-//
-//        // Build up map.
-//        final SortedMap<Integer, Float> m = new TreeMap<>();
-//        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-//        while(null != (line = br.readLine()))
-//            {
-//            final String fields[] = Util.splitCSVLine(line);
-//            if(fields.length <= col) { throw new IOException("malformed row (insufficient columms): " + line); }
-//            final float hdd;
-//            final int year;
-//            final int month;
-//            final int day;
-//            final Integer key;
-//            final String d = fields[0];
-//            if((10 != d.length()) || ('-' != d.charAt(4)) || ('-' != d.charAt(7)))
-//                { throw new IOException("bad date, expecting YYYY-MM-DD: " + d); }
-//            try
-//                {
-//                year = Integer.parseInt(d.substring(0, 4), 10);
-//                month = Integer.parseInt(d.substring(5, 7), 10);
-//                day = Integer.parseInt(d.substring(8), 10);
-//                hdd = Float.parseFloat(fields[col]);
-//                }
-//            catch(final NumberFormatException e)
-//                { throw new IOException("unable to parse row: " + line, e); }
-//            if(hdd < 0) { throw new IOException("bad (negative) HDD value in row: " + line); }
-//            // Check that dates are strictly monotonically increasing and without gaps.
-//            key = (year * 10000) + (month * 100) + day;
-//            if(!m.isEmpty())
-//                {
-//                final Integer pdkey = m.lastKey();
-//                if(pdkey.intValue() >= key) { throw new IOException("misordered date in row: " + line); }
-//                final Calendar prevDay = ((Calendar) cal.clone());
-//                prevDay.set(year, month-1, day);
-//                prevDay.add(Calendar.DAY_OF_MONTH, -1);
-//                if(!Util.keyFromDate(prevDay).equals(pdkey))  { throw new IOException("date gap before row: " + line); }
-//                }
-//            m.put(key, hdd);
-//            }
-//
-//        // Return immutable result.
-//        final float baseTemp = bt;
-//        final SortedMap<Integer, Float> im = Collections.unmodifiableSortedMap(m);
-//        return(new ContinuousDailyHDD(){
-//            @Override public float getBaseTemperatureAsFloat() { return(baseTemp); }
-//            @Override public SortedMap<Integer, Float> getMap() { return(im); }
-//            });
-//        }
 
     /**Extract all HDD set for provided base temperatures from DDN-style multi-base-temperature CSV; never null.
      * Does NOT close the Reader.
@@ -303,6 +221,68 @@ public final class DDNExtractor
                 });
             }
         return(Collections.unmodifiableSortedSet(result));
+        }
+
+    /**Extract simple HDD with specified base temperature; never null.
+     * Does NOT close the Reader.
+     * @param r ASCII CSV file in simple degreedays.net-like format (Date line followed by HDD values); never null
+     * @throws IOException in case of parse error or missing data
+     *
+     * Format accepted (only first two columns used):
+<pre>
+Date,HDD,% Estimated
+2016-03-01,6.6,0
+2016-03-02,10.1,0
+2016-03-03,9.2,0
+2016-03-04,10.6,0
+</pre>
+     */
+    public static ContinuousDailyHDD extractSimpleHDD(final Reader r, final float baseTemperature)
+        throws IOException
+        {
+        if(null == r) { throw new IllegalArgumentException(); }
+
+        // Wrap in BufferedReader if required.
+        @SuppressWarnings("resource")
+        final BufferedReader br = (r instanceof BufferedReader) ? ((BufferedReader) r) : new BufferedReader(r);
+
+        // Discard header lines until encountering the first one starting with "Date" as its first field.
+        // Thereafter extract data and HDD float value.
+        final SortedMap<Integer, Float> map = new TreeMap<>();
+        String line;
+        while(null != (line = br.readLine()))
+            { if(line.startsWith("Date,")) { break; } }
+        while(null != (line = br.readLine()))
+            {
+            final String fields[] = Util.splitCSVLine(line);
+            if(fields.length < 2) { continue; }
+            final float hdd;
+            final int year;
+            final int month;
+            final int day;
+            final Integer key;
+            final String d = fields[0];
+            if((10 != d.length()) || ('-' != d.charAt(4)) || ('-' != d.charAt(7)))
+                { throw new IOException("bad date, expecting YYYY-MM-DD: " + d); }
+            try
+                {
+                year = Integer.parseInt(d.substring(0, 4), 10);
+                month = Integer.parseInt(d.substring(5, 7), 10);
+                day = Integer.parseInt(d.substring(8), 10);
+                final float v = Float.parseFloat(fields[1]);
+                if(!(v >= 0)) { throw new IOException("bad HDD value in row: " + line); }
+                hdd = v;
+                }
+            catch(final NumberFormatException e)
+                { throw new IOException("unable to parse row: " + line, e); }
+            key = (year * 10000) + (month * 100) + day;
+            map.put(key, hdd);
+            }
+
+        return(new ContinuousDailyHDD(){
+            @Override public float getBaseTemperatureAsFloat() { return(baseTemperature); }
+            @Override public SortedMap<Integer, Float> getMap() { return(map); }
+            });
         }
 
 //    /**UTC date-only format for Excel/CSV dates; hold lock on this instance while using for thread-safety. */

@@ -139,13 +139,17 @@ public class DDNExtractorTest
     public static Reader getETVEGLLHDDCSVReader() throws IOException
         { return(new InputStreamReader(getETVEGLLHDDCSVStream(), "ASCII7")); }
 
-
     /**Test extraction from a simple (single HDD base temperature) file. */
     @Test public void testDDNExtractSimple() throws Exception
         {
         try(final Reader r = getETVEGLLHDDCSVReader())
             {
-
+            final ContinuousDailyHDD hdd = DDNExtractor.extractSimpleHDD(r, 15.5f);
+            assertEquals(15.5f, hdd.getBaseTemperatureAsFloat(), 0.1f);
+            assertNotNull(hdd.getMap());
+            assertEquals(31, hdd.getMap().size());
+            assertEquals(10.1f, hdd.getMap().get(20160302), 0.01f);
+            assertEquals(7.9f, hdd.getMap().get(20160329), 0.01f);
             }
         }
 
