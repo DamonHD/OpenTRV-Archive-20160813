@@ -206,19 +206,41 @@ public class CalcTest
         }
 
     /**Return a stream for the ETV (ASCII) simple kWh consumption data; never null. */
-    public static InputStream getETVKWhCSVStream()
+    public static InputStream getETVKWh201602CSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("201602-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
+    /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
+    public static Reader getETVKWh201602CSVReader() throws IOException
+        { return(new InputStreamReader(getETVKWh201602CSVStream(), "ASCII7")); }
+
+    /**Return a stream for the ETV (ASCII) simple kWh consumption data; never null. */
+    public static InputStream getETVKWh201603CSVStream()
         { return(DDNExtractorTest.class.getResourceAsStream("201603-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
     /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
-    public static Reader getETVKWhCSVReader() throws IOException
-        { return(new InputStreamReader(getETVKWhCSVStream(), "ASCII7")); }
+    public static Reader getETVKWh201603CSVReader() throws IOException
+        { return(new InputStreamReader(getETVKWh201603CSVStream(), "ASCII7")); }
 
     /**Compute test vector for ETV samples. */
     @Test
-    public void testCombineMeterReadingsWithHDDForETV() throws Exception
+    public void testCombineMeterReadingsWithHDDForETV201602() throws Exception
         {
         final Collection<ConsumptionHDDTuple> ds = Util.combineMeterReadingsWithHDD(
-            MeterReadingsExtractor.extractMeterReadings(getETVKWhCSVReader(), true),
-            DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDDCSVReader(), 15.5f),
+            MeterReadingsExtractor.extractMeterReadings(getETVKWh201602CSVReader(), true),
+            DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDD201602CSVReader(), 15.5f),
+            true);
+        final HDDMetrics metrics = Util.computeHDDMetrics(ds);
+        System.out.println(metrics);
+        assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, metrics.slopeEnergyPerHDD, 0.1f);
+        assertEquals("baseline usage ~ 5.2kWh/d", 5.2f, metrics.interceptBaseline, 0.1f);
+        assertEquals("R^2 ~ 0.6", 0.6f, metrics.rsqFit, 0.1f);
+        }
+
+    /**Compute test vector for ETV samples. */
+    @Test
+    public void testCombineMeterReadingsWithHDDForETV201603() throws Exception
+        {
+        final Collection<ConsumptionHDDTuple> ds = Util.combineMeterReadingsWithHDD(
+            MeterReadingsExtractor.extractMeterReadings(getETVKWh201603CSVReader(), true),
+            DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDD201603CSVReader(), 15.5f),
             true);
         final HDDMetrics metrics = Util.computeHDDMetrics(ds);
         System.out.println(metrics);
