@@ -216,10 +216,15 @@ public class CalcTest
     @Test
     public void testCombineMeterReadingsWithHDDForETV() throws Exception
         {
-        final Collection<ConsumptionHDDTuple> ds1eve = Util.combineMeterReadingsWithHDD(
+        final Collection<ConsumptionHDDTuple> ds = Util.combineMeterReadingsWithHDD(
             MeterReadingsExtractor.extractMeterReadings(getETVKWhCSVReader(), true),
             DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDDCSVReader(), 15.5f),
             true);
+        final HDDMetrics metrics = Util.computeHDDMetrics(ds);
+        System.out.println(metrics);
+        assertEquals("slope ~ 1.7kWh/HDD12.5", 1.7f, metrics.slopeEnergyPerHDD, 0.1f);
+        assertEquals("baseline usage ~ 0.7kWh/d", 0.7f, metrics.interceptBaseline, 0.1f);
+        assertEquals("R^2 ~ 0.4", 0.4f, metrics.rsqFit, 0.1f);
         }
 
     /**Test some date arithmetic. */
