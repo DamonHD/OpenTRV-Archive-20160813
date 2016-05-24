@@ -131,4 +131,33 @@ public class DDNExtractorTest
         assertEquals(4, i2.get(Calendar.MONTH));
         assertEquals(25, i2.get(Calendar.DATE));
         }
+
+    /**Return a stream for the ETV (ASCII) simple HDD 2016/02 data for EGLL; never null. */
+    public static InputStream getETVEGLLHDD201602CSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("201602-ETV-16WW-sample-HDD15p5-DegreeDaysNet-EGLL.csv")); }
+    /**Return a Reader for the ETV sample HDD 2016/02 data for EGLL; never null. */
+    public static Reader getETVEGLLHDD201602CSVReader() throws IOException
+        { return(new InputStreamReader(getETVEGLLHDD201602CSVStream(), "ASCII7")); }
+
+    /**Return a stream for the ETV (ASCII) simple HDD 2016/03 data for EGLL; never null. */
+    public static InputStream getETVEGLLHDD201603CSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("201603-ETV-16WW-sample-HDD15p5-DegreeDaysNet-EGLL.csv")); }
+    /**Return a Reader for the ETV sample HDD 2016/03 data for EGLL; never null. */
+    public static Reader getETVEGLLHDD201603CSVReader() throws IOException
+        { return(new InputStreamReader(getETVEGLLHDD201603CSVStream(), "ASCII7")); }
+
+    /**Test extraction from a simple (single HDD base temperature) file. */
+    @Test public void testDDNExtractSimple() throws Exception
+        {
+        try(final Reader r = getETVEGLLHDD201603CSVReader())
+            {
+            final ContinuousDailyHDD hdd = DDNExtractor.extractSimpleHDD(r, 15.5f);
+            assertEquals(15.5f, hdd.getBaseTemperatureAsFloat(), 0.1f);
+            assertNotNull(hdd.getMap());
+            assertEquals(31, hdd.getMap().size());
+            assertEquals(10.1f, hdd.getMap().get(20160302), 0.01f);
+            assertEquals(7.9f, hdd.getMap().get(20160329), 0.01f);
+            }
+        }
+
     }
