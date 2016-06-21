@@ -24,7 +24,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * <li>Daily (local midnight-to-midnight, or close) kWh space-heating fuel-use date or equivalent.</li>
  * <li>Optional OpenTRV stats data,
  *     in particular indicating when occupancy-based energy-saving features are enabled or not.</li>
- * <li>Explicitly active / non-active / mixed or don't-user flags by day for the household.</li>
+ * <li>Explicit smart / dumb / don't-use flags by day for the household.</li>
  * </ul>
  * <p>
  * The data is then processed to look for changes in kWh/HDD,
