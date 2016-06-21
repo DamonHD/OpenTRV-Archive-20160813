@@ -27,9 +27,9 @@ public interface ETVPerHouseholdComputation
     public interface ETVPerHouseholdComputationInput
         {
         SortedMap<Integer, Float> getHDDByLocalDay();
-        SortedMap<Integer, Float> getkWHByLocalDay();
+        SortedMap<Integer, Float> getKWHByLocalDay();
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
-        TimeZone getLocalTimeZone();
+        TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
         SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID();
         }
