@@ -20,7 +20,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * This support includes accepting data in its usual forms for
  * evaluating per-household energy efficiency changes with OpenTRV devices:
  * <ul>
- * <li>Daily (local midnight-to-midnight, or close) kWh space-heating fuel-use date or equivalent,
+ * <li>Daily (local midnight-to-midnight, or close) kWh space-heating fuel-use by day or equivalent,
  *     presented as one or more contiguous blocks in date order.</li>
  * <li>Daily (local midnight-to-midnight, or close) HDD (Heating Degree Day) data,
  *     presented as one or more contiguous blocks in date order
