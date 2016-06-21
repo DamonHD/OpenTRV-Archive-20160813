@@ -15,12 +15,18 @@ package uk.org.opentrv.ETV;
  */
 public interface ETVPerHouseholdComputation
     {
-    /**Abstract input for running the computation for one household. */
+    /**Abstract input for running the computation for one household.
+     * This should have an implementation that is backed by
+     * plain-text CSV input data files.
+     */
     public interface ETVPerHouseholdComputationInput
         {
         }
 
-    /**Result of running the computation for one household. */
+    /**Result of running the computation for one household.
+     * There should be an implementation that can write to
+     * plain-text CSV output file(s).
+     */
     public interface ETVPerHouseholdComputationResult
         {
         }
