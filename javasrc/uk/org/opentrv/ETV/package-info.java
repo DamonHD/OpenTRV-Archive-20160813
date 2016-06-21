@@ -36,8 +36,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * eg for trial-wide statistical confidence analysis.
  * A normalised expression of +/- fractional change in kWh/HDD can be used.
  * <p>
- * Data inputs and outputs are simple to read and parse,
- * eg ASCII CSV format,
+ * Data inputs and outputs are simple to read and parse, eg ASCII CSV format,
  * documented externally and/or with leading information row(s).
  */
 package uk.org.opentrv.ETV;
