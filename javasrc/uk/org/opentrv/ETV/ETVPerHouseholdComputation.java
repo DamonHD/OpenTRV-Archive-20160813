@@ -1,5 +1,8 @@
 package uk.org.opentrv.ETV;
 
+import java.util.SortedMap;
+import java.util.TimeZone;
+
 /**Compute space-heat energy efficiency change per ETV protocol for one household.
  * Typically used over one heating season,
  * or back-to-back heating seasons without significant changes in occupancy or heating season.
@@ -15,12 +18,20 @@ package uk.org.opentrv.ETV;
  */
 public interface ETVPerHouseholdComputation
     {
+    public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
+
     /**Abstract input for running the computation for one household.
      * This should have an implementation that is backed by
      * plain-text CSV input data files.
      */
     public interface ETVPerHouseholdComputationInput
         {
+        SortedMap<Integer, Float> getHDDByLocalDay();
+        SortedMap<Integer, Float> getkWHByLocalDay();
+        SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
+        TimeZone getLocalTimeZone();
+        SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
+        SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID();
         }
 
     /**Result of running the computation for one household.
@@ -29,7 +40,10 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
+        int getDaysSampled();
+        float getRatiokWhPerHDDSmartOverNotSmart();
         }
 
-    public ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in);
+    ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in)
+        throws IllegalArgumentException;
     }
