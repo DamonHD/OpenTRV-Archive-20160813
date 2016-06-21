@@ -18,18 +18,21 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
 
 /**Support for processing data for the EU Environmental Technology Verification programme data.
  * This support includes accepting data in its usual forms for
- * evaluating per-household energy efficiency changes with OpenTRV devices:
+ * evaluating per-household energy efficiency changes with OpenTRV devices,
+ * one household at a time:
  * <ul>
  * <li>Daily (local midnight-to-midnight, or close) kWh space-heating fuel-use by day or equivalent,
  *     presented as one or more contiguous blocks in date order.</li>
  * <li>Daily (local midnight-to-midnight, or close) HDD (Heating Degree Day) data,
  *     presented as one or more contiguous blocks in date order
  *     covering most or all of the kWh data by date range(s).</li>
- * <li>Optional OpenTRV stats data,
+ * <li>Optional OpenTRV stats data per valve or valve controller and boiler in the household,
  *     in particular indicating when occupancy-based energy-saving features are enabled or not,
  *     presented as one or more contiguous blocks in date order
- *     covering most or all of the kWH data by date range(s).</li>
- * <li>Explicit smart / dumb / don't-use flags by day for the household.</li>
+ *     covering most or all of the kWH data by date range(s),
+ *     with the local timezone of the kWh and HDD data
+ *     to be able to convert the OpenTRV (UTC) timestamps to match.</li>
+ * <li>Optional explicit smart-on / smart-off / don't-use flags by day for the household.</li>
  * </ul>
  * <p>
  * The data is then processed to look for changes in kWh/HDD,
