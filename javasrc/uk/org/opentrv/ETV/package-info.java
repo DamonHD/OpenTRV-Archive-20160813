@@ -21,12 +21,14 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * evaluating per-household energy efficiency changes with OpenTRV devices:
  * <ul>
  * <li>Daily (local midnight-to-midnight, or close) kWh space-heating fuel-use date or equivalent,
- *     presented as one or more contiguous blocks.</li>
+ *     presented as one or more contiguous blocks in date order.</li>
  * <li>Daily (local midnight-to-midnight, or close) HDD (Heating Degree Day) data,
- *     presented as one or more contiguous blocks matching the kWh data by date range.</li>
+ *     presented as one or more contiguous blocks in date order
+ *     covering most or all of the kWh data by date range(s).</li>
  * <li>Optional OpenTRV stats data,
  *     in particular indicating when occupancy-based energy-saving features are enabled or not,
- *     presented as one or more contiguous blocks matching the kWH data by date range.</li>
+ *     presented as one or more contiguous blocks in date order
+ *     covering most or all of the kWH data by date range(s).</li>
  * <li>Explicit smart / dumb / don't-use flags by day for the household.</li>
  * </ul>
  * <p>
@@ -36,8 +38,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * eg for trial-wide statistical confidence analysis.
  * A normalised expression of +/- fractional change in kWh/HDD can be used.
  * <p>
- * Data inputs and outputs are simple to read and parse,
- * eg ASCII CSV format,
+ * Data inputs and outputs are simple to read and parse, eg ASCII CSV format,
  * documented externally and/or with leading information row(s).
  */
 package uk.org.opentrv.ETV;
