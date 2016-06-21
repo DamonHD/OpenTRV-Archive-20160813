@@ -36,7 +36,7 @@ Author(s) / Copyright (s): Damon Hart-Davis 2016
  * </ul>
  * <p>
  * The data is then processed to look for changes in kWh/HDD,
- * and establish some per-household confidence,
+ * and establish some per-household confidence metrics,
  * and write the output in a form suitable for further aggregate processing,
  * eg for trial-wide statistical confidence analysis.
  * A normalised expression of +/- fractional change in kWh/HDD can be used.
