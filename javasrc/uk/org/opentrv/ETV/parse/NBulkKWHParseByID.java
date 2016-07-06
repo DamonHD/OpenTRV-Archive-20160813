@@ -3,6 +3,9 @@ package uk.org.opentrv.ETV.parse;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Reader;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.SortedMap;
 import java.util.TimeZone;
 import java.util.TreeMap;
@@ -26,6 +29,11 @@ house_id,received_timestamp,device_timestamp,energy,temperature
  * <p>
  * No assumption is made about ordering by house_id,
  * but values for a given house ID must be in rising order by device_timestamp.
+ * <p>
+ * <ul>
+ * <li>energy is assumed to be in kWh (cumulative)</li>
+ * <li>device_timestamp is assumed to be in UTC seconds</li>
+ * </ul>
  */
 public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     {
@@ -90,17 +98,29 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
             final String sID = Integer.toString(meterID);
 
             // Read data rows...
-            // Filter by house ID [0], use device timestamp [2] and energy [3].
+            // Filter by house ID [0], use device_timestamp [2] and energy [3].
             // This will need to accumulate energy for an entire day in the local timezone,
             // taking the last value from the previous day from the last value for the current day,
             // both values needing to be acceptably close to midnight.
             String row;
+            Long lastTimeSeenUTCms = null;
+            Calendar currentdts = GregorianCalendar.getInstance(tz);
             while(null != (row = l.readLine()))
                 {
                 final String rf[] = row.split(",");
                 if(rf.length < 4) { throw new IOException("too few fields in row " + l.getLineNumber()); }
                 if(!sID.equals(rf[0])) { continue; }
+                final long device_timestamp = Long.parseLong(rf[2], 10);
+                final float energy = Float.parseFloat(rf[3]);
+                final long dtsms = 1000L * device_timestamp;
+                currentdts.setTimeInMillis(dtsms);
 
+                SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
+                fmt.setCalendar(currentdts);
+                String dateFormatted = fmt.format(currentdts.getTime());
+System.out.println(dateFormatted);
+
+                lastTimeSeenUTCms = dtsms;
                 }
             }
 

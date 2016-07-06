@@ -28,7 +28,8 @@ public class ParseTest
         // Check that just a header, or no matching entries, returns empty rather than an exception.
         assertTrue(new NBulkKWHParseByID(0, new StringReader("house_id,received_timestamp,device_timestamp,energy,temperature")).getKWHByLocalDay().isEmpty());
 
-        // Check correct number of rows read with wrong/right ID chosen.
+        // Check correct number of rows read with wrong/right ID chosen
+        // and only using data for full local-time day intervals.
         assertEquals(0, new NBulkKWHParseByID(0, new StringReader(sampleN1)).getKWHByLocalDay().size());
         assertEquals(0, new NBulkKWHParseByID(1002, new StringReader(sampleN1)).getKWHByLocalDay().size());
         }
