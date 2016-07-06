@@ -1,5 +1,6 @@
 package uk.org.opentrv.ETV;
 
+import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TimeZone;
 
@@ -20,14 +21,26 @@ public interface ETVPerHouseholdComputation
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
+    /**Get heating fuel energy consumption by whole local days (local midnight-to-midnight).
+     * Days may not be contiguous.
+     */
+    public interface ETVPerHouseholdComputationInputKWH
+        {
+        /**Heating fuel consumption by whole local days; never null.
+         * @return  never null though may be empty
+         * @throws IOException  in case of failure, eg parse problems
+         */
+        SortedMap<Integer, Float> getKWHByLocalDay() throws IOException;
+        }
+
     /**Abstract input for running the computation for one household.
      * This should have an implementation that is backed by
-     * plain-text CSV input data files.
+     * plain-text CSV input data files,
+     * though these may need filtering, transforming, and cross-referencing.
      */
-    public interface ETVPerHouseholdComputationInput
+    public interface ETVPerHouseholdComputationInput extends ETVPerHouseholdComputationInputKWH
         {
         SortedMap<Integer, Float> getHDDByLocalDay();
-        SortedMap<Integer, Float> getKWHByLocalDay();
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
