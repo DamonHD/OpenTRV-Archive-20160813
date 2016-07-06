@@ -20,5 +20,4 @@ public class ParseTest
         // Check that just a header, or no matching entries, returns empty rather than an exception.
         assertTrue(new NBulkKWHParseByID(0, new StringReader("house_id,received_timestamp,device_timestamp,energy,temperature")).getKWHByLocalDay().isEmpty());
         }
-
     }
