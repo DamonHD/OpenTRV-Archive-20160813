@@ -1,8 +1,10 @@
 package uk.org.opentrv.ETV.parse;
 
 import java.io.IOException;
+import java.io.LineNumberReader;
 import java.io.Reader;
 import java.util.SortedMap;
+import java.util.TreeMap;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInputKWH;
 
@@ -46,9 +48,33 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
      * @return  never null though may be empty
      * @throws IOException  in case of failure, eg parse problems
      */
-    @Override  public SortedMap<Integer, Float> getKWHByLocalDay() throws IOException
+    @Override public SortedMap<Integer, Float> getKWHByLocalDay() throws IOException
         {
-        throw new IOException("NOT IMPLEMENTED");
+        // Read first line, usually:
+        // house_id,received_timestamp,device_timestamp,energy,temperature
+        // Simply check that the header exists, has (at least) 5 fields, and does not start with a digit.
+        // An empty file is not acceptable.
+
+        final SortedMap<Integer, Float> result = new TreeMap<>();
+
+        // Wrap with a by-line reader and arrange to close() when done...
+        try(final LineNumberReader l = new LineNumberReader(r))
+            {
+            final String header = l.readLine();
+            if(null == header) { throw new IOException("missing header row"); }
+            final String hf[] = header.split(",");
+            if(hf.length < 5) { throw new IOException("too few fields in header row"); }
+            if((hf[0].length() > 0) && (Character.isDigit(hf[0].charAt(0)))) { throw new IOException("leading numeric not text in header row"); }
+
+            // Read data rows...
+            String row;
+            while(null != (row = l.readLine()))
+                {
+// TODO
+                }
+            }
+
+        return(result);
         }
 
     }
