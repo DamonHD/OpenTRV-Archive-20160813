@@ -23,9 +23,9 @@ house_id,received_timestamp,device_timestamp,energy,temperature
  */
 public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     {
-    /**House/meter ID to filter for; usually +ve. */
+    /**House/meter ID to filter for; +ve. */
     private final int meterID;
-    
+
     /**Reader for CSV; never null but may be closed. */
     private final Reader r;
 
