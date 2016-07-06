@@ -21,12 +21,12 @@ public interface ETVPerHouseholdComputation
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
-    /**Get heating fuel energy consumption by whole local days (local midnight-to-midnight).
+    /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight).
      * Days may not be contiguous and the result may be empty.
      */
     public interface ETVPerHouseholdComputationInputKWH
         {
-        /**Heating fuel consumption by whole local days; never null.
+        /**Cumulative heating fuel consumption (kWh) by whole local days; never null.
          * @return  never null though may be empty
          * @throws IOException  in case of failure, eg parse problems
          */
