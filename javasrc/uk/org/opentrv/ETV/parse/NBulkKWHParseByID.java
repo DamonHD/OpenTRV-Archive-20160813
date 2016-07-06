@@ -40,12 +40,18 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     /**Default time zone assumed for this data for UK based homes. */
     public static final TimeZone DEFAULT_NB_TIMEZONE = TimeZone.getTimeZone("Europe/London");
 
+    /**Maximum number of minutes tolerance (before local midnight) to accept reading; +ve.
+     * Note that even reading mid-evening once per day or once per week is probably fine!
+     * But given the nature of this data we can insist on a better fit to HDD data.
+     */
+    public static final int EPSILON_MIN = 30;
+
     /**House/meter ID to filter for; +ve. */
     private final int meterID;
 
     /**Reader for CSV; never null but may be closed. */
     private final Reader r;
-    
+
     /**Time zone of house; never null. */
     private final TimeZone tz;
 
@@ -99,7 +105,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
 
             // Read data rows...
             // Filter by house ID [0], use device_timestamp [2] and energy [3].
-            // This will need to accumulate energy for an entire day in the local timezone,
+            // This will need to accumulate energy for an entire day in the local time zone,
             // taking the last value from the previous day from the last value for the current day,
             // both values needing to be acceptably close to midnight.
             String row;
