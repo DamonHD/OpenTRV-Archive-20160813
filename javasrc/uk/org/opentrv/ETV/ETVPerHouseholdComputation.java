@@ -22,7 +22,7 @@ public interface ETVPerHouseholdComputation
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
     /**Get heating fuel energy consumption by whole local days (local midnight-to-midnight).
-     * Days may not be contiguous.
+     * Days may not be contiguous and the result may be empty.
      */
     public interface ETVPerHouseholdComputationInputKWH
         {
