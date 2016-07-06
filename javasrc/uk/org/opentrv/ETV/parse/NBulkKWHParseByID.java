@@ -11,6 +11,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInputKWH;
+import uk.org.opentrv.hdd.Util;
 
 /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight) from bulk data.
  * Days may not be contiguous.
@@ -40,7 +41,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     /**Default time zone assumed for this data for UK based homes. */
     public static final TimeZone DEFAULT_NB_TIMEZONE = TimeZone.getTimeZone("Europe/London");
 
-    /**Maximum number of minutes tolerance (before local midnight) to accept reading; +ve.
+    /**Maximum number of minutes tolerance (before local midnight) to accept reading; range [1,59].
      * Note that even reading mid-evening once per day or once per week is probably OK too!
      * But given the nature of this data we can insist on a better fit to HDD data.
      */
@@ -107,10 +108,11 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
             // Filter by house ID [0], use device_timestamp [2] and energy [3].
             // This will need to accumulate energy for an entire day in the local time zone,
             // taking the last value from the previous day from the last value for the current day,
-            // both values needing to be acceptably close to midnight.
+            // both values needing to be acceptably close to (ie possibly just after) midnight.
             String row;
-            Long lastTimeSeenUTCms = null;
-            Calendar currentdts = GregorianCalendar.getInstance(tz);
+            int currentDayYYYYMMDD = -1;
+            Float kWhAtStartOfCurrentDay = null;
+            final Calendar latestDeviceTimestamp = GregorianCalendar.getInstance(tz);
             while(null != (row = l.readLine()))
                 {
                 final String rf[] = row.split(",");
@@ -119,14 +121,35 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
                 final long device_timestamp = Long.parseLong(rf[2], 10);
                 final float energy = Float.parseFloat(rf[3]);
                 final long dtsms = 1000L * device_timestamp;
-                currentdts.setTimeInMillis(dtsms);
+                latestDeviceTimestamp.setTimeInMillis(dtsms);
+                final int todayYYYYMMDD =
+                    (latestDeviceTimestamp.get(Calendar.YEAR)*10000) +
+                    ((latestDeviceTimestamp.get(Calendar.MONTH)+1)*100) +
+                    (latestDeviceTimestamp.get(Calendar.DAY_OF_MONTH));
+                if(todayYYYYMMDD != currentDayYYYYMMDD)
+                    {
+                    // On a new day...
+                    if((0 == latestDeviceTimestamp.get(Calendar.HOUR_OF_DAY)) &&
+                       (EPSILON_MIN >= latestDeviceTimestamp.get(Calendar.MINUTE)))
+                       {
+                       // Sufficiently close to start of day to treat as midnight
+                       // for computing a day interval energy consumption.
+                       if((-1 != currentDayYYYYMMDD) &&
+                               ((currentDayYYYYMMDD+1 == todayYYYYMMDD) ||
+                                (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))))
+                           {
+                           // Just rolled from one day to the next.
+                           }
+                       kWhAtStartOfCurrentDay = energy;
+                       }
+                    currentDayYYYYMMDD = todayYYYYMMDD;
+                    }
 
                 SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
-                fmt.setCalendar(currentdts);
-                String dateFormatted = fmt.format(currentdts.getTime());
+                fmt.setCalendar(latestDeviceTimestamp);
+                String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
 System.out.println(dateFormatted);
 
-                lastTimeSeenUTCms = dtsms;
                 }
             }
 
