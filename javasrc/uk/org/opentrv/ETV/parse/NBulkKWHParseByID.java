@@ -41,7 +41,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     public static final TimeZone DEFAULT_NB_TIMEZONE = TimeZone.getTimeZone("Europe/London");
 
     /**Maximum number of minutes tolerance (before local midnight) to accept reading; +ve.
-     * Note that even reading mid-evening once per day or once per week is probably fine!
+     * Note that even reading mid-evening once per day or once per week is probably OK too!
      * But given the nature of this data we can insist on a better fit to HDD data.
      */
     public static final int EPSILON_MIN = 30;
@@ -70,7 +70,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
         this.tz = tz;
         }
 
-    /**Create instance with the house/meter ID to filter for and CSV input Reader and default UK timezone.
+    /**Create instance with the house/meter ID to filter for and CSV input Reader and default UK time zone.
      * Reader will be closed by getKWHByLocalDay()
      * so this is one shot and a new instance of this class
      * is needed if the data is to be read again.
@@ -78,7 +78,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     public NBulkKWHParseByID(final int meterID, final Reader r)
         { this(meterID, r, DEFAULT_NB_TIMEZONE); }
 
-    /**Cumulative heating fuel consumption (kWh) by whole local days; never null.
+    /**Interval heating fuel consumption (kWh) by whole local days; never null.
      * @return  never null though may be empty
      * @throws IOException  in case of failure, eg parse problems
      */

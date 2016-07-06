@@ -26,7 +26,7 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationInputKWH
         {
-        /**Cumulative heating fuel consumption (kWh) by whole local days; never null.
+        /**Interval heating fuel consumption (kWh) by whole local days; never null.
          * @return  never null though may be empty
          * @throws IOException  in case of failure, eg parse problems
          */
