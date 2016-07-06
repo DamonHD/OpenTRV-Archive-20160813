@@ -20,14 +20,20 @@ public interface ETVPerHouseholdComputation
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
+    /**Get heating fuel energy consumption by whole local day (no partial days). */
+    public interface ETVPerHouseholdComputationInputKWH
+        {
+        SortedMap<Integer, Float> getKWHByLocalDay();
+        }
+
     /**Abstract input for running the computation for one household.
      * This should have an implementation that is backed by
-     * plain-text CSV input data files.
+     * plain-text CSV input data files,
+     * though these may need filtering, transforming, and cross-referencing.
      */
-    public interface ETVPerHouseholdComputationInput
+    public interface ETVPerHouseholdComputationInput extends ETVPerHouseholdComputationInputKWH
         {
         SortedMap<Integer, Float> getHDDByLocalDay();
-        SortedMap<Integer, Float> getKWHByLocalDay();
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
