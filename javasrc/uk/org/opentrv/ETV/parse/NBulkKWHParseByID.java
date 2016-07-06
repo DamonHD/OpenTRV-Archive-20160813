@@ -1,6 +1,7 @@
 package uk.org.opentrv.ETV.parse;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.util.SortedMap;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInputKWH;
@@ -22,11 +23,24 @@ house_id,received_timestamp,device_timestamp,energy,temperature
  */
 public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     {
-    /**House/meter ID to filter for. */
+    /**House/meter ID to filter for; usually +ve. */
     private final int meterID;
+    
+    /**Reader for CSV; never null but may be closed. */
+    private final Reader r;
 
-    /**Create instance with the house/meter ID to filter for. */
-    public NBulkKWHParseByID(final int meterID) { this.meterID = meterID; }
+    /**Create instance with the house/meter ID to filter for and CSV input Reader.
+     * Reader will be closed by getKWHByLocalDay()
+     * so this is one shot and a new instance of this class
+     * is needed if the data is to be read again.
+     */
+    public NBulkKWHParseByID(final int meterID, final Reader r)
+        {
+        if(meterID < 0) { throw new IllegalArgumentException(); }
+        if(null == r) { throw new IllegalArgumentException(); }
+        this.meterID = meterID;
+        this.r = r;
+        }
 
     /**Heating fuel consumption by whole local days; never null.
      * @return  never null though may be empty
