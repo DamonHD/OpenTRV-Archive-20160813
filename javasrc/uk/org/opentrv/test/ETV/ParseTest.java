@@ -51,6 +51,6 @@ public class ParseTest
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
         assertEquals(0, new NBulkKWHParseByID(0, getNBulk1CSVReader()).getKWHByLocalDay().size());
-        assertEquals(0, new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWHByLocalDay().size());
+        assertEquals(1, new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWHByLocalDay().size());
         }
     }

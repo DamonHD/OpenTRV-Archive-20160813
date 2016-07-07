@@ -142,13 +142,22 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
                     final boolean closeEnoughToStartOfDay = 
                        ((0 == latestDeviceTimestamp.get(Calendar.HOUR_OF_DAY)) &&
                         (EPSILON_MIN >= latestDeviceTimestamp.get(Calendar.MINUTE)));
-                       {
-//                           {
-//                           // Just rolled from one day to the start of the following.
-//                           if(null != kWhAtStartOfCurrentDay)
-//                           }
-//                       kWhAtStartOfCurrentDay = energy;
-                       }
+                    if(!closeEnoughToStartOfDay)
+                        {
+                        // If not close enough to use, just null the 'start of day' reading.
+                        kWhAtStartOfCurrentDay = null;
+                        }
+                    else
+                        {
+                        // If the start-of-day value is present then compute the interval.
+                        if(null != kWhAtStartOfCurrentDay)
+                            {
+                            final float dayUse = energy - kWhAtStartOfCurrentDay;
+                            result.put(currentDayYYYYMMDD, dayUse);
+                            }
+                        kWhAtStartOfCurrentDay = energy;
+                        }
+                    // In any case, note the new day.
                     currentDayYYYYMMDD = todayYYYYMMDD;
                     }
 
