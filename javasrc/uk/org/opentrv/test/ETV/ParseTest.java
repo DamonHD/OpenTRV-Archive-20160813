@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.SortedMap;
 
 import org.junit.Test;
 
@@ -51,6 +52,9 @@ public class ParseTest
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
         assertEquals(0, new NBulkKWHParseByID(0, getNBulk1CSVReader()).getKWHByLocalDay().size());
-        assertEquals(1, new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWHByLocalDay().size());
+        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWHByLocalDay();
+        assertEquals(1, kwhByLocalDay1002.size());
+        assertTrue(kwhByLocalDay1002.containsKey(20160301));
+        assertEquals(kwhByLocalDay1002.get(20160301), 75.31f, 0.01f);
         }
     }
