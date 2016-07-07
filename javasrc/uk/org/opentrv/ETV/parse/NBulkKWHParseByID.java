@@ -133,7 +133,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
                 final boolean newDay = (todayYYYYMMDD != currentDayYYYYMMDD);
                 if(newDay)
                     {
-                    // Rolled to following day with no gap?
+                    // Rolled directly to following day with no gap?
                     final boolean followingDay = ((-1 != currentDayYYYYMMDD) &&
                         (((currentDayYYYYMMDD+1) == todayYYYYMMDD) ||
                         (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))));
