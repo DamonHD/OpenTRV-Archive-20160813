@@ -5,7 +5,6 @@ import java.io.LineNumberReader;
 import java.io.Reader;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.GregorianCalendar;
 import java.util.SortedMap;
 import java.util.TimeZone;
 import java.util.TreeMap;
@@ -112,7 +111,7 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
             String row;
             int currentDayYYYYMMDD = -1;
             Float kWhAtStartOfCurrentDay = null;
-            final Calendar latestDeviceTimestamp = GregorianCalendar.getInstance(tz);
+            final Calendar latestDeviceTimestamp = Calendar.getInstance(tz);
             while(null != (row = l.readLine()))
                 {
                 final String rf[] = row.split(",");
@@ -121,33 +120,41 @@ public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
                 final long device_timestamp = Long.parseLong(rf[2], 10);
                 final float energy = Float.parseFloat(rf[3]);
                 final long dtsms = 1000L * device_timestamp;
+                // Verify that device time moves monotonically forwards...
+                if((-1 != currentDayYYYYMMDD) && (dtsms <= latestDeviceTimestamp.getTimeInMillis()))
+                    { throw new IOException("device time not increased at row " + l.getLineNumber()); }
+                // Now convert to local date (and time) allowing for time zone.
+                // Measurement days are local midnight to local midnight.
                 latestDeviceTimestamp.setTimeInMillis(dtsms);
                 final int todayYYYYMMDD =
                     (latestDeviceTimestamp.get(Calendar.YEAR)*10000) +
                     ((latestDeviceTimestamp.get(Calendar.MONTH)+1)*100) +
                     (latestDeviceTimestamp.get(Calendar.DAY_OF_MONTH));
-                if(todayYYYYMMDD != currentDayYYYYMMDD)
+                final boolean newDay = (todayYYYYMMDD != currentDayYYYYMMDD);
+                if(newDay)
                     {
-                    // On a new day...
-                    if((0 == latestDeviceTimestamp.get(Calendar.HOUR_OF_DAY)) &&
-                       (EPSILON_MIN >= latestDeviceTimestamp.get(Calendar.MINUTE)))
+                    // Rolled to following day with no gap?
+                    final boolean followingDay = ((-1 != currentDayYYYYMMDD) &&
+                        (((currentDayYYYYMMDD+1) == todayYYYYMMDD) ||
+                        (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))));
+                    // Sufficiently close to start of day to treat as midnight
+                    // for computing a day interval energy consumption?
+                    final boolean closeEnoughToStartOfDay = 
+                       ((0 == latestDeviceTimestamp.get(Calendar.HOUR_OF_DAY)) &&
+                        (EPSILON_MIN >= latestDeviceTimestamp.get(Calendar.MINUTE)));
                        {
-                       // Sufficiently close to start of day to treat as midnight
-                       // for computing a day interval energy consumption.
-                       if((-1 != currentDayYYYYMMDD) &&
-                               ((currentDayYYYYMMDD+1 == todayYYYYMMDD) ||
-                                (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))))
-                           {
-                           // Just rolled from one day to the next.
-                           }
-                       kWhAtStartOfCurrentDay = energy;
+//                           {
+//                           // Just rolled from one day to the start of the following.
+//                           if(null != kWhAtStartOfCurrentDay)
+//                           }
+//                       kWhAtStartOfCurrentDay = energy;
                        }
                     currentDayYYYYMMDD = todayYYYYMMDD;
                     }
 
-                SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
+                final SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
                 fmt.setCalendar(latestDeviceTimestamp);
-                String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
+                final String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
 System.out.println(dateFormatted);
 
                 }
