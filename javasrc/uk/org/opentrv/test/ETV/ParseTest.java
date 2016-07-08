@@ -86,9 +86,40 @@ public class ParseTest
         assertEquals(33.52f, kwhByLocalDay1002.get(20160303), 0.01f);
         }
 
-
-    /**Sample 3 of bulk energy readings; values around clocks going DST switch. */
+    /**Sample 3 of bulk energy readings in UK; values around clocks going DST switch. */
     public static final String sampleN3 =
-        "house_id,received_timestamp,device_timestamp,energy,temperature\n";
+        "house_id,received_timestamp,device_timestamp,energy,temperature\n" +
+        "1002,1458864000,1458864000,10,0\n" + // TZ='Europe/London' date +%s --date='2016/03/25 00:00'
+        "1002,1458950400,1458950400,21,0\n" + // TZ='Europe/London' date +%s --date='2016/03/26 00:00'
+        "1002,1459036800,1459036800,33,0\n" + // TZ='Europe/London' date +%s --date='2016/03/27 00:00'
+        // Clocks go forward so 23h here...
+        "1002,1459119600,1459119600,46,0\n" + // TZ='Europe/London' date +%s --date='2016/03/28 00:00'
+        "1002,1459123200,1459123200,47,0\n";  // TZ='Europe/London' date +%s --date='2016/03/28 01:00'
 
+    /**Test for correct behaviour around daylight-savings change.
+     * HDD runs local time midnight-to-midnight so the energy interval should do so too.
+     */
+    @Test public void testNBulkParse3() throws IOException
+        {
+        // Check correct number of rows read with wrong/right ID chosen
+        // and only using data for full local-time day intervals.
+        assertEquals(0, new NBulkKWHParseByID(9999, new StringReader(sampleN3)).getKWHByLocalDay().size());
+        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN3)).getKWHByLocalDay();
+        assertEquals(3, kwhByLocalDay1002.size());
+        // Check that the 00:00 samples are used
+        // even when other close/eligible ones are present.
+        assertTrue(kwhByLocalDay1002.containsKey(20160325));
+        assertEquals(11f, kwhByLocalDay1002.get(20160325), 0.01f);
+        assertTrue(kwhByLocalDay1002.containsKey(20160326));
+        assertEquals(12f, kwhByLocalDay1002.get(20160326), 0.01f);
+        assertTrue(kwhByLocalDay1002.containsKey(20160327));
+        assertEquals(13f, kwhByLocalDay1002.get(20160327), 0.01f);
+        }
+
+
+
+    // Note helpful *nx tools, eg date:
+    //     date --date='@2147483647'
+    //     TZ='Europe/London' date
+    //     date +%s
     }
