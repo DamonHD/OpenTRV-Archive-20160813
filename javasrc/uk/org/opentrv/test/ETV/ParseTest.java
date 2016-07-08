@@ -76,7 +76,7 @@ public class ParseTest
         assertEquals(0, new NBulkKWHParseByID(1001, new StringReader(sampleN2)).getKWHByLocalDay().size());
         final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN2)).getKWHByLocalDay();
         assertEquals(3, kwhByLocalDay1002.size());
-        // Check that the 00:00 samples are being used
+        // Check that the 00:00 samples are used
         // even when other close/eligible ones are present.
         assertTrue(kwhByLocalDay1002.containsKey(20160301));
         assertEquals(75.31f, kwhByLocalDay1002.get(20160301), 0.01f);
