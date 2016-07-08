@@ -92,8 +92,9 @@ public class ParseTest
         "1002,1458864000,1458864000,10,0\n" + // TZ='Europe/London' date +%s --date='2016/03/25 00:00'
         "1002,1458950400,1458950400,21,0\n" + // TZ='Europe/London' date +%s --date='2016/03/26 00:00'
         "1002,1459036800,1459036800,33,0\n" + // TZ='Europe/London' date +%s --date='2016/03/27 00:00'
-        // Clocks go forward so 23h here...
+        // Clocks go forward, so 23h interval here rather than usual 24h...
         "1002,1459119600,1459119600,46,0\n" + // TZ='Europe/London' date +%s --date='2016/03/28 00:00'
+        // Offer up (wrong) 24h interval which should be ignored.
         "1002,1459123200,1459123200,47,0\n";  // TZ='Europe/London' date +%s --date='2016/03/28 01:00'
 
     /**Test for correct behaviour around daylight-savings change.
