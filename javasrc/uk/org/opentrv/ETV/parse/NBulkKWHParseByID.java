@@ -49,6 +49,7 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
     public static final int EPSILON_MIN = 30;
 
     /**Extract set of all distinct (non-negative integer) IDs in the supplied data.
+     * @param  r  bulk input data, close()d by by this routine on completion; never null
      * @return set of distinct non-negative house IDs; may be empty but never null
      */
     public static final Set<Integer> extractIDs(final Reader r) throws IOException

@@ -56,6 +56,10 @@ public class ParseTest
         assertEquals(1, kwhByLocalDay1002.size());
         assertTrue(kwhByLocalDay1002.containsKey(20160301));
         assertEquals(75.31f, kwhByLocalDay1002.get(20160301), 0.01f);
+        // Check correct ID extraction.
+        assertEquals(2, NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).size());
+        assertTrue(NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).contains(1001));
+        assertTrue(NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).contains(1002));
         }
 
     /**Sample 2 of bulk energy readings; a few-days' values all at or close after midnight. */
@@ -84,6 +88,9 @@ public class ParseTest
         assertEquals(73.1f, kwhByLocalDay1002.get(20160302), 0.01f);
         assertTrue(kwhByLocalDay1002.containsKey(20160303));
         assertEquals(33.52f, kwhByLocalDay1002.get(20160303), 0.01f);
+        // Check correct ID extraction.
+        assertEquals(1, NBulkKWHParseByID.extractIDs(new StringReader(sampleN2)).size());
+        assertEquals(1002, NBulkKWHParseByID.extractIDs(new StringReader(sampleN2)).iterator().next().intValue());
         }
 
     /**Sample 3 of bulk energy readings in UK; values around clocks going DST switch. */
