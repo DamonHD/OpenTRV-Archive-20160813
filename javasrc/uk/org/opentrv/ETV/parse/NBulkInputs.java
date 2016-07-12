@@ -2,6 +2,7 @@ package uk.org.opentrv.ETV.parse;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.SortedMap;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
 
@@ -26,6 +27,7 @@ public final class NBulkInputs
      * <p>
      * The standard (UK) time zone will be used.
      *
+     * @param houseID the house to extract data for
      * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
      * @param HDDDataFile  Reader (eg from file) for HDD data
      * @return  collection of all data to process to compute
@@ -34,10 +36,13 @@ public final class NBulkInputs
      * @throws IOException  in case of input data problems
      */
     public static ETVPerHouseholdComputationInput gatherData(
-            final Reader NBulkDataFile,
-            final Reader HDDDataFile)
+            final int houseID,
+            final Reader NBulkData,
+            final Reader HDDData)
         throws IOException
         {
+        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData)).getKWHByLocalDay();
+
 
         throw new RuntimeException("NOT IMPLEMENTED");
         }
