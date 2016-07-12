@@ -26,6 +26,6 @@ public final class NBulkInputs
             final File HDDDataFile)
         throws IOException
         {
-        throw new RuntimeException();
+        throw new RuntimeException("NOT IMPLEMENTED");
         }
     }
