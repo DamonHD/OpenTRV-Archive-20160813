@@ -5,7 +5,7 @@ import java.io.Reader;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
 
-/**Process typical set of bulk data with HDDs into input data object.
+/**Process typical set of bulk data, with HDDs, into input data object.
  * This allows bulk processing in one hit,
  * with single bulk files (or possibly directories) for each of:
  * <ul>
@@ -38,6 +38,7 @@ public final class NBulkInputs
             final Reader HDDDataFile)
         throws IOException
         {
+
         throw new RuntimeException("NOT IMPLEMENTED");
         }
     }
