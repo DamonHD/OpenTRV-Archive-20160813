@@ -35,7 +35,7 @@ house_id,received_timestamp,device_timestamp,energy,temperature
  * <li>device_timestamp is assumed to be in UTC seconds</li>
  * </ul>
  */
-public class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
+public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
     {
     /**Default time zone assumed for this data for UK based homes. */
     public static final TimeZone DEFAULT_NB_TIMEZONE = TimeZone.getTimeZone("Europe/London");
