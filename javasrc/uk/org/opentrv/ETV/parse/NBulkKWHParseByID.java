@@ -5,6 +5,8 @@ import java.io.LineNumberReader;
 import java.io.Reader;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TimeZone;
 import java.util.TreeMap;
@@ -45,6 +47,37 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
      * But given the nature of this data we can insist on a better fit to HDD data.
      */
     public static final int EPSILON_MIN = 30;
+
+    /**Extract set of all distinct (non-negative integer) IDs in the supplied data.
+     * @return set of distinct non-negative house IDs; may be empty but never null
+     */
+    public static final Set<Integer> extractIDs(final Reader r) throws IOException
+        {
+        if(null == r) { throw new IllegalArgumentException(); }
+
+        final Set<Integer> result = new HashSet<>();
+
+        // Wrap with a by-line reader and arrange to close() when done...
+        try(final LineNumberReader l = new LineNumberReader(r))
+            {
+            final String header = l.readLine();
+            if(null == header) { throw new IOException("missing header row"); }
+            final String hf[] = header.split(",");
+            if(hf.length < 5) { throw new IOException("too few fields in header row"); }
+            if((hf[0].length() > 0) && (Character.isDigit(hf[0].charAt(0)))) { throw new IOException("leading numeric not text in header row"); }
+
+            // Read data rows just to extract the house ID [0].
+            String row;
+            while(null != (row = l.readLine()))
+                {
+                final String rf[] = row.split(",");
+                if(rf.length < 4) { throw new IOException("too few fields in row " + l.getLineNumber()); }
+                result.add(Integer.parseInt(rf[0], 10));
+                }
+            };
+
+        return(result);
+        }
 
     /**House/meter ID to filter for; +ve. */
     private final int meterID;
@@ -139,7 +172,7 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
                         (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))));
                     // Sufficiently close to start of day to treat as midnight
                     // for computing a day interval energy consumption?
-                    final boolean closeEnoughToStartOfDay = 
+                    final boolean closeEnoughToStartOfDay =
                        ((0 == latestDeviceTimestamp.get(Calendar.HOUR_OF_DAY)) &&
                         (EPSILON_MIN >= latestDeviceTimestamp.get(Calendar.MINUTE)));
                     if(!closeEnoughToStartOfDay)

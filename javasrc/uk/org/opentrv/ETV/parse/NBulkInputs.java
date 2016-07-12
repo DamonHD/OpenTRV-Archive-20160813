@@ -1,7 +1,7 @@
 package uk.org.opentrv.ETV.parse;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.Reader;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
 
@@ -13,7 +13,7 @@ import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationI
  * <li>HDD</li>
  * <li>OpenTRV log data</li>
  * <li>associations between the various IDs</li>
- * </ul> 
+ * </ul>
  * All households must be in the same time zone
  * and have the same local HDD source.
  * <p>
@@ -21,9 +21,21 @@ import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationI
  */
 public final class NBulkInputs
     {
+    /**For energy (and HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
+     * The standard HDD baseline temperature will be used.
+     * <p>
+     * The standard (UK) time zone will be used.
+     *
+     * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
+     * @param HDDDataFile  Reader (eg from file) for HDD data
+     * @return  collection of all data to process to compute
+     *     overall kWh/HDD per household, no efficacy computation;
+     *     never null
+     * @throws IOException  in case of input data problems
+     */
     public static ETVPerHouseholdComputationInput gatherData(
-            final File NBulkDataFile,
-            final File HDDDataFile)
+            final Reader NBulkDataFile,
+            final Reader HDDDataFile)
         throws IOException
         {
         throw new RuntimeException("NOT IMPLEMENTED");
