@@ -1,6 +1,7 @@
 package uk.org.opentrv.test.ETV;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -13,6 +14,8 @@ import java.util.SortedMap;
 
 import org.junit.Test;
 
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
+import uk.org.opentrv.ETV.parse.NBulkInputs;
 import uk.org.opentrv.ETV.parse.NBulkKWHParseByID;
 import uk.org.opentrv.test.hdd.DDNExtractorTest;
 
@@ -104,6 +107,11 @@ public class ParseTest
         // Offer up (wrong) 24h interval which should be ignored.
         "1002,1459123200,1459123200,47,0\n";  // TZ='Europe/London' date +%s --date='2016/03/28 01:00'
 
+    // Note helpful *nx tools, eg date:
+    //     date --date='@2147483647'
+    //     TZ='Europe/London' date
+    //     date +%s
+
     /**Test for correct behaviour around daylight-savings change.
      * HDD runs local time midnight-to-midnight so the energy interval should do so too.
      */
@@ -124,10 +132,10 @@ public class ParseTest
         assertEquals(13f, kwhByLocalDay1002.get(20160327), 0.01f);
         }
 
-
-
-    // Note helpful *nx tools, eg date:
-    //     date --date='@2147483647'
-    //     TZ='Europe/London' date
-    //     date +%s
+    /**Test for correct loading for a single household into input object. */
+    @Test public void testNBulkInputs() throws IOException
+        {
+        final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(1002, getNBulk1CSVReader(), DDNExtractorTest.getETVEGLLHDD201603CSVReader());
+        assertNotNull(data);
+        }
     }

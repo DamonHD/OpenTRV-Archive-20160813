@@ -56,6 +56,9 @@ public interface ETVPerHouseholdComputation
     public interface ETVPerHouseholdComputationInput
         extends ETVPerHouseholdComputationInputKWH, ETVPerHouseholdComputationInputHDD
         {
+        /**Get unique house ID as String; never null. */
+        String getHouseID();
+
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
