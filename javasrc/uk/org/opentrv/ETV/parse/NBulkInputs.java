@@ -23,13 +23,19 @@ import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationI
 public final class NBulkInputs
     {
     /**For energy (and HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
-     * The standard HDD baseline temperature will be used.
+     * The uniform/default HDD baseline temperature will be used, in this format:
+<pre>
+Date,HDD,% Estimated
+2016-03-01,6.6,0
+2016-03-02,10.1,0
+2016-03-03,9.2,0
+</pre>
      * <p>
-     * The standard (UK) time zone will be used.
+     * The standard/default (UK) time zone for this type of bulk data will be used.
      *
      * @param houseID the house to extract data for
      * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
-     * @param HDDDataFile  Reader (eg from file) for HDD data
+     * @param HDDDataFile  Reader (eg from file) for simple HDD data with standard/default baseline
      * @return  collection of all data to process to compute
      *     overall kWh/HDD per household, no efficacy computation;
      *     never null
