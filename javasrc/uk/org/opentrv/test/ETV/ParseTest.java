@@ -137,5 +137,12 @@ public class ParseTest
         {
         final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(1002, getNBulk1CSVReader(), DDNExtractorTest.getETVEGLLHDD201603CSVReader());
         assertNotNull(data);
+        assertEquals("1002", data.getHouseID());
+        assertEquals(1, data.getKWHByLocalDay().size());
+        assertTrue(data.getKWHByLocalDay().containsKey(20160301));
+        assertEquals(75.31f, data.getKWHByLocalDay().get(20160301), 0.01f);
+        assertEquals(31, data.getHDDByLocalDay().size());
+        assertEquals(10.1f, data.getHDDByLocalDay().get(20160302), 0.01f);
+        assertEquals(7.9f, data.getHDDByLocalDay().get(20160329), 0.01f);
         }
     }
