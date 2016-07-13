@@ -3,8 +3,11 @@ package uk.org.opentrv.ETV.parse;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.SortedMap;
+import java.util.TimeZone;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.SavingEnabledAndDataStatus;
+import uk.org.opentrv.hdd.DDNExtractor;
 
 /**Process typical set of bulk data, with HDDs, into input data object.
  * This allows bulk processing in one hit,
@@ -31,7 +34,13 @@ Date,HDD,% Estimated
 2016-03-03,9.2,0
 </pre>
      * <p>
-     * The standard/default (UK) time zone for this type of bulk data will be used.
+     * The standard/default (UK) time zone for this type of bulk data will be used, in this format:
+<pre>
+house_id,received_timestamp,device_timestamp,energy,temperature
+1002,1456790560,1456790400,306.48,-3
+1002,1456791348,1456791300,306.48,-3
+1002,1456792442,1456792200,306.48,-3
+</pre>
      *
      * @param houseID the house to extract data for
      * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
@@ -44,12 +53,20 @@ Date,HDD,% Estimated
     public static ETVPerHouseholdComputationInput gatherData(
             final int houseID,
             final Reader NBulkData,
-            final Reader HDDData)
+            final Reader simpleHDDData)
         throws IOException
         {
-        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData)).getKWHByLocalDay();
+        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWHByLocalDay();
+        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, 15.5f).getMap();
 
-
-        throw new RuntimeException("NOT IMPLEMENTED");
+        return(new ETVPerHouseholdComputationInput(){
+            @Override public SortedMap<Integer, Float> getKWHByLocalDay() throws IOException { return(kwhByLocalDay); }
+            @Override public SortedMap<Integer, Float> getHDDByLocalDay() throws IOException { return(hdd); }
+            @Override public TimeZone getLocalTimeZoneForKWhAndHDD() { return(NBulkKWHParseByID.DEFAULT_NB_TIMEZONE); }
+            // Not implemented (null return values).
+            @Override public SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay() { return(null); }
+            @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
+            @Override public SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID() { return(null); }
+            });
         }
     }
