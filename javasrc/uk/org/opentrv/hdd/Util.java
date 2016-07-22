@@ -27,8 +27,8 @@ public final class Util
         if(null == k) { throw new IllegalArgumentException(); }
         final int ki = k.intValue();
         final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-        if(ki < 10000000) { throw new IllegalArgumentException(); }
-        if(ki > 99990000) { throw new IllegalArgumentException(); }
+        if(ki < 10000000) { throw new IllegalArgumentException(k.toString()); }
+        if(ki > 99990000) { throw new IllegalArgumentException(k.toString()); }
         final int year = ki / 10000;
         final int month = ((ki / 100) % 100) - 1; // Zero-based.
         if((month < 0) || (month >= 12)) { throw new IllegalArgumentException(); }
@@ -115,6 +115,7 @@ public final class Util
     public static int daysBetweenDateKeys(final int first, final int second)
         {
         if(second < first) { throw new IllegalArgumentException(); }
+        if(first == second) { return(0); }
         final Calendar c1 = dateFromKey(first);
         final Calendar c2 = dateFromKey(second);
         // Round the days to allow for DST changes.

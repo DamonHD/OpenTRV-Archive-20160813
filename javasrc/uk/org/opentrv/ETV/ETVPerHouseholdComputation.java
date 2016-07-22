@@ -1,5 +1,6 @@
 package uk.org.opentrv.ETV;
 
+import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TimeZone;
 
@@ -20,14 +21,44 @@ public interface ETVPerHouseholdComputation
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
+    /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight).
+     * Days may not be contiguous and the result may be empty.
+     */
+    public interface ETVPerHouseholdComputationInputKWH
+        {
+        /**Interval heating fuel consumption (kWh) by whole local days; never null.
+         * @return  never null though may be empty
+         * @throws IOException  in case of failure, eg parse problems
+         */
+        SortedMap<Integer, Float> getKWHByLocalDay() throws IOException;
+        }
+
+    /**Get Heating Degree Days (HDD, Celsius) by whole local days (local midnight-to-midnight).
+     * Days may not be contiguous and the result may be empty.
+     */
+    public interface ETVPerHouseholdComputationInputHDD
+        {
+        /**Heating Degree Days (HDD, Celsius) by whole local days; never null.
+         * Uses values for either a 'standard' base temperature (typically 15.5C)
+         * or per-household value determined in other ways, eg by best-fit.
+         *
+         * @return  never null though may be empty
+         * @throws IOException  in case of failure, eg parse problems
+         */
+        SortedMap<Integer, Float> getHDDByLocalDay() throws IOException;
+        }
+
     /**Abstract input for running the computation for one household.
      * This should have an implementation that is backed by
-     * plain-text CSV input data files.
+     * plain-text CSV input data files,
+     * though these may need filtering, transforming, and cross-referencing.
      */
     public interface ETVPerHouseholdComputationInput
+        extends ETVPerHouseholdComputationInputKWH, ETVPerHouseholdComputationInputHDD
         {
-        SortedMap<Integer, Float> getHDDByLocalDay();
-        SortedMap<Integer, Float> getKWHByLocalDay();
+        /**Get unique house ID as String; never null. */
+        String getHouseID();
+
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
