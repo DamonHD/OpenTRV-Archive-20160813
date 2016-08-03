@@ -160,4 +160,27 @@ public class DDNExtractorTest
             }
         }
 
+    /**Return a stream for the ETV (ASCII) simple HDD 2016H1 data for EGLL; never null. */
+    public static InputStream getETVEGLLHDD2016H1CSVStream()
+        { return(DDNExtractorTest.class.getResourceAsStream("2016H1-EGLL_HDD_15.5C.csv")); }
+    /**Return a Reader for the ETV sample HDD 2016/03 data for EGLL; never null. */
+    public static Reader getETVEGLLHDD2016H1CSVReader() throws IOException
+        { return(new InputStreamReader(getETVEGLLHDD2016H1CSVStream(), "ASCII7")); }
+
+    /**Test extraction from a longer half-year (single HDD base temperature) file. */
+    @Test public void testDDNExtractSimpleHY() throws Exception
+        {
+        try(final Reader r = getETVEGLLHDD2016H1CSVReader())
+            {
+            final ContinuousDailyHDD hdd = DDNExtractor.extractSimpleHDD(r, 15.5f);
+            assertEquals(15.5f, hdd.getBaseTemperatureAsFloat(), 0.1f);
+            assertNotNull(hdd.getMap());
+            assertEquals(182, hdd.getMap().size());
+            assertEquals(10.2f, hdd.getMap().get(20160101), 0.01f);
+            assertEquals(10.1f, hdd.getMap().get(20160302), 0.01f);
+            assertEquals(7.9f, hdd.getMap().get(20160329), 0.01f);
+            assertEquals(0.6f, hdd.getMap().get(20160630), 0.01f);
+            }
+        }
+
     }
