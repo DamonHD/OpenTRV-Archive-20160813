@@ -1,10 +1,4 @@
-Description:,"Celsius-based heating degree days for a base temperature of 15.5C"
-Source:,"www.degreedays.net (using temperature data from www.wunderground.com)"
-Accuracy:,"Estimates were made to account for missing data: the ""% Estimated"" column shows how much each figure was affected (0% is best, 100% is worst)"
-Station:,"London, UK (0.46W,51.48N)"
-Station ID:,"EGLL"
-
-Date,HDD,% Estimated
+Date,HDD,% Estimated,"EGLL 15.5C base, source www.degreedays.net (using temperature data from www.wunderground.com)"
 2015-11-01,6.7,0
 2015-11-02,5.6,0
 2015-11-03,3.9,0
