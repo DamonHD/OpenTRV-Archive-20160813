@@ -160,11 +160,19 @@ public class ETVParseTest
         assertNotNull(data);
         assertEquals("5013", data.getHouseID());
         assertEquals(187, data.getKWHByLocalDay().size());
-//        assertTrue(data.getKWHByLocalDay().containsKey(20160301));
-//        assertEquals(75.31f, data.getKWHByLocalDay().get(20160301), 0.01f);
-//        assertEquals(31, data.getHDDByLocalDay().size());
-//        assertEquals(10.1f, data.getHDDByLocalDay().get(20160302), 0.01f);
-//        assertEquals(7.9f, data.getHDDByLocalDay().get(20160329), 0.01f);
+        assertEquals(182, data.getHDDByLocalDay().size());
+        assertTrue(data.getKWHByLocalDay().containsKey(20160216));
+        assertEquals(28.43f, data.getKWHByLocalDay().get(20160216), 0.01f);
+        assertTrue(data.getKWHByLocalDay().containsKey(20160319));
+        assertEquals(19.33f, data.getKWHByLocalDay().get(20160319), 0.01f);
+        // Data around DST switch.
+        assertEquals(17.10f, data.getKWHByLocalDay().get(20160320), 0.01f);
+        assertEquals(9.33f, data.getKWHByLocalDay().get(20160322), 0.01f);
+        assertEquals(10.11f, data.getKWHByLocalDay().get(20160325), 0.01f);
+        assertEquals(16.11f, data.getKWHByLocalDay().get(20160326), 0.015f); // Needed extra error margin...
+        assertEquals(9.00f, data.getKWHByLocalDay().get(20160327), 0.01f);  // Spring forward...
+        assertEquals(12.66f, data.getKWHByLocalDay().get(20160328), 0.01f);
+        assertEquals(10.55f, data.getKWHByLocalDay().get(20160331), 0.01f);
         }
 
     }
