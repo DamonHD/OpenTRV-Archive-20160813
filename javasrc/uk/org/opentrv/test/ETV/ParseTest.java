@@ -44,7 +44,7 @@ public class ParseTest
 
     /**Return a stream for the ETV (ASCII) sample bulk kWh consumption data; never null. */
     public static InputStream getNBulk1CSVStream()
-        { return(DDNExtractorTest.class.getResourceAsStream("N-bulk-data-format-sample.csv")); }
+        { return(ParseTest.class.getResourceAsStream("N-bulk-data-format-sample.csv")); }
     /**Return a Reader for the ETV sample bulk HDD data for EGLL; never null. */
     public static Reader getNBulk1CSVReader() throws IOException
         { return(new InputStreamReader(getNBulk1CSVStream(), "ASCII7")); }
