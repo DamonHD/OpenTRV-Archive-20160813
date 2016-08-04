@@ -9,6 +9,7 @@ package uk.org.opentrv.ETV;
  */
 public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseholdComputation
     {
+    // Lazy-creation singleton.
     private ETVPerHouseholdComputationSimpleImpl() { /* prevent direct instance creation. */ }
     private static class ETVPerHouseholdComputationSimpleImplHolder { static final ETVPerHouseholdComputationSimpleImpl INSTANCE = new ETVPerHouseholdComputationSimpleImpl(); }
     public static ETVPerHouseholdComputationSimpleImpl getInstance() { return(ETVPerHouseholdComputationSimpleImplHolder.INSTANCE); }
