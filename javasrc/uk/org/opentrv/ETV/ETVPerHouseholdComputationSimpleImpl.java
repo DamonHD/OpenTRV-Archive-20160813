@@ -3,9 +3,9 @@ package uk.org.opentrv.ETV;
 /**Simple computation implementation for one household, no efficacy.
  * This can do a simple computation to find overall kWh/HDD
  * from the supplied house's data,
- * ignoring any change in efficiency with equipment operation.
+ * ignoring (not computing) change in efficiency with equipment operation.
  * <p>
- * This is a stateless singleton.
+ * This class is a stateless singleton.
  */
 public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseholdComputation
     {
@@ -15,12 +15,29 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
     public static ETVPerHouseholdComputationSimpleImpl getInstance() { return(ETVPerHouseholdComputationSimpleImplHolder.INSTANCE); }
 
     @Override
-    public ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in) throws IllegalArgumentException
+    public ETVPerHouseholdComputationResult compute(final ETVPerHouseholdComputationInput in) throws IllegalArgumentException
         {
         if(null == in) { throw new IllegalArgumentException(); }
 
-        // TODO Auto-generated method stub
-        return null;
+        return(new ETVPerHouseholdComputationResult(){
+
+            @Override
+            public int getDaysSampled()
+                {
+                // TODO Auto-generated method stub
+                return 0;
+                }
+
+            @Override
+            public Float getkWhPerHDD()
+                {
+                // TODO Auto-generated method stub
+                return null;
+                }
+
+            // Not implemented for simple analysis.
+            @Override public Float getRatiokWhPerHDDNotSmartOverSmart() { return(null); }
+            });
         }
 
     }

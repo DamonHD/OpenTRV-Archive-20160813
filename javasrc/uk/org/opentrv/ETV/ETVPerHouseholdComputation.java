@@ -71,8 +71,12 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
+        /**Approx number of days' data from which result is derived; non-negative; zero meand not computable. */
         int getDaysSampled();
-        float getRatiokWhPerHDDSmartOverNotSmart();
+        /**Return energy demand (kWh) per HDD excluding baseload, +ve, null if not computable. */
+        Float getkWhPerHDD();
+        /**Return energy efficiency improvement (more than 1.0 is good), +ve, null if not computable. */
+        Float getRatiokWhPerHDDNotSmartOverSmart();
         }
 
     ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in)
