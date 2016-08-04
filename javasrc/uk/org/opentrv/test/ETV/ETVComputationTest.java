@@ -1,7 +1,9 @@
 package uk.org.opentrv.test.ETV;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
@@ -22,7 +24,9 @@ public class ETVComputationTest
         assertNotNull(in);
         final ETVPerHouseholdComputationResult out = ETVPerHouseholdComputationSimpleImpl.getInstance().compute(in);
         assertNotNull(out);
-        assertNull("simple analysis does not compute ratio", out.getRatiokWhPerHDDNotSmartOverSmart());
+        assertNull("simple analysis should not compute ratio", out.getRatiokWhPerHDDNotSmartOverSmart());
+//        assertTrue("simple analysis should compute kWh/HD", out.getDaysSampled() > 0);
+//        assertNotNull("simple analysis should compute kWh/HD", out.getkWhPerHDD());
+//        assertFalse("simple analysis should compute kWh/HD", Float.isNaN(out.getkWhPerHDD()));
         }
-
     }
