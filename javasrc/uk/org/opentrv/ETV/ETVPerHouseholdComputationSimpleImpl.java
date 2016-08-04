@@ -35,7 +35,7 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
                 return null;
                 }
 
-            // Not implemented for simple analysis.
+            // Efficacy computation not implemented for simple analysis.
             @Override public Float getRatiokWhPerHDDNotSmartOverSmart() { return(null); }
             });
         }

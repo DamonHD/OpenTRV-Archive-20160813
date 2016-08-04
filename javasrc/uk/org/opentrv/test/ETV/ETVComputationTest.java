@@ -22,7 +22,7 @@ public class ETVComputationTest
         assertNotNull(in);
         final ETVPerHouseholdComputationResult out = ETVPerHouseholdComputationSimpleImpl.getInstance().compute(in);
         assertNotNull(out);
-        assertNull("simple analysis does not compute ratio", out.getRatiokWhPerHDDNotSmartOverSmart());
+        assertNull("simple analysis should not compute ratio", out.getRatiokWhPerHDDNotSmartOverSmart());
         }
 
     }
