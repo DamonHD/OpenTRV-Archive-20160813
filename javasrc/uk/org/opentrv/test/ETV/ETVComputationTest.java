@@ -1,7 +1,6 @@
 package uk.org.opentrv.test.ETV;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
 

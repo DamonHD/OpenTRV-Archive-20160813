@@ -27,6 +27,7 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
         {
         if(null == in) { throw new IllegalArgumentException(); }
 
+        // FIXME: not meeting contract if HDD data discontinuous; should check.
         final ContinuousDailyHDD cdh = new ContinuousDailyHDD()
             {
             @Override public SortedMap<Integer, Float> getMap() { try { return(in.getHDDByLocalDay()); } catch(final IOException e) { throw new IllegalArgumentException(e); } }
