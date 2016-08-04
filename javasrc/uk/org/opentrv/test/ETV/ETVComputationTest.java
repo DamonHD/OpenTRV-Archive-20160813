@@ -28,5 +28,6 @@ public class ETVComputationTest
 //        assertTrue("simple analysis should compute kWh/HD", out.getDaysSampled() > 0);
 //        assertNotNull("simple analysis should compute kWh/HD", out.getkWhPerHDD());
 //        assertFalse("simple analysis should compute kWh/HD", Float.isNaN(out.getkWhPerHDD()));
+//        assertTrue("simple analysis should compute kWh/HD", out.getkWhPerHDD() > 0.0f);
         }
     }
