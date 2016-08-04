@@ -5,7 +5,7 @@ package uk.org.opentrv.ETV;
  * from the supplied house's data,
  * ignoring any change in efficiency with equipment operation.
  * <p>
- * This is a singleton.
+ * This is a stateless singleton.
  */
 public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseholdComputation
     {
@@ -17,6 +17,8 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
     @Override
     public ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in) throws IllegalArgumentException
         {
+        if(null == in) { throw new IllegalArgumentException(); }
+
         // TODO Auto-generated method stub
         return null;
         }
