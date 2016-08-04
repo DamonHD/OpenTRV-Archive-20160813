@@ -22,10 +22,13 @@ import java.util.SortedMap;
 
 /**Continuous (ie no-missing-days) map of HDD values by day over an interval.
  * Implementations should generally be immutable.
+ * <p>
+ * The notion of day may be based on a local time zone,
+ * eg some days may be different lengths at DST switches.
  */
 public abstract class ContinuousDailyHDD implements Comparable<ContinuousDailyHDD>
     {
-    /**Get base temperature for this data set as float; never NaN nor Inf. */
+    /**Get base temperature for this data set as float; never Inf, may be NaN if unknown or not constant. */
     public abstract float getBaseTemperatureAsFloat();
 
     /**Get immutable map from date as YYYYMMDD integer to HDD value as Float; never null. */
@@ -54,6 +57,5 @@ public abstract class ContinuousDailyHDD implements Comparable<ContinuousDailyHD
         return((obj instanceof Float) &&
             (Float.floatToIntBits(((ContinuousDailyHDD)obj).getBaseTemperatureAsFloat()) == Float.floatToIntBits(getBaseTemperatureAsFloat())));
         }
-
 
     }

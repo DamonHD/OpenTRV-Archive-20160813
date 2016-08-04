@@ -34,12 +34,12 @@ public class ETVParseTest
         // Rudimentary test of bad-arg checking.
         try { new NBulkKWHParseByID(-1, null); fail(); } catch(final IllegalArgumentException e) { /* OK */ }
         // Check that just a header, or no matching entries, returns empty rather than an exception.
-        assertTrue(new NBulkKWHParseByID(0, new StringReader("house_id,received_timestamp,device_timestamp,energy,temperature")).getKWHByLocalDay().isEmpty());
+        assertTrue(new NBulkKWHParseByID(0, new StringReader("house_id,received_timestamp,device_timestamp,energy,temperature")).getKWhByLocalDay().isEmpty());
 
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
-        assertEquals(0, new NBulkKWHParseByID(0, new StringReader(sampleN1)).getKWHByLocalDay().size());
-        assertEquals(0, new NBulkKWHParseByID(1002, new StringReader(sampleN1)).getKWHByLocalDay().size());
+        assertEquals(0, new NBulkKWHParseByID(0, new StringReader(sampleN1)).getKWhByLocalDay().size());
+        assertEquals(0, new NBulkKWHParseByID(1002, new StringReader(sampleN1)).getKWhByLocalDay().size());
         }
 
     /**Return a stream for the ETV (ASCII) sample bulk kWh consumption data; never null. */
@@ -54,8 +54,8 @@ public class ETVParseTest
         {
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
-        assertEquals(0, new NBulkKWHParseByID(0, getNBulk1CSVReader()).getKWHByLocalDay().size());
-        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWHByLocalDay();
+        assertEquals(0, new NBulkKWHParseByID(0, getNBulk1CSVReader()).getKWhByLocalDay().size());
+        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, getNBulk1CSVReader()).getKWhByLocalDay();
         assertEquals(1, kwhByLocalDay1002.size());
         assertTrue(kwhByLocalDay1002.containsKey(20160301));
         assertEquals(75.31f, kwhByLocalDay1002.get(20160301), 0.01f);
@@ -80,8 +80,8 @@ public class ETVParseTest
         {
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
-        assertEquals(0, new NBulkKWHParseByID(1001, new StringReader(sampleN2)).getKWHByLocalDay().size());
-        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN2)).getKWHByLocalDay();
+        assertEquals(0, new NBulkKWHParseByID(1001, new StringReader(sampleN2)).getKWhByLocalDay().size());
+        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN2)).getKWhByLocalDay();
         assertEquals(3, kwhByLocalDay1002.size());
         // Check that the 00:00 samples are used
         // even when other close/eligible ones are present.
@@ -119,8 +119,8 @@ public class ETVParseTest
         {
         // Check correct number of rows read with wrong/right ID chosen
         // and only using data for full local-time day intervals.
-        assertEquals(0, new NBulkKWHParseByID(9999, new StringReader(sampleN3)).getKWHByLocalDay().size());
-        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN3)).getKWHByLocalDay();
+        assertEquals(0, new NBulkKWHParseByID(9999, new StringReader(sampleN3)).getKWhByLocalDay().size());
+        final SortedMap<Integer, Float> kwhByLocalDay1002 = new NBulkKWHParseByID(1002, new StringReader(sampleN3)).getKWhByLocalDay();
         assertEquals(3, kwhByLocalDay1002.size());
         // Check that the 00:00 samples are used
         // even when other close/eligible ones are present.
@@ -138,9 +138,9 @@ public class ETVParseTest
         final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(1002, getNBulk1CSVReader(), DDNExtractorTest.getETVEGLLHDD201603CSVReader());
         assertNotNull(data);
         assertEquals("1002", data.getHouseID());
-        assertEquals(1, data.getKWHByLocalDay().size());
-        assertTrue(data.getKWHByLocalDay().containsKey(20160301));
-        assertEquals(75.31f, data.getKWHByLocalDay().get(20160301), 0.01f);
+        assertEquals(1, data.getKWhByLocalDay().size());
+        assertTrue(data.getKWhByLocalDay().containsKey(20160301));
+        assertEquals(75.31f, data.getKWhByLocalDay().get(20160301), 0.01f);
         assertEquals(31, data.getHDDByLocalDay().size());
         assertEquals(10.1f, data.getHDDByLocalDay().get(20160302), 0.01f);
         assertEquals(7.9f, data.getHDDByLocalDay().get(20160329), 0.01f);
@@ -159,20 +159,20 @@ public class ETVParseTest
         final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(5013, getNBulkSHCSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
         assertNotNull(data);
         assertEquals("5013", data.getHouseID());
-        assertEquals(187, data.getKWHByLocalDay().size());
+        assertEquals(187, data.getKWhByLocalDay().size());
         assertEquals(182, data.getHDDByLocalDay().size());
-        assertTrue(data.getKWHByLocalDay().containsKey(20160216));
-        assertEquals(28.43f, data.getKWHByLocalDay().get(20160216), 0.01f);
-        assertTrue(data.getKWHByLocalDay().containsKey(20160319));
-        assertEquals(19.33f, data.getKWHByLocalDay().get(20160319), 0.01f);
+        assertTrue(data.getKWhByLocalDay().containsKey(20160216));
+        assertEquals(28.43f, data.getKWhByLocalDay().get(20160216), 0.01f);
+        assertTrue(data.getKWhByLocalDay().containsKey(20160319));
+        assertEquals(19.33f, data.getKWhByLocalDay().get(20160319), 0.01f);
         // Data around DST switch.
-        assertEquals(17.10f, data.getKWHByLocalDay().get(20160320), 0.01f);
-        assertEquals(9.33f, data.getKWHByLocalDay().get(20160322), 0.01f);
-        assertEquals(10.11f, data.getKWHByLocalDay().get(20160325), 0.01f);
-        assertEquals(16.11f, data.getKWHByLocalDay().get(20160326), 0.015f); // Needs extra error margin...
-        assertEquals(9.00f, data.getKWHByLocalDay().get(20160327), 0.01f);  // Spring forward...
-        assertEquals(12.66f, data.getKWHByLocalDay().get(20160328), 0.01f);
-        assertEquals(10.55f, data.getKWHByLocalDay().get(20160331), 0.01f);
+        assertEquals(17.10f, data.getKWhByLocalDay().get(20160320), 0.01f);
+        assertEquals(9.33f, data.getKWhByLocalDay().get(20160322), 0.01f);
+        assertEquals(10.11f, data.getKWhByLocalDay().get(20160325), 0.01f);
+        assertEquals(16.11f, data.getKWhByLocalDay().get(20160326), 0.015f); // Needs extra error margin...
+        assertEquals(9.00f, data.getKWhByLocalDay().get(20160327), 0.01f);  // Spring forward...
+        assertEquals(12.66f, data.getKWhByLocalDay().get(20160328), 0.01f);
+        assertEquals(10.55f, data.getKWhByLocalDay().get(20160331), 0.01f);
         }
 
     }

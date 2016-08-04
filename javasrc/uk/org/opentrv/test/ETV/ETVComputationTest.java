@@ -1,9 +1,7 @@
 package uk.org.opentrv.test.ETV;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
@@ -29,5 +27,16 @@ public class ETVComputationTest
 //        assertNotNull("simple analysis should compute kWh/HD", out.getkWhPerHDD());
 //        assertFalse("simple analysis should compute kWh/HD", Float.isNaN(out.getkWhPerHDD()));
 //        assertTrue("simple analysis should compute kWh/HD", out.getkWhPerHDD() > 0.0f);
+
+
+//        final Collection<ConsumptionHDDTuple> ds = Util.combineMeterReadingsWithHDD(
+//                MeterReadingsExtractor.extractMeterReadings(getETVKWh201602CSVReader(), true),
+//                DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDD201602CSVReader(), 15.5f),
+//                true);
+//            final HDDMetrics metrics = Util.computeHDDMetrics(ds);
+//            System.out.println(metrics);
+//            assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, metrics.slopeEnergyPerHDD, 0.1f);
+//            assertEquals("baseline usage ~ 5.2kWh/d", 5.2f, metrics.interceptBaseline, 0.1f);
+//            assertEquals("R^2 ~ 0.6", 0.6f, metrics.rsqFit, 0.1f);
         }
     }

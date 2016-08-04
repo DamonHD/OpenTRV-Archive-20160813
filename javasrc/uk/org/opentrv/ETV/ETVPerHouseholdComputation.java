@@ -30,7 +30,7 @@ public interface ETVPerHouseholdComputation
          * @return  never null though may be empty
          * @throws IOException  in case of failure, eg parse problems
          */
-        SortedMap<Integer, Float> getKWHByLocalDay() throws IOException;
+        SortedMap<Integer, Float> getKWhByLocalDay() throws IOException;
         }
 
     /**Get Heating Degree Days (HDD, Celsius) by whole local days (local midnight-to-midnight).
