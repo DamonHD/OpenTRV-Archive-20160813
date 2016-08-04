@@ -29,7 +29,7 @@ public class ETVComputationTest
         final ETVPerHouseholdComputationInput in = NBulkInputs.gatherData(5013, ETVParseTest.getNBulkSHCSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
         assertNotNull(in);
         final ETVPerHouseholdComputationResult out = ETVPerHouseholdComputationSimpleImpl.getInstance().compute(in);
-//        assertNotNull(out);
+        assertNotNull(out);
         }
 
     }
