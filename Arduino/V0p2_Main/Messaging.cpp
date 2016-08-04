@@ -63,7 +63,8 @@ Author(s) / Copyright (s): Damon Hart-Davis 2014--2016
 
 // APN Configs - Uncomment based on what SIM you are using
 //  static const char SIM900_APN[] PROGMEM      = "\"everywhere\",\"eesecure\",\"secure\""; // EE
-  static const char SIM900_APN[] PROGMEM      = "\"arkessa.net\",\"arkessa\",\"arkessa\""; // Arkessa
+//static const char SIM900_APN[] PROGMEM      = "\"arkessa.net\",\"arkessa\",\"arkessa\""; // Arkessa
+static const char SIM900_APN[] PROGMEM      = "\"mobiledata\""; // GeoSIM
 
 // UDP Configs - Edit SIM900_UDP_ADDR for relevant server. NOTE: The server IP address should never be committed to Github.
   static const char SIM900_UDP_ADDR[16] PROGMEM = "0.0.0.0";
@@ -256,7 +257,6 @@ p->print("FS20 msg HC "); p->print(command.hc1); p->print(' '); p->println(comma
   }
 #endif
 
-
 #if defined(ENABLE_RADIO_RX) && defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT) // && defined(ENABLE_FAST_FRAMED_CARRIER_SUPPORT)
 // Handle FS20/FHT8V traffic including binary stats.
 // Returns true on successful frame type match, false if no suitable frame was found/decoded and another parser should be tried.
@@ -433,7 +433,6 @@ DEBUG_SERIAL_PRINTLN_FLASHSTRING("!RX O short"); // "O' frame too short.
   return(false);
   }
 #endif // defined(ENABLE_OTSECUREFRAME_ENCODING_SUPPORT) 
-
 
 #ifdef ENABLE_RADIO_RX
 // Decode and handle inbound raw message (msg[-1] contains the count of bytes received).
