@@ -198,8 +198,7 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
                 final SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
                 fmt.setCalendar(latestDeviceTimestamp);
                 final String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
-System.out.println(dateFormatted);
-
+//System.out.println(dateFormatted);
                 }
             }
 

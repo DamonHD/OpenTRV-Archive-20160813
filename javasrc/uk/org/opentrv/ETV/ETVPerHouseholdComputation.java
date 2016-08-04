@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TimeZone;
 
+import uk.org.opentrv.hdd.Util.HDDMetrics;
+
 /**Compute space-heat energy efficiency change per ETV protocol for one household.
  * Typically used over one heating season,
  * or back-to-back heating seasons without significant changes in occupancy or heating season.
@@ -71,10 +73,8 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
-        /**Approx number of days' data from which result is derived; non-negative; zero meand not computable. */
-        int getDaysSampled();
-        /**Return energy demand (kWh) per HDD excluding baseload, +ve, null if not computable. */
-        Float getkWhPerHDD();
+        /**Return HDD metrics; null if not computable. */
+        HDDMetrics getHDDMetrics();
         /**Return energy efficiency improvement (more than 1.0 is good), +ve, null if not computable. */
         Float getRatiokWhPerHDDNotSmartOverSmart();
         }
