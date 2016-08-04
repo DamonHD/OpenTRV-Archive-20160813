@@ -15,7 +15,7 @@ import uk.org.opentrv.test.hdd.DDNExtractorTest;
 
 public class ETVComputationTest
     {
-    /**Test for correct computation for a single household into for several months' data. */
+    /**Test for correct computation for a single household info for several months' data. */
     @Test public void testNBulkSHInputs() throws IOException
         {
         final ETVPerHouseholdComputationInput in = NBulkInputs.gatherData(5013, ETVParseTest.getNBulkSH2016H1CSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
