@@ -1,6 +1,7 @@
 package uk.org.opentrv.test.ETV;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -173,6 +174,27 @@ public class ETVParseTest
         assertEquals(9.00f, data.getKWhByLocalDay().get(20160327), 0.01f);  // Spring forward...
         assertEquals(12.66f, data.getKWhByLocalDay().get(20160328), 0.01f);
         assertEquals(10.55f, data.getKWhByLocalDay().get(20160331), 0.01f);
+        }
+
+    /**Return a stream for the ETV (ASCII) sample single-home bulk kWh consumption data all in 2016H1; never null. */
+    public static InputStream getNBulkSH2016H1CSVStream()
+        { return(ETVParseTest.class.getResourceAsStream("N-sample-GAS-2016-06.csv")); }
+    /**Return a Reader for the ETV sample single-home bulk HDD data all in 2016H1 for EGLL; never null. */
+    public static Reader getNBulkSH2016H1CSVReader() throws IOException
+        { return(new InputStreamReader(getNBulkSH2016H1CSVStream(), "ASCII7")); }
+
+    /**Test for correct loading for a single household into input object from alternative bulk file (2016H1). */
+    @Test public void testNBulkSH2016HCInputs() throws IOException
+        {
+        final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(5013, getNBulkSH2016H1CSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
+        assertNotNull(data);
+        assertEquals("5013", data.getHouseID());
+        assertEquals(156, data.getKWhByLocalDay().size());
+        assertEquals(182, data.getHDDByLocalDay().size());
+        assertTrue(data.getKWhByLocalDay().containsKey(20160216));
+        assertEquals(28.43f, data.getKWhByLocalDay().get(20160216), 0.01f);
+        assertTrue(data.getKWhByLocalDay().containsKey(20160630));
+        assertFalse(data.getKWhByLocalDay().containsKey(20160701)); // Data runs up to 20160630.
         }
 
     }

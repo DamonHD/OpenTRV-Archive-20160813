@@ -161,8 +161,8 @@ public final class Util
         final SortedSet<ConsumptionHDDTuple> result = new TreeSet<>();
 
         // HDD data must more than span the meter readings.
-        if(intervalReadings.firstKey() < hddMap.firstKey()) { throw new IllegalArgumentException("HDD data missing for start of interval energy readings"); }
-        if(intervalReadings.lastKey() > hddMap.lastKey()) { throw new IllegalArgumentException("HDD data missing for end of interval energy readings"); }
+        if(intervalReadings.firstKey() < hddMap.firstKey()) { throw new IllegalArgumentException("HDD data missing for start of interval energy readings @ " + intervalReadings.firstKey()); }
+        if(intervalReadings.lastKey() > hddMap.lastKey()) { throw new IllegalArgumentException("HDD data missing for end of interval energy readings @ " + intervalReadings.lastKey()); }
 
         for(final Integer readingKey : intervalReadings.keySet())
             {
