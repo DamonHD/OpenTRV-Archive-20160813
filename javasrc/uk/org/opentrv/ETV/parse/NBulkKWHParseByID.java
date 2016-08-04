@@ -116,7 +116,7 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
      * @return  never null though may be empty
      * @throws IOException  in case of failure, eg parse problems
      */
-    @Override public SortedMap<Integer, Float> getKWHByLocalDay() throws IOException
+    @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException
         {
         // Read first line, usually:
         //     house_id,received_timestamp,device_timestamp,energy,temperature

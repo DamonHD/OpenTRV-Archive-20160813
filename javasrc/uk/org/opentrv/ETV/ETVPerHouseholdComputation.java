@@ -30,7 +30,7 @@ public interface ETVPerHouseholdComputation
          * @return  never null though may be empty
          * @throws IOException  in case of failure, eg parse problems
          */
-        SortedMap<Integer, Float> getKWHByLocalDay() throws IOException;
+        SortedMap<Integer, Float> getKWhByLocalDay() throws IOException;
         }
 
     /**Get Heating Degree Days (HDD, Celsius) by whole local days (local midnight-to-midnight).
@@ -71,8 +71,12 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
+        /**Approx number of days' data from which result is derived; non-negative; zero meand not computable. */
         int getDaysSampled();
-        float getRatiokWhPerHDDSmartOverNotSmart();
+        /**Return energy demand (kWh) per HDD excluding baseload, +ve, null if not computable. */
+        Float getkWhPerHDD();
+        /**Return energy efficiency improvement (more than 1.0 is good), +ve, null if not computable. */
+        Float getRatiokWhPerHDDNotSmartOverSmart();
         }
 
     ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in)

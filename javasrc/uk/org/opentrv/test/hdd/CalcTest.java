@@ -43,6 +43,7 @@ import uk.org.opentrv.hdd.DDNExtractor;
 import uk.org.opentrv.hdd.MeterReadingsExtractor;
 import uk.org.opentrv.hdd.Util;
 import uk.org.opentrv.hdd.Util.HDDMetrics;
+import uk.org.opentrv.test.ETV.ETVParseTest;
 
 public class CalcTest
     {
@@ -207,14 +208,14 @@ public class CalcTest
 
     /**Return a stream for the ETV (ASCII) simple kWh consumption data; never null. */
     public static InputStream getETVKWh201602CSVStream()
-        { return(DDNExtractorTest.class.getResourceAsStream("201602-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
+        { return(ETVParseTest.class.getResourceAsStream("201602-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
     /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
     public static Reader getETVKWh201602CSVReader() throws IOException
         { return(new InputStreamReader(getETVKWh201602CSVStream(), "ASCII7")); }
 
     /**Return a stream for the ETV (ASCII) simple kWh consumption data; never null. */
     public static InputStream getETVKWh201603CSVStream()
-        { return(DDNExtractorTest.class.getResourceAsStream("201603-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
+        { return(ETVParseTest.class.getResourceAsStream("201603-ETV-16WW-sample-gas-consumption-kWh-Loop-EGLL.csv")); }
     /**Return a Reader for the ETV sample HDD data for EGLL; never null. */
     public static Reader getETVKWh201603CSVReader() throws IOException
         { return(new InputStreamReader(getETVKWh201603CSVStream(), "ASCII7")); }
