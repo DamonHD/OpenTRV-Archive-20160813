@@ -44,6 +44,7 @@ house_id,received_timestamp,device_timestamp,energy,temperature
 1002,1456791348,1456791300,306.48,-3
 1002,1456792442,1456792200,306.48,-3
 </pre>
+     * The space taken is roughly 1MB/year per household.
      *
      * @param houseID the house to extract data for
      * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
@@ -61,7 +62,6 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         {
         final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
         final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
-
         return(new ETVPerHouseholdComputationInput(){
             @Override public String getHouseID() { return(String.valueOf(houseID)); }
             @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
