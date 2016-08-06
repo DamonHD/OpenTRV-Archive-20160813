@@ -33,6 +33,50 @@ public final class NBulkInputs
     /**Standard HDD base temperature used for this class, Celsius. */
     public static final float STD_BASE_TEMP_C = 15.5f;
 
+    /**For energy (and preparsed HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
+     * The standard/default (UK) time zone for this type of bulk data will be used, in this format:
+<pre>
+house_id,received_timestamp,device_timestamp,energy,temperature
+1002,1456790560,1456790400,306.48,-3
+1002,1456791348,1456791300,306.48,-3
+1002,1456792442,1456792200,306.48,-3
+</pre>
+     * The space taken is roughly 1MB/year per household.
+     *
+     * @param houseID the house to extract data for
+     * @param NBulkDataFile  Reader (eg from file) for bulk energy user data,
+     *        Reader is closed when done; never null
+     * @param HDDDataFile  Reader (eg from file) for simple HDD data with standard/default baseline,
+     *        Reader is closed when done; never null
+     * @return  collection of all data to process to compute
+     *     overall kWh/HDD per household, no efficacy computation;
+     *     never null
+     * @throws IOException  in case of input data problems
+     */
+    public static ETVPerHouseholdComputationInput gatherData(
+            final int houseID,
+            final Reader NBulkData,
+            final SortedMap<Integer, Float> hdd)
+        throws IOException
+        {
+        if(null == NBulkData) { throw new IllegalArgumentException(); }
+        if(null == hdd) { throw new IllegalArgumentException(); }
+        final SortedMap<Integer, Float> kwhByLocalDay;
+        try(final Reader r = NBulkData) // Ensure NBulkData Reader closed when done, probably redundantly.
+            { kwhByLocalDay = (new NBulkKWHParseByID(houseID, r, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay(); }
+        return(new ETVPerHouseholdComputationInput(){
+            @Override public String getHouseID() { return(String.valueOf(houseID)); }
+            @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
+            @Override public SortedMap<Integer, Float> getHDDByLocalDay() throws IOException { return(hdd); }
+            @Override public TimeZone getLocalTimeZoneForKWhAndHDD() { return(NBulkKWHParseByID.DEFAULT_NB_TIMEZONE); }
+            @Override public float getBaseTemperatureAsFloat() { return(STD_BASE_TEMP_C); }
+            // Not implemented (null return values).
+            @Override public SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay() { return(null); }
+            @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
+            @Override public SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID() { return(null); }
+            });
+        }
+
     /**For energy (and HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
      * The uniform/default HDD baseline temperature will be used, in this format:
 <pre>
@@ -67,22 +111,10 @@ house_id,received_timestamp,device_timestamp,energy,temperature
             final Reader simpleHDDData)
         throws IOException
         {
-        if(null == NBulkData) { throw new IllegalArgumentException(); }
         if(null == simpleHDDData) { throw new IllegalArgumentException(); }
         final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
-        simpleHDDData.close();
-        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
-        return(new ETVPerHouseholdComputationInput(){
-            @Override public String getHouseID() { return(String.valueOf(houseID)); }
-            @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
-            @Override public SortedMap<Integer, Float> getHDDByLocalDay() throws IOException { return(hdd); }
-            @Override public TimeZone getLocalTimeZoneForKWhAndHDD() { return(NBulkKWHParseByID.DEFAULT_NB_TIMEZONE); }
-            @Override public float getBaseTemperatureAsFloat() { return(STD_BASE_TEMP_C); }
-            // Not implemented (null return values).
-            @Override public SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay() { return(null); }
-            @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
-            @Override public SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID() { return(null); }
-            });
+        simpleHDDData.close(); // Close HDD reader when done.
+        return(gatherData(houseID, NBulkData, hdd));
         }
 
     /**Extract data for all the households in the bulk data file.
@@ -111,17 +143,18 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
         simpleHDDData.close();
 
-        // Get the set of IDs...
+        // Get the set of household IDs present.
         final Set<Integer> IDs;
         try(final Reader rID = NBulkDataSupplier.get())
             { IDs = NBulkKWHParseByID.extractIDs(rID); }
 
-        final ArrayList<ETVPerHouseholdComputationInput> result = new ArrayList(IDs.size());
-
-        // TODO
-
-
-
+        // Load the data for each household.
+        final ArrayList<ETVPerHouseholdComputationInput> result = new ArrayList<>(IDs.size());
+        for(final Integer id : IDs)
+            {
+            final ETVPerHouseholdComputationInput oneHousehold = gatherData(id, NBulkDataSupplier.get(), hdd);
+            result.add(oneHousehold);
+            }
 
         // Result is not meant to be mutated.
         return(Collections.unmodifiableList(result));

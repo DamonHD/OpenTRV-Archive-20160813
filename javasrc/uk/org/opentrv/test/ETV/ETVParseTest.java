@@ -53,7 +53,7 @@ public class ETVParseTest
         { return(new InputStreamReader(getNBulk1CSVStream(), "ASCII7")); }
     /**Return a Reader for the ETV sample bulk HDD data for EGLL; never null. */
     public static Reader getNBulk1CSVReaderRE()
-        { try { return(getNBulk1CSVReader()); } catch(IOException e) { throw new RuntimeException(e); } }
+        { try { return(getNBulk1CSVReader()); } catch(final IOException e) { throw new RuntimeException(e); } }
     /**Return a Supplier<Reader> for the ETV sample bulk HDD data for EGLL; never null. */
     public static Supplier<Reader> NBulk1CSVReaderSupplier = () -> getNBulk1CSVReaderRE();
 
@@ -81,6 +81,7 @@ public class ETVParseTest
                 NBulk1CSVReaderSupplier,
                 DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
         assertNotNull(lhi);
+        assertEquals(2, lhi.size());
         }
 
     /**Sample 2 of bulk energy readings; a few-days' values all at or close after midnight. */

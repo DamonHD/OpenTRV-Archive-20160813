@@ -168,9 +168,9 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
                 if(newDay)
                     {
                     // Rolled directly to following day with no gap?
-                    final boolean followingDay = ((-1 != currentDayYYYYMMDD) &&
-                        (((currentDayYYYYMMDD+1) == todayYYYYMMDD) ||
-                        (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))));
+//                    final boolean followingDay = ((-1 != currentDayYYYYMMDD) &&
+//                        (((currentDayYYYYMMDD+1) == todayYYYYMMDD) ||
+//                        (1 == Util.daysBetweenDateKeys(currentDayYYYYMMDD, todayYYYYMMDD))));
                     // Sufficiently close to start of day to treat as midnight
                     // for computing a day interval energy consumption?
                     final boolean closeEnoughToStartOfDay =
@@ -195,9 +195,9 @@ public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputK
                     currentDayYYYYMMDD = todayYYYYMMDD;
                     }
 
-                final SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
-                fmt.setCalendar(latestDeviceTimestamp);
-                final String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
+//                final SimpleDateFormat fmt = new SimpleDateFormat("yyyy/MM/dd-HH:mm");
+//                fmt.setCalendar(latestDeviceTimestamp);
+//                final String dateFormatted = fmt.format(latestDeviceTimestamp.getTime());
 //System.out.println(dateFormatted);
                 }
             }
