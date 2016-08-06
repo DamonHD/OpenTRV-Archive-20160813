@@ -61,7 +61,6 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         {
         final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
         final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
-
         return(new ETVPerHouseholdComputationInput(){
             @Override public String getHouseID() { return(String.valueOf(houseID)); }
             @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
