@@ -48,6 +48,9 @@ public interface ETVPerHouseholdComputation
          * @throws IOException  in case of failure, eg parse problems
          */
         SortedMap<Integer, Float> getHDDByLocalDay() throws IOException;
+
+        /**Get base temperature for this data set as float; never Inf, may be NaN if unknown or not constant. */
+        float getBaseTemperatureAsFloat();
         }
 
     /**Abstract input for running the computation for one household.

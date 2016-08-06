@@ -25,6 +25,9 @@ import uk.org.opentrv.hdd.DDNExtractor;
  */
 public final class NBulkInputs
     {
+    /**Standard HDD base temperature used for this class, Celsius. */
+    public static final float STD_BASE_TEMP_C = 15.5f;
+
     /**For energy (and HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
      * The uniform/default HDD baseline temperature will be used, in this format:
 <pre>
@@ -57,13 +60,14 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         throws IOException
         {
         final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
-        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, 15.5f).getMap();
+        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
 
         return(new ETVPerHouseholdComputationInput(){
             @Override public String getHouseID() { return(String.valueOf(houseID)); }
             @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
             @Override public SortedMap<Integer, Float> getHDDByLocalDay() throws IOException { return(hdd); }
             @Override public TimeZone getLocalTimeZoneForKWhAndHDD() { return(NBulkKWHParseByID.DEFAULT_NB_TIMEZONE); }
+            @Override public float getBaseTemperatureAsFloat() { return(STD_BASE_TEMP_C); }
             // Not implemented (null return values).
             @Override public SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay() { return(null); }
             @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
