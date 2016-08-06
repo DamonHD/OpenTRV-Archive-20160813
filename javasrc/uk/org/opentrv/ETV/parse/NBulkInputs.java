@@ -116,7 +116,8 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         try(final Reader rID = NBulkDataSupplier.get())
             { IDs = NBulkKWHParseByID.extractIDs(rID); }
 
-        final ArrayList<ETVPerHouseholdComputationInput> result = new ArrayList(IDs.size());
+        final ArrayList<ETVPerHouseholdComputationInput> result = new ArrayList<>(IDs.size());
+
 
         // TODO
 
