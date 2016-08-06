@@ -11,7 +11,7 @@ import java.util.SortedMap;
 import java.util.TimeZone;
 import java.util.TreeMap;
 
-import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInputKWH;
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInputKWh;
 import uk.org.opentrv.hdd.Util;
 
 /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight) from bulk data.
@@ -37,7 +37,7 @@ house_id,received_timestamp,device_timestamp,energy,temperature
  * <li>device_timestamp is assumed to be in UTC seconds</li>
  * </ul>
  */
-public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWH
+public final class NBulkKWHParseByID implements ETVPerHouseholdComputationInputKWh
     {
     /**Default time zone assumed for this data for UK based homes. */
     public static final TimeZone DEFAULT_NB_TIMEZONE = TimeZone.getTimeZone("Europe/London");

@@ -26,7 +26,7 @@ public interface ETVPerHouseholdComputation
     /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight).
      * Days may not be contiguous and the result may be empty.
      */
-    public interface ETVPerHouseholdComputationInputKWH
+    public interface ETVPerHouseholdComputationInputKWh
         {
         /**Interval heating fuel consumption (kWh) by whole local days; never null.
          * @return  never null though may be empty
@@ -59,7 +59,7 @@ public interface ETVPerHouseholdComputation
      * though these may need filtering, transforming, and cross-referencing.
      */
     public interface ETVPerHouseholdComputationInput
-        extends ETVPerHouseholdComputationInputKWH, ETVPerHouseholdComputationInputHDD
+        extends ETVPerHouseholdComputationInputKWh, ETVPerHouseholdComputationInputHDD
         {
         /**Get unique house ID as String; never null. */
         String getHouseID();
