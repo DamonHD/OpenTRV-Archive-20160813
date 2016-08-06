@@ -2,14 +2,16 @@ package uk.org.opentrv.ETV.parse;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.List;
 import java.util.SortedMap;
 import java.util.TimeZone;
+import java.util.function.Supplier;
 
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.SavingEnabledAndDataStatus;
 import uk.org.opentrv.hdd.DDNExtractor;
 
-/**Process typical set of bulk data, with HDDs, into input data object.
+/**Process typical set of bulk data, with HDDs, into input data object(s).
  * This allows bulk processing in one hit,
  * with single bulk files (or possibly directories) for each of:
  * <ul>
@@ -47,8 +49,10 @@ house_id,received_timestamp,device_timestamp,energy,temperature
      * The space taken is roughly 1MB/year per household.
      *
      * @param houseID the house to extract data for
-     * @param NBulkDataFile  Reader (eg from file) for bulk energy user data; never null
-     * @param HDDDataFile  Reader (eg from file) for simple HDD data with standard/default baseline
+     * @param NBulkDataFile  Reader (eg from file) for bulk energy user data,
+     *        Reader is closed when done; never null
+     * @param HDDDataFile  Reader (eg from file) for simple HDD data with standard/default baseline,
+     *        Reader is closed when done; never null
      * @return  collection of all data to process to compute
      *     overall kWh/HDD per household, no efficacy computation;
      *     never null
@@ -60,8 +64,11 @@ house_id,received_timestamp,device_timestamp,energy,temperature
             final Reader simpleHDDData)
         throws IOException
         {
-        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
+        if(null == NBulkData) { throw new IllegalArgumentException(); }
+        if(null == simpleHDDData) { throw new IllegalArgumentException(); }
         final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
+        simpleHDDData.close();
+        final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
         return(new ETVPerHouseholdComputationInput(){
             @Override public String getHouseID() { return(String.valueOf(houseID)); }
             @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
@@ -73,5 +80,26 @@ house_id,received_timestamp,device_timestamp,energy,temperature
             @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
             @Override public SortedMap<String, Boolean> getJSONStatusValveElseBoilerControlByID() { return(null); }
             });
+        }
+
+    /**Extract data for all the households in the bulk data file.
+     * Note that this may repeatedly scan the input data,
+     * and will call the supplier each time to get a new Reader to do so;
+     * the Reader will be closed each time.
+     * <p>
+     * The common HDD data should only need to be read once.
+     */
+    public static List<ETVPerHouseholdComputationInput> gatherDataForAllHouseholds(
+            final Supplier<Reader> NBulkDataSupplier,
+            final Reader simpleHDDData)
+        throws IOException
+        {
+        if(null == NBulkDataSupplier) { throw new IllegalArgumentException(); }
+        if(null == simpleHDDData) { throw new IllegalArgumentException(); }
+        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, STD_BASE_TEMP_C).getMap();
+        simpleHDDData.close();
+
+
+        throw new RuntimeException("NOT IMPLEMENTED");
         }
     }
