@@ -35,7 +35,7 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
         final ContinuousDailyHDD cdh = new ContinuousDailyHDD()
             {
             @Override public SortedMap<Integer, Float> getMap() { try { return(in.getHDDByLocalDay()); } catch(final IOException e) { throw new IllegalArgumentException(e); } }
-            @Override public float getBaseTemperatureAsFloat() { return(Float.NaN); } // FIXME: UNKNOWN
+            @Override public float getBaseTemperatureAsFloat() { return(in.getBaseTemperatureAsFloat()); }
             };
 
         final SortedSet<ConsumptionHDDTuple> combined;
@@ -43,10 +43,6 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
         catch(final IOException e) { throw new IllegalArgumentException(e); }
 
         final HDDMetrics metrics = Util.computeHDDMetrics(combined);
-//        System.out.println(metrics);
-//        assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, metrics.slopeEnergyPerHDD, 0.1f);
-//        assertEquals("baseline usage ~ 5.2kWh/d", 5.2f, metrics.interceptBaseline, 0.1f);
-//        assertEquals("R^2 ~ 0.6", 0.6f, metrics.rsqFit, 0.1f);
 
         return(new ETVPerHouseholdComputationResult() {
             @Override public HDDMetrics getHDDMetrics() { return(metrics); }

@@ -57,13 +57,15 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         throws IOException
         {
         final SortedMap<Integer, Float> kwhByLocalDay = (new NBulkKWHParseByID(houseID, NBulkData, NBulkKWHParseByID.DEFAULT_NB_TIMEZONE)).getKWhByLocalDay();
-        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, 15.5f).getMap();
+        final float baseTemp = 15.5f;
+        final SortedMap<Integer, Float> hdd = DDNExtractor.extractSimpleHDD(simpleHDDData, baseTemp).getMap();
 
         return(new ETVPerHouseholdComputationInput(){
             @Override public String getHouseID() { return(String.valueOf(houseID)); }
             @Override public SortedMap<Integer, Float> getKWhByLocalDay() throws IOException { return(kwhByLocalDay); }
             @Override public SortedMap<Integer, Float> getHDDByLocalDay() throws IOException { return(hdd); }
             @Override public TimeZone getLocalTimeZoneForKWhAndHDD() { return(NBulkKWHParseByID.DEFAULT_NB_TIMEZONE); }
+            @Override public float getBaseTemperatureAsFloat() { return(baseTemp); }
             // Not implemented (null return values).
             @Override public SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay() { return(null); }
             @Override public SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp() { return(null); }
