@@ -73,7 +73,7 @@ public class ETVParseTest
         assertTrue(NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).contains(1002));
         }
 
-    /**Test bulk gas meter parse for multiple households at once.. */
+    /**Test bulk gas meter parse for multiple households at once. */
     @Test public void testNBulkParseMulti() throws IOException
         {
         final Map<String, ETVPerHouseholdComputationInput> mhi =
@@ -204,6 +204,11 @@ public class ETVParseTest
     /**Return a Reader for the ETV sample single-home bulk HDD data all in 2016H1 for EGLL; never null. */
     public static Reader getNBulkSH2016H1CSVReader() throws IOException
         { return(new InputStreamReader(getNBulkSH2016H1CSVStream(), "ASCII7")); }
+    /**Return a Reader for the ETV sample single-home bulk HDD data for EGLL; never null. */
+    public static Reader getNBulkSH2016H1CSVReaderRE()
+        { try { return(getNBulkSH2016H1CSVReader()); } catch(final IOException e) { throw new RuntimeException(e); } }
+    /**Return a Supplier<Reader> for the ETV sample single-home bulk HDD data for EGLL; never null. */
+    public static Supplier<Reader> NBulkSH2016H1CSVReaderSupplier = () -> getNBulkSH2016H1CSVReaderRE();
 
     /**Test for correct loading for a single household into input object from alternative bulk file (2016H1). */
     @Test public void testNBulkSH2016HCInputs() throws IOException

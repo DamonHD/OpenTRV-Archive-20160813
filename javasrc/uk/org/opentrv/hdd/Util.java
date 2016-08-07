@@ -72,7 +72,7 @@ public final class Util
         cal.add(Calendar.DAY_OF_MONTH, -1);
         return(keyFromDate(cal));
         }
-    
+
     public static Calendar getMidDate(final int end, final int start)
         {
         final Calendar cS = dateFromKey(start);
