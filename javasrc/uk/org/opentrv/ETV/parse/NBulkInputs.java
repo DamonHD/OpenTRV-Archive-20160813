@@ -2,9 +2,9 @@ package uk.org.opentrv.ETV.parse;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TimeZone;
@@ -128,12 +128,12 @@ house_id,received_timestamp,device_timestamp,energy,temperature
      *        each Reader is closed when done; never null
      * @param HDDDataFile  Reader (eg from file) for simple HDD data with standard/default baseline,
      *        Reader is closed when done; never null
-     * @return  collection of all data to process to compute
+     * @return  immutable map from (String) household ID to data to process to compute
      *     overall kWh/HDD per household, no efficacy computation;
      *     never null
      * @throws IOException  in case of input data problems
      */
-    public static List<ETVPerHouseholdComputationInput> gatherDataForAllHouseholds(
+    public static Map<String, ETVPerHouseholdComputationInput> gatherDataForAllHouseholds(
             final Supplier<Reader> NBulkDataSupplier,
             final Reader simpleHDDData)
         throws IOException
@@ -149,14 +149,13 @@ house_id,received_timestamp,device_timestamp,energy,temperature
             { IDs = NBulkKWHParseByID.extractIDs(rID); }
 
         // Load the data for each household.
-        final ArrayList<ETVPerHouseholdComputationInput> result = new ArrayList<>(IDs.size());
+        final Map<String, ETVPerHouseholdComputationInput> result = new HashMap<>(2*IDs.size());
         for(final Integer id : IDs)
             {
             final ETVPerHouseholdComputationInput oneHousehold = gatherData(id, NBulkDataSupplier.get(), hdd);
-            result.add(oneHousehold);
+            result.put(id.toString(), oneHousehold);
             }
 
-        // Result is not meant to be mutated.
-        return(Collections.unmodifiableList(result));
+        return(Collections.unmodifiableMap(result));
         }
     }

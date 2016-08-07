@@ -11,7 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
-import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.Supplier;
 
@@ -76,12 +76,16 @@ public class ETVParseTest
     /**Test bulk gas meter parse for multiple households at once.. */
     @Test public void testNBulkParseMulti() throws IOException
         {
-        final List<ETVPerHouseholdComputationInput> lhi =
+        final Map<String, ETVPerHouseholdComputationInput> mhi =
             NBulkInputs.gatherDataForAllHouseholds(
                 NBulk1CSVReaderSupplier,
                 DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
-        assertNotNull(lhi);
-        assertEquals(2, lhi.size());
+        assertNotNull(mhi);
+        assertEquals(2, mhi.size());
+        assertTrue(mhi.containsKey("1001"));
+        assertTrue(mhi.containsKey("1002"));
+        assertEquals("1001", mhi.get("1001").getHouseID());
+        assertEquals("1002", mhi.get("1002").getHouseID());
         }
 
     /**Sample 2 of bulk energy readings; a few-days' values all at or close after midnight. */
