@@ -33,7 +33,7 @@ public final class NBulkInputs
     /**Standard HDD base temperature used for this class, Celsius. */
     public static final float STD_BASE_TEMP_C = 15.5f;
 
-    /**For energy (and preparsed HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
+    /**For energy (and pre-parsed HDD) data in the default time zone; no logs, overall kWh/HDD estimates only.
      * The standard/default (UK) time zone for this type of bulk data will be used, in this format:
 <pre>
 house_id,received_timestamp,device_timestamp,energy,temperature
@@ -117,12 +117,12 @@ house_id,received_timestamp,device_timestamp,energy,temperature
         return(gatherData(houseID, NBulkData, hdd));
         }
 
-    /**Extract data for all the households in the bulk data file.
+    /**Extract data for all the households in the bulk data file as a Map from household ID to its data; never null but may be empty.
      * Note that this may repeatedly scan the input data,
      * and will call the supplier each time to get a new Reader to do so;
      * the Reader will be closed each time.
      * <p>
-     * The common HDD data should only need to be read once.
+     * The common HDD data is read once.
      *
      * @param NBulkDataFileSupplier  created a Reader (eg from file) for bulk energy user data,
      *        each Reader is closed when done; never null
