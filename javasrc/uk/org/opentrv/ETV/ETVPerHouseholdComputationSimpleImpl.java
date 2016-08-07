@@ -3,6 +3,7 @@ package uk.org.opentrv.ETV;
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.function.Function;
 
 import uk.org.opentrv.hdd.ConsumptionHDDTuple;
 import uk.org.opentrv.hdd.ContinuousDailyHDD;
@@ -45,10 +46,13 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
         final HDDMetrics metrics = Util.computeHDDMetrics(combined);
 
         return(new ETVPerHouseholdComputationResult() {
+            @Override public String getHouseID() { return(in.getHouseID()); }
             @Override public HDDMetrics getHDDMetrics() { return(metrics); }
             // Efficacy computation not implemented for simple analysis.
             @Override public Float getRatiokWhPerHDDNotSmartOverSmart() { return(null); }
             });
         }
 
+    /**As a lambda expression. */
+    public static final Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult> Simple = (in) -> getInstance().compute(in);
     }

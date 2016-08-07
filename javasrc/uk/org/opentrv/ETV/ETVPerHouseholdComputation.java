@@ -63,7 +63,7 @@ public interface ETVPerHouseholdComputation
         {
         /**Get unique house ID as String; never null. */
         String getHouseID();
-
+        // TO BE DOCUMENTED
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
@@ -76,6 +76,8 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
+        /**Get unique house ID as String; never null. */
+        String getHouseID();
         /**Return HDD metrics; null if not computable. */
         HDDMetrics getHDDMetrics();
         /**Return energy efficiency improvement (more than 1.0 is good), +ve, null if not computable. */

@@ -7,7 +7,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.junit.Test;
 
@@ -52,9 +54,9 @@ public class ETVComputationTest
         assertTrue(mhi.containsKey("5013"));
         assertEquals("5013", mhi.get("5013").getHouseID());
 
-
-        // TODO
-
-
+        final List<ETVPerHouseholdComputationResult> computed = mhi.values().stream().map(ETVPerHouseholdComputationSimpleImpl.Simple).collect(Collectors.toList());
+        assertEquals(1, computed.size());
+        assertEquals("5013", computed.get(0).getHouseID());
+        assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, computed.get(0).getHDDMetrics().slopeEnergyPerHDD, 0.1f);
         }
     }
