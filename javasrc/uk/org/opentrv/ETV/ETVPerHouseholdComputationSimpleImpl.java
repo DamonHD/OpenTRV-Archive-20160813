@@ -3,6 +3,7 @@ package uk.org.opentrv.ETV;
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.function.Function;
 
 import uk.org.opentrv.hdd.ConsumptionHDDTuple;
 import uk.org.opentrv.hdd.ContinuousDailyHDD;
@@ -51,4 +52,6 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
             });
         }
 
+    /**As a lambda expression. */
+    public static final Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult> Simple = (in) -> getInstance().compute(in);
     }
