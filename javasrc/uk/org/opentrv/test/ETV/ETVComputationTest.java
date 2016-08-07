@@ -1,8 +1,13 @@
 package uk.org.opentrv.test.ETV;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.junit.Test;
 
@@ -33,5 +38,24 @@ public class ETVComputationTest
         assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, hddMetrics.slopeEnergyPerHDD, 0.1f);
         assertEquals("baseline usage ~ 1.3kWh/d", 1.3f, hddMetrics.interceptBaseline, 0.1f);
         assertEquals("R^2 ~ 0.6", 0.6f, hddMetrics.rsqFit, 0.1f);
+        }
+
+    /**Test bulk gas meter parse and calc for via multi-household route. */
+    @Test public void testNBulkSHMultiInputs() throws IOException
+        {
+        final Map<String, ETVPerHouseholdComputationInput> mhi =
+            NBulkInputs.gatherDataForAllHouseholds(
+                    ETVParseTest.NBulkSH2016H1CSVReaderSupplier,
+                DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
+        assertNotNull(mhi);
+        assertEquals(1, mhi.size());
+        assertTrue(mhi.containsKey("5013"));
+        assertEquals("5013", mhi.get("5013").getHouseID());
+
+
+        // TODO
+
+
+
         }
     }
