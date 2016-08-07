@@ -53,6 +53,6 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
             });
         }
 
-    /**As a lambda expression. */
+    /**As a lambda expression from in to out. */
     public static final Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult> Simple = (in) -> getInstance().compute(in);
     }
