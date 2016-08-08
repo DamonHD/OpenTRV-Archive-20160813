@@ -210,6 +210,11 @@ public final class Util
             }
         @Override public String toString()
             { return("HDDMetrics [slope="+slopeEnergyPerHDD+",baseload="+interceptBaseline+",R^2="+rsqFit+",n="+n+"]"); }
+        /**Produce simple CVS format "slope,baseload,R^2" eg "1.2,3.5,0.73"; no leading/terminating comma, never null. */
+        public String toCSV()
+            { return(slopeEnergyPerHDD+","+interceptBaseline+","+rsqFit+","+n); }
+        /**Produce header for simple CSV format; no leading/terminating comma, never null. */
+        public String headerCSV() { return("\"slope energy/HDD\",\"baseload energy\",\"R^2\",\"n\""); }
         }
 
     /**Compute energy efficiency metrics based on combined energy use and HDD values; never null nor empty nor singleton. */

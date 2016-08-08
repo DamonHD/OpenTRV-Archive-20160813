@@ -65,7 +65,7 @@ public interface ETVPerHouseholdComputation
     public interface ETVPerHouseholdComputationInput
         extends ETVPerHouseholdComputationInputKWh, ETVPerHouseholdComputationInputHDD
         {
-        /**Get unique house ID as String; never null. */
+        /**Get unique house ID as alphanumeric String; never null. */
         String getHouseID();
         // TO BE DOCUMENTED
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
@@ -80,7 +80,7 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
-        /**Get unique house ID as String; never null. */
+        /**Get unique house ID as alphanumeric String; never null. */
         String getHouseID();
         /**Return HDD metrics; null if not computable. */
         HDDMetrics getHDDMetrics();
@@ -88,7 +88,7 @@ public interface ETVPerHouseholdComputation
         Float getRatiokWhPerHDDNotSmartOverSmart();
         }
 
-    /**COnvert the input data to the output result; never null. */
+    /**Convert the input data to the output result; never null. */
     ETVPerHouseholdComputationResult apply(ETVPerHouseholdComputationInput in)
         throws IllegalArgumentException;
     }
