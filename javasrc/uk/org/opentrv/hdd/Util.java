@@ -26,7 +26,6 @@ public final class Util
         {
         if(null == k) { throw new IllegalArgumentException(); }
         final int ki = k.intValue();
-        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         if(ki < 10000000) { throw new IllegalArgumentException(k.toString()); }
         if(ki > 99990000) { throw new IllegalArgumentException(k.toString()); }
         final int year = ki / 10000;
@@ -34,6 +33,7 @@ public final class Util
         if((month < 0) || (month >= 12)) { throw new IllegalArgumentException(); }
         final int day = ki % 100;
         if((day < 1) || (day > 31)) { throw new IllegalArgumentException(); }
+        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         cal.set(year, month, day);
         return(cal);
         }
@@ -50,6 +50,36 @@ public final class Util
         if((day < 1) || (day > 31)) { throw new IllegalArgumentException(); }
         final int ki = (year * 10000) + (month * 100) + day;
         return(ki);
+        }
+
+    /**Returns previous YYYYMMDD date. */
+    public static Integer getPreviousKeyDate(final Integer k)
+        {
+        if(null == k) { throw new IllegalArgumentException(); }
+        final int ki = k.intValue();
+        if(ki < 10000000) { throw new IllegalArgumentException(k.toString()); }
+        if(ki > 99990000) { throw new IllegalArgumentException(k.toString()); }
+        final int day = ki % 100;
+        if((day < 1) || (day > 31)) { throw new IllegalArgumentException(); }
+        // Optimise for days unconditionally within the same month.
+        if((day > 1) && (day < 29)) { return(ki - 1); }
+        final int year = ki / 10000;
+        final int month = ((ki / 100) % 100) - 1; // Zero-based.
+        if((month < 0) || (month >= 12)) { throw new IllegalArgumentException(); }
+        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        // Use the calendar...
+        cal.set(year, month, day);
+        cal.add(Calendar.DAY_OF_MONTH, -1);
+        return(keyFromDate(cal));
+        }
+
+    public static Calendar getMidDate(final int end, final int start)
+        {
+        final Calendar cS = dateFromKey(start);
+        final Calendar cE = dateFromKey(end);
+        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(((cS.getTimeInMillis() + cE.getTimeInMillis()) / 2));
+        return(cal);
         }
 
     /**Split CSV (non-null) line into fields efficiently; never null. */
@@ -106,6 +136,39 @@ public final class Util
                 result.add(new ConsumptionHDDTuple(prevKey, readingKey, consumption, hddSum, intervalDays));
                 }
             prevKey = readingKey;
+            }
+
+        return(Collections.unmodifiableSortedSet(result));
+        }
+
+    /**Combines daily interval energy readings and daily HDD data to generate energy use per HDD immutable data set; never null.
+     * The output size should be the same as the number of interval readings,
+     * though HDD data must at least cover/include all the energy interval reading days.
+     *
+     * @param intervalReadings  interval energy readings indexed by YYYYMMDD date; never null nor empty
+     * @param hdd  source of heating-degree-day data indexed by YYYYMMDD date; never null nor empty
+     */
+    public static SortedSet<ConsumptionHDDTuple> combineDailyIntervalReadingsWithHDD(
+            final SortedMap<Integer, Float> intervalReadings,
+            final ContinuousDailyHDD hdd)
+        {
+        if(null == intervalReadings) { throw new IllegalArgumentException(); }
+        if(intervalReadings.isEmpty()) { throw new IllegalArgumentException(); }
+        if(null == hdd) { throw new IllegalArgumentException(); }
+        final SortedMap<Integer, Float> hddMap = hdd.getMap();
+        if(hddMap.isEmpty()) { throw new IllegalArgumentException(); }
+
+        final SortedSet<ConsumptionHDDTuple> result = new TreeSet<>();
+
+        // HDD data must more than span the meter readings.
+        if(intervalReadings.firstKey() < hddMap.firstKey()) { throw new IllegalArgumentException("HDD data missing for start of interval energy readings @ " + intervalReadings.firstKey()); }
+        if(intervalReadings.lastKey() > hddMap.lastKey()) { throw new IllegalArgumentException("HDD data missing for end of interval energy readings @ " + intervalReadings.lastKey()); }
+
+        for(final Integer readingKey : intervalReadings.keySet())
+            {
+            final Float hddToday = hddMap.get(readingKey);
+            if(null == hddToday) { throw new IllegalArgumentException("HDD data missing for interval energy reading @ "+readingKey); }
+            result.add(new ConsumptionHDDTuple(getPreviousKeyDate(readingKey), readingKey, intervalReadings.get(readingKey), hddToday, 1));
             }
 
         return(Collections.unmodifiableSortedSet(result));
@@ -306,14 +369,5 @@ public final class Util
                 }
             }
         return(result);
-        }
-
-    public static Calendar getMidDate(final int end, final int start)
-        {
-        final Calendar cS = dateFromKey(start);
-        final Calendar cE = dateFromKey(end);
-        final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-        cal.setTimeInMillis(((cS.getTimeInMillis() + cE.getTimeInMillis()) / 2));
-        return(cal);
         }
     }

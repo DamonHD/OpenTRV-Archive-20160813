@@ -3,8 +3,13 @@ package uk.org.opentrv.ETV;
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TimeZone;
+import java.util.function.Function;
 
-/**Compute space-heat energy efficiency change per ETV protocol for one household.
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationResult;
+import uk.org.opentrv.hdd.Util.HDDMetrics;
+
+/**Compute space-heat energy efficiency change per ETV protocol for one household; supports lambdas.
  * Typically used over one heating season,
  * or back-to-back heating seasons without significant changes in occupancy or heating season.
  * <p>
@@ -18,13 +23,14 @@ import java.util.TimeZone;
  * </ul>
  */
 public interface ETVPerHouseholdComputation
+    extends Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult>
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
     /**Get heating fuel energy consumption (kWh) by whole local days (local midnight-to-midnight).
      * Days may not be contiguous and the result may be empty.
      */
-    public interface ETVPerHouseholdComputationInputKWH
+    public interface ETVPerHouseholdComputationInputKWh
         {
         /**Interval heating fuel consumption (kWh) by whole local days; never null.
          * @return  never null though may be empty
@@ -46,6 +52,9 @@ public interface ETVPerHouseholdComputation
          * @throws IOException  in case of failure, eg parse problems
          */
         SortedMap<Integer, Float> getHDDByLocalDay() throws IOException;
+
+        /**Get base temperature for this data set as float; never Inf, may be NaN if unknown or not constant. */
+        float getBaseTemperatureAsFloat();
         }
 
     /**Abstract input for running the computation for one household.
@@ -54,11 +63,11 @@ public interface ETVPerHouseholdComputation
      * though these may need filtering, transforming, and cross-referencing.
      */
     public interface ETVPerHouseholdComputationInput
-        extends ETVPerHouseholdComputationInputKWH, ETVPerHouseholdComputationInputHDD
+        extends ETVPerHouseholdComputationInputKWh, ETVPerHouseholdComputationInputHDD
         {
         /**Get unique house ID as String; never null. */
         String getHouseID();
-
+        // TO BE DOCUMENTED
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
         TimeZone getLocalTimeZoneForKWhAndHDD();
         SortedMap<Long, String> getOptionalJSONStatsByUTCTimestamp();
@@ -71,14 +80,15 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
-        /**Approx number of days' data from which result is derived; non-negative; zero meand not computable. */
-        int getDaysSampled();
-        /**Return energy demand (kWh) per HDD excluding baseload, +ve, null if not computable. */
-        Float getkWhPerHDD();
+        /**Get unique house ID as String; never null. */
+        String getHouseID();
+        /**Return HDD metrics; null if not computable. */
+        HDDMetrics getHDDMetrics();
         /**Return energy efficiency improvement (more than 1.0 is good), +ve, null if not computable. */
         Float getRatiokWhPerHDDNotSmartOverSmart();
         }
 
-    ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in)
+    /**COnvert the input data to the output result; never null. */
+    ETVPerHouseholdComputationResult apply(ETVPerHouseholdComputationInput in)
         throws IllegalArgumentException;
     }

@@ -252,6 +252,18 @@ public class CalcTest
 
     /**Test some date arithmetic. */
     @Test
+    public void testGetPreviousKeyDate()
+        {
+        assertEquals(20111231, Util.getPreviousKeyDate(20120101).intValue()); // Around year end.
+        assertEquals(20150228, Util.getPreviousKeyDate(20150301).intValue()); // End of Feb.
+        assertEquals(20160229, Util.getPreviousKeyDate(20160301).intValue()); // End of Feb.
+        assertEquals(20160326, Util.getPreviousKeyDate(20160327).intValue()); // Around DST change.
+        assertEquals(20160327, Util.getPreviousKeyDate(20160328).intValue()); // Around DST change.
+        assertEquals(20160328, Util.getPreviousKeyDate(20160329).intValue()); // Around DST change.
+        }
+
+    /**Test some date arithmetic. */
+    @Test
     public void testDateDiff()
         {
         assertEquals(0, Util.daysBetweenDateKeys(20120101, 20120101));

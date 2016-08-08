@@ -2,8 +2,13 @@ package uk.org.opentrv.ETV;
 
 import java.io.IOException;
 import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.function.Function;
 
+import uk.org.opentrv.hdd.ConsumptionHDDTuple;
 import uk.org.opentrv.hdd.ContinuousDailyHDD;
+import uk.org.opentrv.hdd.Util;
+import uk.org.opentrv.hdd.Util.HDDMetrics;
 
 /**Simple computation implementation for one household, no efficacy.
  * This can do a simple computation to find overall kWh/HDD
@@ -23,45 +28,28 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
     public static ETVPerHouseholdComputationSimpleImpl getInstance() { return(ETVPerHouseholdComputationSimpleImplHolder.INSTANCE); }
 
     @Override
-    public ETVPerHouseholdComputationResult compute(final ETVPerHouseholdComputationInput in) throws IllegalArgumentException
+    public ETVPerHouseholdComputationResult apply(final ETVPerHouseholdComputationInput in) throws IllegalArgumentException
         {
         if(null == in) { throw new IllegalArgumentException(); }
 
+        // FIXME: not meeting contract if HDD data discontinuous; should check.
         final ContinuousDailyHDD cdh = new ContinuousDailyHDD()
             {
             @Override public SortedMap<Integer, Float> getMap() { try { return(in.getHDDByLocalDay()); } catch(final IOException e) { throw new IllegalArgumentException(e); } }
-            @Override public float getBaseTemperatureAsFloat() { return(Float.NaN); } // FIXME: UNKNOWN
+            @Override public float getBaseTemperatureAsFloat() { return(in.getBaseTemperatureAsFloat()); }
             };
 
-//        final Collection<ConsumptionHDDTuple> ds = Util.combineMeterReadingsWithHDD(
-//                MeterReadingsExtractor.extractMeterReadings(getETVKWh201602CSVReader(), true),
-//                DDNExtractor.extractSimpleHDD(DDNExtractorTest.getETVEGLLHDD201602CSVReader(), 15.5f),
-//                true);
-//            final HDDMetrics metrics = Util.computeHDDMetrics(ds);
-//            System.out.println(metrics);
-//            assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, metrics.slopeEnergyPerHDD, 0.1f);
-//            assertEquals("baseline usage ~ 5.2kWh/d", 5.2f, metrics.interceptBaseline, 0.1f);
-//            assertEquals("R^2 ~ 0.6", 0.6f, metrics.rsqFit, 0.1f);
+        final SortedSet<ConsumptionHDDTuple> combined;
+        try { combined = Util.combineDailyIntervalReadingsWithHDD(in.getKWhByLocalDay(), cdh); }
+        catch(final IOException e) { throw new IllegalArgumentException(e); }
+
+        final HDDMetrics metrics = Util.computeHDDMetrics(combined);
 
         return(new ETVPerHouseholdComputationResult() {
-
-            @Override
-            public int getDaysSampled()
-                {
-                // TODO Auto-generated method stub
-                return 0;
-                }
-
-            @Override
-            public Float getkWhPerHDD()
-                {
-                // TODO Auto-generated method stub
-                return null;
-                }
-
+            @Override public String getHouseID() { return(in.getHouseID()); }
+            @Override public HDDMetrics getHDDMetrics() { return(metrics); }
             // Efficacy computation not implemented for simple analysis.
             @Override public Float getRatiokWhPerHDDNotSmartOverSmart() { return(null); }
             });
         }
-
     }

@@ -1,6 +1,7 @@
 package uk.org.opentrv.test.ETV;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -10,7 +11,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.Map;
 import java.util.SortedMap;
+import java.util.function.Supplier;
 
 import org.junit.Test;
 
@@ -48,6 +51,11 @@ public class ETVParseTest
     /**Return a Reader for the ETV sample bulk HDD data for EGLL; never null. */
     public static Reader getNBulk1CSVReader() throws IOException
         { return(new InputStreamReader(getNBulk1CSVStream(), "ASCII7")); }
+    /**Return a Reader for the ETV sample bulk HDD data for EGLL; never null. */
+    public static Reader getNBulk1CSVReaderRE()
+        { try { return(getNBulk1CSVReader()); } catch(final IOException e) { throw new RuntimeException(e); } }
+    /**Return a Supplier<Reader> for the ETV sample bulk HDD data for EGLL; never null. */
+    public static Supplier<Reader> NBulk1CSVReaderSupplier = () -> getNBulk1CSVReaderRE();
 
     /**Test bulk gas meter parse on a more substantive sample. */
     @Test public void testNBulkParse() throws IOException
@@ -63,6 +71,21 @@ public class ETVParseTest
         assertEquals(2, NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).size());
         assertTrue(NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).contains(1001));
         assertTrue(NBulkKWHParseByID.extractIDs(getNBulk1CSVReader()).contains(1002));
+        }
+
+    /**Test bulk gas meter parse for multiple households at once. */
+    @Test public void testNBulkParseMulti() throws IOException
+        {
+        final Map<String, ETVPerHouseholdComputationInput> mhi =
+            NBulkInputs.gatherDataForAllHouseholds(
+                NBulk1CSVReaderSupplier,
+                DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
+        assertNotNull(mhi);
+        assertEquals(2, mhi.size());
+        assertTrue(mhi.containsKey("1001"));
+        assertTrue(mhi.containsKey("1002"));
+        assertEquals("1001", mhi.get("1001").getHouseID());
+        assertEquals("1002", mhi.get("1002").getHouseID());
         }
 
     /**Sample 2 of bulk energy readings; a few-days' values all at or close after midnight. */
@@ -175,4 +198,42 @@ public class ETVParseTest
         assertEquals(10.55f, data.getKWhByLocalDay().get(20160331), 0.01f);
         }
 
+    /**Return a stream for the ETV (ASCII) sample single-home bulk kWh consumption data all in 2016H1; never null. */
+    public static InputStream getNBulkSH2016H1CSVStream()
+        { return(ETVParseTest.class.getResourceAsStream("N-sample-GAS-2016-06.csv")); }
+    /**Return a Reader for the ETV sample single-home bulk HDD data all in 2016H1 for EGLL; never null. */
+    public static Reader getNBulkSH2016H1CSVReader() throws IOException
+        { return(new InputStreamReader(getNBulkSH2016H1CSVStream(), "ASCII7")); }
+    /**Return a Reader for the ETV sample single-home bulk HDD data for EGLL; never null. */
+    public static Reader getNBulkSH2016H1CSVReaderRE()
+        { try { return(getNBulkSH2016H1CSVReader()); } catch(final IOException e) { throw new RuntimeException(e); } }
+    /**Return a Supplier<Reader> for the ETV sample single-home bulk HDD data for EGLL; never null. */
+    public static Supplier<Reader> NBulkSH2016H1CSVReaderSupplier = () -> getNBulkSH2016H1CSVReaderRE();
+
+    /**Test for correct loading for a single household into input object from alternative bulk file (2016H1). */
+    @Test public void testNBulkSH2016HCInputs() throws IOException
+        {
+        final ETVPerHouseholdComputationInput data = NBulkInputs.gatherData(5013, getNBulkSH2016H1CSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
+        assertNotNull(data);
+        assertEquals("5013", data.getHouseID());
+        assertEquals(156, data.getKWhByLocalDay().size());
+        assertEquals(182, data.getHDDByLocalDay().size());
+        assertTrue(data.getKWhByLocalDay().containsKey(20160216));
+        assertEquals(28.43f, data.getKWhByLocalDay().get(20160216), 0.01f);
+        assertTrue(data.getKWhByLocalDay().containsKey(20160630));
+        assertFalse(data.getKWhByLocalDay().containsKey(20160701)); // Data runs up to 20160630.
+        }
+
+    /**Test bulk gas meter parse via multi-household route. */
+    @Test public void testNBulkSHMultiInputs() throws IOException
+        {
+        final Map<String, ETVPerHouseholdComputationInput> mhi =
+            NBulkInputs.gatherDataForAllHouseholds(
+                    NBulkSH2016H1CSVReaderSupplier,
+                DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
+        assertNotNull(mhi);
+        assertEquals(1, mhi.size());
+        assertTrue(mhi.containsKey("5013"));
+        assertEquals("5013", mhi.get("5013").getHouseID());
+        }
     }
