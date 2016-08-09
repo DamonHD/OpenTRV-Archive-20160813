@@ -28,7 +28,7 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
     public static ETVPerHouseholdComputationSimpleImpl getInstance() { return(ETVPerHouseholdComputationSimpleImplHolder.INSTANCE); }
 
     @Override
-    public ETVPerHouseholdComputationResult compute(final ETVPerHouseholdComputationInput in) throws IllegalArgumentException
+    public ETVPerHouseholdComputationResult apply(final ETVPerHouseholdComputationInput in) throws IllegalArgumentException
         {
         if(null == in) { throw new IllegalArgumentException(); }
 
@@ -52,7 +52,4 @@ public final class ETVPerHouseholdComputationSimpleImpl implements ETVPerHouseho
             @Override public Float getRatiokWhPerHDDNotSmartOverSmart() { return(null); }
             });
         }
-
-    /**As a lambda expression from in to out. */
-    public static final Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult> Simple = (in) -> getInstance().compute(in);
     }

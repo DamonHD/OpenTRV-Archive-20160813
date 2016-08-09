@@ -3,10 +3,13 @@ package uk.org.opentrv.ETV;
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TimeZone;
+import java.util.function.Function;
 
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationInput;
+import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationResult;
 import uk.org.opentrv.hdd.Util.HDDMetrics;
 
-/**Compute space-heat energy efficiency change per ETV protocol for one household.
+/**Compute space-heat energy efficiency change per ETV protocol for one household; supports lambdas.
  * Typically used over one heating season,
  * or back-to-back heating seasons without significant changes in occupancy or heating season.
  * <p>
@@ -20,6 +23,7 @@ import uk.org.opentrv.hdd.Util.HDDMetrics;
  * </ul>
  */
 public interface ETVPerHouseholdComputation
+    extends Function<ETVPerHouseholdComputationInput, ETVPerHouseholdComputationResult>
     {
     public enum SavingEnabledAndDataStatus { Enabled, Disabled, DontUse };
 
@@ -61,7 +65,7 @@ public interface ETVPerHouseholdComputation
     public interface ETVPerHouseholdComputationInput
         extends ETVPerHouseholdComputationInputKWh, ETVPerHouseholdComputationInputHDD
         {
-        /**Get unique house ID as String; never null. */
+        /**Get unique house ID as alphanumeric String; never null. */
         String getHouseID();
         // TO BE DOCUMENTED
         SortedMap<Integer, SavingEnabledAndDataStatus> getOptionalEnabledAndUsableFlagsByLocalDay();
@@ -76,7 +80,7 @@ public interface ETVPerHouseholdComputation
      */
     public interface ETVPerHouseholdComputationResult
         {
-        /**Get unique house ID as String; never null. */
+        /**Get unique house ID as alphanumeric String; never null. */
         String getHouseID();
         /**Return HDD metrics; null if not computable. */
         HDDMetrics getHDDMetrics();
@@ -84,6 +88,7 @@ public interface ETVPerHouseholdComputation
         Float getRatiokWhPerHDDNotSmartOverSmart();
         }
 
-    ETVPerHouseholdComputationResult compute(ETVPerHouseholdComputationInput in)
+    /**Convert the input data to the output result; never null. */
+    ETVPerHouseholdComputationResult apply(ETVPerHouseholdComputationInput in)
         throws IllegalArgumentException;
     }

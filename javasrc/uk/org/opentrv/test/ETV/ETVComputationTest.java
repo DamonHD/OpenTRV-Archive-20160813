@@ -27,7 +27,7 @@ public class ETVComputationTest
         {
         final ETVPerHouseholdComputationInput in = NBulkInputs.gatherData(5013, ETVParseTest.getNBulkSH2016H1CSVReader(), DDNExtractorTest.getETVEGLLHDD2016H1CSVReader());
         assertNotNull(in);
-        final ETVPerHouseholdComputationResult out = ETVPerHouseholdComputationSimpleImpl.getInstance().compute(in);
+        final ETVPerHouseholdComputationResult out = ETVPerHouseholdComputationSimpleImpl.getInstance().apply(in);
         assertNotNull(out);
         assertNull("simple analysis should not compute ratio", out.getRatiokWhPerHDDNotSmartOverSmart());
         final HDDMetrics hddMetrics = out.getHDDMetrics();
@@ -54,7 +54,7 @@ public class ETVComputationTest
         assertTrue(mhi.containsKey("5013"));
         assertEquals("5013", mhi.get("5013").getHouseID());
 
-        final List<ETVPerHouseholdComputationResult> computed = mhi.values().stream().map(ETVPerHouseholdComputationSimpleImpl.Simple).collect(Collectors.toList());
+        final List<ETVPerHouseholdComputationResult> computed = mhi.values().stream().map(ETVPerHouseholdComputationSimpleImpl.getInstance()).collect(Collectors.toList());
         assertEquals(1, computed.size());
         assertEquals("5013", computed.get(0).getHouseID());
         assertEquals("slope ~ 1.5kWh/HDD12.5", 1.5f, computed.get(0).getHDDMetrics().slopeEnergyPerHDD, 0.1f);
