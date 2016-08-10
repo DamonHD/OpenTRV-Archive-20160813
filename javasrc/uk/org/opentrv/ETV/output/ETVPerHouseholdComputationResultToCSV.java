@@ -15,7 +15,7 @@ public final class ETVPerHouseholdComputationResultToCSV
     public String apply(ETVPerHouseholdComputationResult r)
         {
         final Float ratio = r.getRatiokWhPerHDDNotSmartOverSmart();
-        return("\""+r.getHouseID()+"\","+r.getHDDMetrics().toCSV()+","+((null!=ratio)?ratio:""));
+        return("\""+r.getHouseID()+"\","+r.getHDDMetrics().toCSV()+"," + ((null!=ratio)?ratio:""));
         }
 
     /**Produce header for simple CSV format; no leading/terminating comma, never null. */

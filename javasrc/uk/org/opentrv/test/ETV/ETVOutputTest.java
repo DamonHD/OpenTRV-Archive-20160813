@@ -22,7 +22,6 @@ public class ETVOutputTest
             @Override public HDDMetrics getHDDMetrics() { return(new HDDMetrics(1.2f, 5.4f, 0.8f, 63)); }
             };
         final String r1CSV = (new ETVPerHouseholdComputationResultToCSV()).apply(r1);
-//        System.out.println(r1CSV);
         assertEquals("\"1234\",1.2,5.4,0.8,63,", r1CSV);
         // Simple result without efficacy computation.
         final ETVPerHouseholdComputationResult r2 = new ETVPerHouseholdComputationResult(){
@@ -31,7 +30,6 @@ public class ETVOutputTest
             @Override public HDDMetrics getHDDMetrics() { return(new HDDMetrics(7.89f, 0.1f, 0.6f, 532)); }
             };
         final String r2CSV = (new ETVPerHouseholdComputationResultToCSV()).apply(r2);
-//        System.out.println(r1CSV);
         assertEquals("\"56\",7.89,0.1,0.6,532,1.23", r2CSV);
         }
     }
