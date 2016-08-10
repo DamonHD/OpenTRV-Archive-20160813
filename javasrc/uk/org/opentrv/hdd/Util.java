@@ -213,7 +213,7 @@ public final class Util
         /**Produce simple CVS format "slope,baseload,R^2,n" eg "1.2,3.5,0.73,156"; no leading/terminating comma, never null. */
         public String toCSV()
             { return(slopeEnergyPerHDD+","+interceptBaseline+","+rsqFit+","+n); }
-        /**Produce header for simple CSV format; no leading/terminating comma, never null. */
+        /**Produce header for simple CSV format; no leading/terminating comma (nor line-end), never null. */
         public static String headerCSV() { return("\"slope energy/HDD\",\"baseload energy\",\"R^2\",\"n\""); }
         }
 
