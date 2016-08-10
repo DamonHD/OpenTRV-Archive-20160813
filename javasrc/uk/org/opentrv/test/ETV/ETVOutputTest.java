@@ -53,7 +53,7 @@ public class ETVOutputTest
             };
         final List<ETVPerHouseholdComputationResult> rl = Arrays.asList(r1, r2);
         final String rlCSV = (new ETVPerHouseholdComputationResultsToCSV()).apply(rl);
-        System.out.println(rlCSV);
+//        System.out.println(rlCSV);
         assertEquals(
                 "\"house ID\",\"slope energy/HDD\",\"baseload energy\",\"R^2\",\"n\",\"efficiency gain if computed\"\n" +
                 "\"1234\",1.2,5.4,0.8,63,\n" +
