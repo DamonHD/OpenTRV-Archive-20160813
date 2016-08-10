@@ -5,7 +5,7 @@ import java.util.function.Function;
 import uk.org.opentrv.ETV.ETVPerHouseholdComputation.ETVPerHouseholdComputationResult;
 import uk.org.opentrv.hdd.Util.HDDMetrics;
 
-/**Generate machine-readable (CVS) form.
+/**Generate machine-readable (partial-CVS-line) form for a single result.
  * Stateless.
  */
 public final class ETVPerHouseholdComputationResultToCSV
@@ -18,6 +18,6 @@ public final class ETVPerHouseholdComputationResultToCSV
         return("\""+r.getHouseID()+"\","+r.getHDDMetrics().toCSV()+"," + ((null!=ratio)?ratio:""));
         }
 
-    /**Produce header for simple CSV format; no leading/terminating comma, never null. */
-    public String headerCSV() { return("\"house ID\","+HDDMetrics.headerCSV()+",\"efficiency gain if computed\""); }
+    /**Produce header for simple CSV format; no leading/terminating comma (nor line-end), never null. */
+    public static String headerCSV() { return("\"house ID\","+HDDMetrics.headerCSV()+",\"efficiency gain if computed\""); }
     }
