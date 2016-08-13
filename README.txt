@@ -1,3 +1,6 @@
+WARNING: AS OF 2016/08/13 THIS IS A READ-ONLY ARCHIVE/SNAPSHOT WITH HISTORY
+
+
 This is the OpenTRV (Open-Source Thermostatic Radiator Valve) project.
 
 See http://www.earth.org.uk/open-source-programmable-thermostatic-radiator-valve.html for more.
