@@ -1,5 +1,8 @@
 WARNING: AS OF 2016/08/13 THIS IS A READ-ONLY ARCHIVE/SNAPSHOT WITH HISTORY
 
+See https://github.com/opentrv/OTWiki/wiki/Repo-Restructure-2016-08-13
+for how the content has been refactored.
+
 
 This is the OpenTRV (Open-Source Thermostatic Radiator Valve) project.
 
